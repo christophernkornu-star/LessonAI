@@ -28,6 +28,17 @@ export function cleanAndSplitText(text: string): string[] {
     processed = processed.replace(/(\s)(Tier\s\d)/g, '\n$2');
   }
 
+  // Fix "Activity N:" merging and ensure bold formatting
+  // First, strip existing stars if any, to normalize
+  processed = processed.replace(/\*\*(Activity\s+\d+:?)\*\*/gi, '$1');
+  processed = processed.replace(/\*\*(Activity\s+\d+:?)/gi, '$1');
+  
+  // Now ensure newline and add bold
+  processed = processed.replace(/([^\n])\s*(Activity\s+\d+:?)/gi, '$1\n**$2**');
+  
+  // Handle case where it is already at start of line
+  processed = processed.replace(/(^|\n)(Activity\s+\d+:?)/gi, '$1**$2**');
+
   return processed.split('\n');
 }
 

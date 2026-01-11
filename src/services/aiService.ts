@@ -442,6 +442,7 @@ ${data.template.structure}
 - Replace {REFERENCE} with ONLY the specific curriculum materials, textbooks, or resources used to generate this lesson. Do not list generic references.
 - Replace {STARTER_DURATION}, {NEW_LEARNING_DURATION}, {REFLECTION_DURATION} with appropriate time allocations (e.g., "10 minutes", "30 minutes", "15 minutes")
 - For {STARTER_ACTIVITIES}, {NEW_LEARNING_ACTIVITIES}, {REFLECTION_ACTIVITIES}, write detailed step-by-step activities
+- IMPORTANT: For numbered "Activity 1:", "Activity 2:", etc., ALWAYS start them on a new line and use bold formatting (e.g., **Activity 1:**).
 - For {STARTER_RESOURCES}, {NEW_LEARNING_RESOURCES}, {REFLECTION_RESOURCES}, list ONLY essential, simple, and readily available materials (avoid long lists)
 - For sections like {INTRODUCTION}, {MAIN_ACTIVITIES}, {ASSESSMENT}, etc., write detailed, practical content
 
@@ -527,6 +528,7 @@ Include descriptions of relevant diagrams, charts, illustrations, or visual aids
    - Step-by-step instructional sequence
    - Guided practice activities
    - Examples and demonstrations
+   - IMPORTANT: Start every "Activity X:" on a new line and use bold formatting (e.g., **Activity 1:**).
 6. Assessment Methods
 7. Differentiation Strategies
 8. Closure/Summary (5 minutes)
