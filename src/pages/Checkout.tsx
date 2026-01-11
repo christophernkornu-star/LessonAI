@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { CreditCard, Download, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { Navbar } from "@/components/Navbar";
 
 const Checkout = () => {
   const navigate = useNavigate();

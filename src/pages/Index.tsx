@@ -2,25 +2,37 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { BookOpen, Sparkles, Clock, CheckCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Navbar } from "@/components/Navbar";
 
 const Index = () => {
   const navigate = useNavigate();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsLoggedIn(!!session);
+    };
+    checkSession();
+  }, []);
 
   const features = [
     {
       icon: Sparkles,
       title: "AI-Powered Generation",
-      description: "Advanced AI fills your lesson note template with precise, curriculum-aligned content",
+      description: "Advanced AI generates curriculum-aligned content based on Ghana's National Pre-tertiary Standards",
     },
     {
       icon: Clock,
       title: "Save Hours of Work",
-      description: "Generate professional lesson notes in minutes instead of hours of manual work",
+      description: "Generate professional lesson notes in minutes for any subject from Basic 1 to Basic 10",
     },
     {
       icon: CheckCircle,
-      title: "Curriculum-Aligned",
-      description: "Perfectly matches your curriculum standards, strands, and exemplars",
+      title: "NPC-Aligned",
+      description: "Perfectly aligned with National Pre-tertiary Curriculum strands, content standards, and learning indicators",
     },
     {
       icon: BookOpen,
@@ -31,36 +43,25 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
-      {/* Header */}
-      <header className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-foreground">LessonAI</h1>
-            <div className="flex gap-3">
-              <Button variant="ghost">Sign In</Button>
-              <Button className="bg-gradient-hero hover:opacity-90">Get Started</Button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Navbar />
 
       {/* Hero Section */}
-      <section className="container mx-auto px-4 py-20">
+      <section className="container mx-auto px-4 py-12 sm:py-16 lg:py-20">
         <div className="mx-auto max-w-4xl text-center">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-foreground">
-            <Sparkles className="h-4 w-4" />
+          <div className="mb-4 sm:mb-6 inline-flex items-center gap-2 rounded-full bg-accent px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-accent-foreground">
+            <Sparkles className="h-3 w-3 sm:h-4 sm:w-4" />
             AI-Powered Lesson Planning
           </div>
-          <h2 className="mb-6 text-5xl font-bold leading-tight text-foreground md:text-6xl">
+          <h2 className="mb-4 sm:mb-6 text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-tight text-foreground">
             Create Professional
             <br />
             <span className="bg-gradient-hero bg-clip-text text-transparent">
               Lesson Notes in Minutes
             </span>
           </h2>
-          <p className="mb-8 text-xl text-muted-foreground">
-            Upload your template, select your curriculum, and let AI generate comprehensive,
-            standards-aligned lesson notes tailored to your teaching needs
+          <p className="mb-6 sm:mb-8 text-base sm:text-lg lg:text-xl text-muted-foreground px-4">
+            Aligned with Ghana's National Pre-tertiary Curriculum. Generate comprehensive,
+            standards-based lesson notes for Basic 1-10 tailored to Ghanaian teachers' needs
           </p>
           <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
             <Button
@@ -79,32 +80,32 @@ const Index = () => {
       </section>
 
       {/* Features Section */}
-      <section className="container mx-auto px-4 py-20">
+      <section className="container mx-auto px-4 py-12 sm:py-16 lg:py-20">
         <div className="mx-auto max-w-5xl">
-          <div className="mb-12 text-center">
-            <h3 className="mb-3 text-3xl font-bold text-foreground">
+          <div className="mb-8 sm:mb-12 text-center">
+            <h3 className="mb-2 sm:mb-3 text-2xl sm:text-3xl font-bold text-foreground">
               Everything You Need for Perfect Lesson Notes
             </h3>
-            <p className="text-muted-foreground">
-              Powerful features designed specifically for educators
+            <p className="text-sm sm:text-base text-muted-foreground px-4">
+              Powerful features designed specifically for Ghanaian educators
             </p>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
             {features.map((feature, index) => {
               const Icon = feature.icon;
               return (
                 <Card
                   key={index}
-                  className="p-6 shadow-soft transition-all hover:shadow-medium"
+                  className="p-4 sm:p-6 shadow-soft transition-all hover:shadow-medium"
                 >
-                  <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-accent">
-                    <Icon className="h-6 w-6 text-accent-foreground" />
+                  <div className="mb-3 sm:mb-4 inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-lg bg-accent">
+                    <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-accent-foreground" />
                   </div>
-                  <h4 className="mb-2 text-xl font-semibold text-foreground">
+                  <h4 className="mb-2 text-lg sm:text-xl font-semibold text-foreground">
                     {feature.title}
                   </h4>
-                  <p className="text-muted-foreground">{feature.description}</p>
+                  <p className="text-sm sm:text-base text-muted-foreground">{feature.description}</p>
                 </Card>
               );
             })}
@@ -113,16 +114,16 @@ const Index = () => {
       </section>
 
       {/* How It Works */}
-      <section className="container mx-auto px-4 py-20">
+      <section className="container mx-auto px-4 py-12 sm:py-16 lg:py-20">
         <div className="mx-auto max-w-4xl">
-          <div className="mb-12 text-center">
-            <h3 className="mb-3 text-3xl font-bold text-foreground">How It Works</h3>
-            <p className="text-muted-foreground">
+          <div className="mb-8 sm:mb-12 text-center">
+            <h3 className="mb-2 sm:mb-3 text-2xl sm:text-3xl font-bold text-foreground">How It Works</h3>
+            <p className="text-sm sm:text-base text-muted-foreground px-4">
               Three simple steps to your perfect lesson note
             </p>
           </div>
 
-          <div className="grid gap-8 md:grid-cols-3">
+          <div className="grid gap-6 sm:gap-8 md:grid-cols-3">
             {[
               {
                 step: "1",
@@ -176,8 +177,16 @@ const Index = () => {
 
       {/* Footer */}
       <footer className="border-t border-border bg-background py-8">
-        <div className="container mx-auto px-4 text-center text-muted-foreground">
-          <p>© 2024 LessonAI. All rights reserved.</p>
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <p className="text-muted-foreground">© 2024 LessonAI. All rights reserved.</p>
+            <button
+              onClick={() => navigate("/admin")}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Admin Portal
+            </button>
+          </div>
         </div>
       </footer>
     </div>

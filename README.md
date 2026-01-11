@@ -1,4 +1,25 @@
-# Welcome to your Lovable project
+# LessonAI - Ghana Edition
+
+AI-powered lesson note generator for Ghanaian teachers, aligned with the National Pre-tertiary Curriculum for Basic 1-10.
+
+## About
+
+LessonAI helps Ghanaian teachers create professional, curriculum-aligned lesson notes in minutes. Built specifically for Ghana's education system with support for:
+
+- **Class Levels**: Basic 1 through Basic 10
+- **Curriculum**: National Pre-tertiary Curriculum (NPC) & National Teaching Standards (NTS)
+- **Subjects**: Mathematics, English, Science, Social Studies, RME, ICT, Creative Arts, Ghanaian Languages, and more
+- **AI-Powered**: DeepSeek AI generates content aligned with Ghana's curriculum standards
+
+## Features
+
+- 🎓 Ghanaian curriculum-specific (Basic 1-10)
+- 📚 6 professional lesson note templates
+- 🤖 AI-powered content generation
+- 📝 Upload custom curriculum documents (PDF/DOC)
+- 👨‍💼 Admin portal for managing resources
+- 💾 Save and organize lesson history
+- 🔐 Secure authentication via Supabase
 
 ## Project info
 
