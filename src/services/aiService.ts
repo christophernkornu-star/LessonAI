@@ -441,8 +441,8 @@ ${data.template.structure}
 - Replace {KEYWORDS} with key vocabulary terms for this lesson
 - Replace {REFERENCE} with ONLY the specific curriculum materials, textbooks, or resources used to generate this lesson. Do not list generic references.
 - Replace {STARTER_DURATION}, {NEW_LEARNING_DURATION}, {REFLECTION_DURATION} with appropriate time allocations (e.g., "10 minutes", "30 minutes", "15 minutes")
-- For {STARTER_ACTIVITIES}, {NEW_LEARNING_ACTIVITIES}, {REFLECTION_ACTIVITIES}, write detailed step-by-step activities
-- IMPORTANT: For numbered "Activity 1:", "Activity 2:", etc., ALWAYS start them on a new line and use bold formatting (e.g., **Activity 1:**).
+- For {STARTER_ACTIVITIES} and {REFLECTION_ACTIVITIES}: Describe the activity directly WITHOUT "Activity 1" prefixes.
+- For {NEW_LEARNING_ACTIVITIES}: Number the activities (Activity 1:, Activity 2:) starting on new lines, but DO NOT use bold/asterisks.
 - For {STARTER_RESOURCES}, {NEW_LEARNING_RESOURCES}, {REFLECTION_RESOURCES}, list ONLY essential, simple, and readily available materials (avoid long lists)
 - For sections like {INTRODUCTION}, {MAIN_ACTIVITIES}, {ASSESSMENT}, etc., write detailed, practical content
 
@@ -528,7 +528,7 @@ Include descriptions of relevant diagrams, charts, illustrations, or visual aids
    - Step-by-step instructional sequence
    - Guided practice activities
    - Examples and demonstrations
-   - IMPORTANT: Start every "Activity X:" on a new line and use bold formatting (e.g., **Activity 1:**).
+   - IMPORTANT: For "Activity 1:", "Activity 2:", etc., start on a new line but DO NOT use bold formatting/asterisks.
 6. Assessment Methods
 7. Differentiation Strategies
 8. Closure/Summary (5 minutes)

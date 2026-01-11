@@ -176,17 +176,9 @@ function createCell(
         // Handle "Activity X: ... **" pattern (bold the content, remove trailing **)
         // Global replace to handle multiple occurrences
         let activityMatched = false;
-        if (trimmedLine.match(/Activity\s+\d+:.*?\*\*/i)) {
-            // Replace: Activity 1: Content ** -> **Activity 1:** **Content**
-            trimmedLine = trimmedLine.replace(/(Activity\s+\d+:\s*)(.*?)\s*\*\*/gi, '**$1** **$2**');
-            activityMatched = true;
-        }
         
-        // Handle "Activity X" bolding (bolds the label itself) if not already handled
-        if (!activityMatched) {
-            trimmedLine = trimmedLine.replace(/(Activity\s+\d+)/gi, '**$1**');
-        }
-
+        // REMOVED AUTOMATIC BOLDING LIBRARIES FOR ACTIVITY LABELS AS PER USER REQUEST
+        
         const children: TextRun[] = [];
         const tokens = parseMarkdownLine(trimmedLine);
         
@@ -234,6 +226,17 @@ function createCell(
     },
     width: width, // Use explicit width if provided, otherwise let grid/auto handle it
   });
+}
+
+/**
+ * Remove "Activity N:" prefix from text
+ */
+function cleanActivityPrefix(text: string): string {
+  if (!text) return "";
+  // Remove "Activity 1:", "Activity 1", etc from start of string or lines
+  let cleaned = text.replace(/^(Activity\s+\d+:?)/i, '');
+  cleaned = cleaned.replace(/\n(Activity\s+\d+:?)/gi, '\n');
+  return cleaned.trim();
 }
 
 /**
@@ -307,7 +310,7 @@ function cleanContentStandard(text: string): string {
   if (!text) return "";
   
   // Check for duplicated code pattern
-  // Matches "CODE.: CODE." or "CODE: CODE"
+  // Matches "CODE.:|:|." or "CODE: CODE"
   // Group 1 is the code.
   const match = text.match(/^([A-Z0-9.]+)(?:\.:|:|.)\s*\1\.?\s*(.*)/i);
   
@@ -573,7 +576,7 @@ export async function generateGhanaLessonDocx(
             new TableRow({
               children: [
                 createCell(`PHASE 1: STARTER`, true, 1, false),
-                createCell(capitalizeWords(lessonData.phases?.phase1_starter?.learnerActivities || ""), false, 1, false),
+                createCell(capitalizeWords(cleanActivityPrefix(lessonData.phases?.phase1_starter?.learnerActivities || "")), false, 1, false),
                 createCell(capitalizeWords(lessonData.phases?.phase1_starter?.resources || ""), false, 1, false),
               ],
             }),
@@ -591,7 +594,7 @@ export async function generateGhanaLessonDocx(
             new TableRow({
               children: [
                 createCell(`PHASE 3: REFLECTION`, true, 1, false),
-                createCell(capitalizeWords(lessonData.phases?.phase3_reflection?.learnerActivities || ""), false, 1, false),
+                createCell(capitalizeWords(cleanActivityPrefix(lessonData.phases?.phase3_reflection?.learnerActivities || "")), false, 1, false),
                 createCell(capitalizeWords(lessonData.phases?.phase3_reflection?.resources || ""), false, 1, false),
               ],
             }),
