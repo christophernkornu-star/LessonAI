@@ -533,14 +533,14 @@ export async function generateGhanaLessonDocx(
         });
 
         // Table 4: Keywords & References (Rows 6-7)
-        // Independent grid: 2 columns [1500, 9000]
+        // Independent grid: 2 columns [2000, 8500] - Increased first column for "Keywords"
         const table4 = new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
-          columnWidths: [1500, 9000],
+          columnWidths: [2000, 8500],
           rows: [
             new TableRow({
               children: [
-                createCell(`Key Words:`, false, 1, false, true),
+                createCell(`Keywords:`, false, 1, false, true),
                 createCell(lessonData.keywords || '', false, 1, false),
               ],
             }),
