@@ -9,12 +9,13 @@ import {
 import { extractTextFromFile } from "./fileParsingService";
 
 // AI Provider Configuration
-const AI_PROVIDER = import.meta.env.VITE_AI_PROVIDER || "groq";
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+// Enforced to DeepSeek for production
+const AI_PROVIDER = "deepseek";
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY; // Kept for reference but unused
 const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY;
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
+const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
 
 // Helper functions for teaching philosophy and detail level
 function getPhilosophyGuidance(philosophy: string): string {
@@ -88,11 +89,8 @@ async function logAIUsage(
 }
 
 export async function callAIAPI(prompt: string, systemMessage?: string): Promise<string> {
-  if (AI_PROVIDER === "groq") {
-    return callGroqAPI(prompt, systemMessage);
-  } else {
-    return callDeepSeekAPI(prompt, systemMessage);
-  }
+  // Strictly use DeepSeek API
+  return callDeepSeekAPI(prompt, systemMessage);
 }
 
 async function callGroqAPI(prompt: string, systemMessage?: string): Promise<string> {
