@@ -6,511 +6,653 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export interface Database {
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "13.0.5"
+  }
   public: {
     Tables: {
-      profiles: {
+      ai_usage_logs: {
         Row: {
+          cost_estimate: number | null
+          created_at: string | null
+          error_message: string | null
           id: string
-          email: string
-          full_name: string | null
-          first_name: string | null
-          middle_name: string | null
-          last_name: string | null
-          school_name: string | null
-          subjects_taught: string[] | null
-          classes_taught: string[] | null
-          default_class_size: number | null
-          lessons_generated: number
-          subscription_tier: string
-          avatar_url: string | null
-          role: string
-          created_at: string
-          updated_at: string
+          model: string | null
+          request_type: string
+          success: boolean | null
+          tokens_used: number | null
+          user_id: string | null
         }
         Insert: {
-          id: string
-          email: string
-          full_name?: string | null
-          first_name?: string | null
-          middle_name?: string | null
-          last_name?: string | null
-          school_name?: string | null
-          subjects_taught?: string[] | null
-          classes_taught?: string[] | null
-          default_class_size?: number | null
-          lessons_generated?: number
-          subscription_tier?: string
-          avatar_url?: string | null
-          role?: string
-          created_at?: string
-          updated_at?: string
+          cost_estimate?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          model?: string | null
+          request_type: string
+          success?: boolean | null
+          tokens_used?: number | null
+          user_id?: string | null
         }
         Update: {
+          cost_estimate?: number | null
+          created_at?: string | null
+          error_message?: string | null
           id?: string
-          email?: string
-          full_name?: string | null
-          first_name?: string | null
-          middle_name?: string | null
-          last_name?: string | null
-          school_name?: string | null
-          subjects_taught?: string[] | null
-          classes_taught?: string[] | null
-          default_class_size?: number | null
-          lessons_generated?: number
-          subscription_tier?: string
-          avatar_url?: string | null
-          role?: string
-          created_at?: string
-          updated_at?: string
+          model?: string | null
+          request_type?: string
+          success?: boolean | null
+          tokens_used?: number | null
+          user_id?: string | null
         }
         Relationships: []
       }
-      lesson_notes: {
+      curriculum: {
         Row: {
-          id: string
-          user_id: string
-          template_id: string | null
-          title: string
-          curriculum: string
-          subject: string
-          grade_level: string
-          strand: string
-          sub_strand: string
-          content_standard: string
-          exemplars: string
-          generated_content: string
-          is_favorite: boolean
+          content_standards: Json
           created_at: string
+          curriculum_name: string
+          exemplars: string | null
+          grade_level: string
+          id: string
+          is_public: boolean | null
+          learning_indicators: Json
+          strand: string | null
+          sub_strand: string | null
+          subject: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
-          id?: string
-          user_id: string
-          template_id?: string | null
-          title: string
-          curriculum: string
-          subject: string
-          grade_level: string
-          strand: string
-          sub_strand: string
-          content_standard: string
-          exemplars: string
-          generated_content: string
-          is_favorite?: boolean
+          content_standards?: Json
           created_at?: string
+          curriculum_name: string
+          exemplars?: string | null
+          grade_level: string
+          id?: string
+          is_public?: boolean | null
+          learning_indicators?: Json
+          strand?: string | null
+          sub_strand?: string | null
+          subject: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
-          id?: string
-          user_id?: string
-          template_id?: string | null
-          title?: string
-          curriculum?: string
-          subject?: string
-          grade_level?: string
-          strand?: string
-          sub_strand?: string
-          content_standard?: string
-          exemplars?: string
-          generated_content?: string
-          is_favorite?: boolean
+          content_standards?: Json
           created_at?: string
+          curriculum_name?: string
+          exemplars?: string | null
+          grade_level?: string
+          id?: string
+          is_public?: boolean | null
+          learning_indicators?: Json
+          strand?: string | null
+          sub_strand?: string | null
+          subject?: string
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "lesson_notes_user_id_fkey"
+            foreignKeyName: "curriculum_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          }
+          },
         ]
       }
-      templates: {
+      curriculum_files: {
         Row: {
+          file_name: string
+          file_size: number | null
+          file_type: string | null
+          file_url: string
           id: string
+          is_system_wide: boolean | null
+          last_used: string | null
+          level: string | null
+          subject: string | null
+          tags: string[] | null
+          upload_date: string | null
+          use_count: number | null
           user_id: string | null
-          name: string
-          description: string | null
-          curriculum: string
-          structure: string
-          sections: string[]
-          is_public: boolean
-          is_system: boolean
-          created_at: string
-          updated_at: string
         }
         Insert: {
+          file_name: string
+          file_size?: number | null
+          file_type?: string | null
+          file_url: string
           id?: string
+          is_system_wide?: boolean | null
+          last_used?: string | null
+          level?: string | null
+          subject?: string | null
+          tags?: string[] | null
+          upload_date?: string | null
+          use_count?: number | null
           user_id?: string | null
-          name: string
-          description?: string | null
-          curriculum: string
-          structure: string
-          sections: string[]
-          is_public?: boolean
-          is_system?: boolean
-          created_at?: string
-          updated_at?: string
         }
         Update: {
+          file_name?: string
+          file_size?: number | null
+          file_type?: string | null
+          file_url?: string
           id?: string
+          is_system_wide?: boolean | null
+          last_used?: string | null
+          level?: string | null
+          subject?: string | null
+          tags?: string[] | null
+          upload_date?: string | null
+          use_count?: number | null
           user_id?: string | null
-          name?: string
-          description?: string | null
-          curriculum?: string
-          structure?: string
-          sections?: string[]
-          is_public?: boolean
-          is_system?: boolean
-          created_at?: string
-          updated_at?: string
         }
         Relationships: []
       }
       custom_templates: {
         Row: {
-          id: string
-          user_id: string
-          name: string
+          category: string | null
+          created_at: string | null
           description: string | null
-          file_url: string
+          download_count: number | null
           file_name: string
           file_size: number | null
-          is_public: boolean
-          is_favorite: boolean
-          category: string | null
+          file_url: string
+          id: string
+          is_favorite: boolean | null
+          is_public: boolean | null
+          name: string
           tags: string[] | null
-          download_count: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          download_count?: number | null
+          file_name: string
+          file_size?: number | null
+          file_url: string
+          id?: string
+          is_favorite?: boolean | null
+          is_public?: boolean | null
+          name: string
+          tags?: string[] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          download_count?: number | null
+          file_name?: string
+          file_size?: number | null
+          file_url?: string
+          id?: string
+          is_favorite?: boolean | null
+          is_public?: boolean | null
+          name?: string
+          tags?: string[] | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      lesson_notes: {
+        Row: {
+          content_standard: string | null
           created_at: string
+          curriculum: string | null
+          exemplars: string | null
+          generated_content: string
+          grade_level: string | null
+          id: string
+          is_favorite: boolean | null
+          strand: string | null
+          sub_strand: string | null
+          subject: string | null
+          template_id: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content_standard?: string | null
+          created_at?: string
+          curriculum?: string | null
+          exemplars?: string | null
+          generated_content: string
+          grade_level?: string | null
+          id?: string
+          is_favorite?: boolean | null
+          strand?: string | null
+          sub_strand?: string | null
+          subject?: string | null
+          template_id?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content_standard?: string | null
+          created_at?: string
+          curriculum?: string | null
+          exemplars?: string | null
+          generated_content?: string
+          grade_level?: string | null
+          id?: string
+          is_favorite?: boolean | null
+          strand?: string | null
+          sub_strand?: string | null
+          subject?: string | null
+          template_id?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lesson_notes_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lesson_notes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          classes_taught: Json | null
+          created_at: string
+          default_class_size: number | null
+          email: string
+          first_name: string | null
+          full_name: string | null
+          id: string
+          last_name: string | null
+          lessons_generated: number | null
+          middle_name: string | null
+          role: string | null
+          school_name: string | null
+          subjects_taught: Json | null
+          subscription_tier: string | null
           updated_at: string
         }
         Insert: {
-          id?: string
-          user_id: string
-          name: string
-          description?: string | null
-          file_url: string
-          file_name: string
-          file_size?: number | null
-          is_public?: boolean
-          is_favorite?: boolean
-          category?: string | null
-          tags?: string[] | null
-          download_count?: number
+          avatar_url?: string | null
+          classes_taught?: Json | null
           created_at?: string
+          default_class_size?: number | null
+          email: string
+          first_name?: string | null
+          full_name?: string | null
+          id: string
+          last_name?: string | null
+          lessons_generated?: number | null
+          middle_name?: string | null
+          role?: string | null
+          school_name?: string | null
+          subjects_taught?: Json | null
+          subscription_tier?: string | null
           updated_at?: string
         }
         Update: {
-          id?: string
-          user_id?: string
-          name?: string
-          description?: string | null
-          file_url?: string
-          file_name?: string
-          file_size?: number | null
-          is_public?: boolean
-          is_favorite?: boolean
-          category?: string | null
-          tags?: string[] | null
-          download_count?: number
+          avatar_url?: string | null
+          classes_taught?: Json | null
           created_at?: string
+          default_class_size?: number | null
+          email?: string
+          first_name?: string | null
+          full_name?: string | null
+          id?: string
+          last_name?: string | null
+          lessons_generated?: number | null
+          middle_name?: string | null
+          role?: string | null
+          school_name?: string | null
+          subjects_taught?: Json | null
+          subscription_tier?: string | null
           updated_at?: string
         }
         Relationships: []
       }
       resource_files: {
         Row: {
-          id: string
-          user_id: string
+          created_at: string
+          description: string | null
+          download_count: number | null
+          file_format: string
           file_name: string
           file_path: string
-          file_type: 'curriculum' | 'template' | 'resource'
-          file_format: 'pdf' | 'doc' | 'docx'
           file_size: number | null
-          title: string
-          description: string | null
+          file_type: string
           grade_level: string | null
+          id: string
+          is_public: boolean | null
           subject: string | null
           tags: string[] | null
-          is_public: boolean
-          download_count: number
-          created_at: string
+          title: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
-          id?: string
-          user_id: string
+          created_at?: string
+          description?: string | null
+          download_count?: number | null
+          file_format: string
           file_name: string
           file_path: string
-          file_type: 'curriculum' | 'template' | 'resource'
-          file_format: 'pdf' | 'doc' | 'docx'
           file_size?: number | null
-          title: string
-          description?: string | null
+          file_type: string
           grade_level?: string | null
+          id?: string
+          is_public?: boolean | null
           subject?: string | null
           tags?: string[] | null
-          is_public?: boolean
-          download_count?: number
-          created_at?: string
+          title: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
-          id?: string
-          user_id?: string
+          created_at?: string
+          description?: string | null
+          download_count?: number | null
+          file_format?: string
           file_name?: string
           file_path?: string
-          file_type?: 'curriculum' | 'template' | 'resource'
-          file_format?: 'pdf' | 'doc' | 'docx'
           file_size?: number | null
-          title?: string
-          description?: string | null
+          file_type?: string
           grade_level?: string | null
+          id?: string
+          is_public?: boolean | null
           subject?: string | null
           tags?: string[] | null
-          is_public?: boolean
-          download_count?: number
-          created_at?: string
+          title?: string
           updated_at?: string
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "resource_files_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       resource_library: {
         Row: {
-          id: string
-          user_id: string
-          title: string
+          created_at: string | null
           description: string | null
-          resource_type: 'image' | 'video' | 'document' | 'link' | 'activity'
-          file_url: string | null
+          download_count: number | null
           external_url: string | null
-          thumbnail_url: string | null
-          tags: string[] | null
-          subject: string | null
-          level: string | null
-          is_public: boolean
-          is_featured: boolean
-          download_count: number
-          view_count: number
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          title: string
-          description?: string | null
-          resource_type: 'image' | 'video' | 'document' | 'link' | 'activity'
-          file_url?: string | null
-          external_url?: string | null
-          thumbnail_url?: string | null
-          tags?: string[] | null
-          subject?: string | null
-          level?: string | null
-          is_public?: boolean
-          is_featured?: boolean
-          download_count?: number
-          view_count?: number
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          title?: string
-          description?: string | null
-          resource_type?: 'image' | 'video' | 'document' | 'link' | 'activity'
-          file_url?: string | null
-          external_url?: string | null
-          thumbnail_url?: string | null
-          tags?: string[] | null
-          subject?: string | null
-          level?: string | null
-          is_public?: boolean
-          is_featured?: boolean
-          download_count?: number
-          view_count?: number
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      curriculum: {
-        Row: {
+          file_url: string | null
           id: string
-          user_id: string
-          curriculum_name: string
-          grade_level: string
-          subject: string
-          strand: string | null
-          sub_strand: string | null
-          content_standards: string[]
-          learning_indicators: string[]
-          exemplars: string | null
-          is_public: boolean
-          created_at: string
-          updated_at: string
+          is_featured: boolean | null
+          is_public: boolean | null
+          level: string | null
+          resource_type: string
+          subject: string | null
+          tags: string[] | null
+          thumbnail_url: string | null
+          title: string
+          updated_at: string | null
+          user_id: string | null
+          view_count: number | null
         }
         Insert: {
+          created_at?: string | null
+          description?: string | null
+          download_count?: number | null
+          external_url?: string | null
+          file_url?: string | null
           id?: string
-          user_id: string
-          curriculum_name: string
-          grade_level: string
-          subject: string
-          strand?: string | null
-          sub_strand?: string | null
-          content_standards: string[]
-          learning_indicators: string[]
-          exemplars?: string | null
-          is_public?: boolean
-          created_at?: string
-          updated_at?: string
+          is_featured?: boolean | null
+          is_public?: boolean | null
+          level?: string | null
+          resource_type: string
+          subject?: string | null
+          tags?: string[] | null
+          thumbnail_url?: string | null
+          title: string
+          updated_at?: string | null
+          user_id?: string | null
+          view_count?: number | null
         }
         Update: {
+          created_at?: string | null
+          description?: string | null
+          download_count?: number | null
+          external_url?: string | null
+          file_url?: string | null
           id?: string
-          user_id?: string
-          curriculum_name?: string
-          grade_level?: string
-          subject?: string
-          strand?: string | null
-          sub_strand?: string | null
-          content_standards?: string[]
-          learning_indicators?: string[]
-          exemplars?: string | null
-          is_public?: boolean
-          created_at?: string
-          updated_at?: string
+          is_featured?: boolean | null
+          is_public?: boolean | null
+          level?: string | null
+          resource_type?: string
+          subject?: string | null
+          tags?: string[] | null
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string | null
+          view_count?: number | null
         }
         Relationships: []
       }
       standards_coverage: {
         Row: {
+          content_standard: string
+          created_at: string | null
+          date_taught: string
           id: string
-          user_id: string
-          subject: string
+          lesson_note_id: string | null
           level: string
+          notes: string | null
           strand: string
           sub_strand: string | null
-          content_standard: string
-          lesson_note_id: string | null
-          date_taught: string
-          notes: string | null
-          created_at: string
-          updated_at: string
+          subject: string
+          updated_at: string | null
+          user_id: string
         }
         Insert: {
+          content_standard: string
+          created_at?: string | null
+          date_taught: string
           id?: string
-          user_id: string
-          subject: string
+          lesson_note_id?: string | null
           level: string
+          notes?: string | null
           strand: string
           sub_strand?: string | null
-          content_standard: string
-          lesson_note_id?: string | null
-          date_taught: string
-          notes?: string | null
-          created_at?: string
-          updated_at?: string
+          subject: string
+          updated_at?: string | null
+          user_id: string
         }
         Update: {
+          content_standard?: string
+          created_at?: string | null
+          date_taught?: string
           id?: string
-          user_id?: string
-          subject?: string
+          lesson_note_id?: string | null
           level?: string
+          notes?: string | null
           strand?: string
           sub_strand?: string | null
-          content_standard?: string
-          lesson_note_id?: string | null
-          date_taught?: string
-          notes?: string | null
-          created_at?: string
-          updated_at?: string
+          subject?: string
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
-      ai_usage_logs: {
+      system_analytics: {
         Row: {
           id: string
-          user_id: string | null
-          request_type: string
-          model: string
-          tokens_used: number
-          success: boolean
-          error_message: string | null
-          created_at: string
+          metadata: Json | null
+          metric_name: string
+          metric_value: number | null
+          recorded_at: string | null
         }
         Insert: {
           id?: string
-          user_id?: string | null
-          request_type: string
-          model: string
-          tokens_used: number
-          success: boolean
-          error_message?: string | null
-          created_at?: string
+          metadata?: Json | null
+          metric_name: string
+          metric_value?: number | null
+          recorded_at?: string | null
         }
         Update: {
           id?: string
-          user_id?: string | null
-          request_type?: string
-          model?: string
-          tokens_used?: number
-          success?: boolean
-          error_message?: string | null
-          created_at?: string
+          metadata?: Json | null
+          metric_name?: string
+          metric_value?: number | null
+          recorded_at?: string | null
         }
         Relationships: []
+      }
+      template_favorites: {
+        Row: {
+          created_at: string
+          id: string
+          template_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          template_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          template_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_favorites_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_favorites_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      templates: {
+        Row: {
+          created_at: string
+          curriculum: string | null
+          description: string | null
+          id: string
+          is_public: boolean | null
+          is_system: boolean | null
+          name: string
+          sections: Json
+          structure: string
+          updated_at: string
+          usage_count: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          curriculum?: string | null
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          is_system?: boolean | null
+          name: string
+          sections?: Json
+          structure: string
+          updated_at?: string
+          usage_count?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          curriculum?: string | null
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          is_system?: boolean | null
+          name?: string
+          sections?: Json
+          structure?: string
+          updated_at?: string
+          usage_count?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "templates_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      increment_lessons_count: {
-        Args: {
-          user_id: string
-        }
-        Returns: undefined
-      }
       admin_insert_resource_file: {
         Args: {
-          p_user_id: string
+          p_description: string
+          p_file_format: string
           p_file_name: string
           p_file_path: string
-          p_file_type: string
-          p_file_format: string
           p_file_size: number
-          p_title: string
-          p_description: string
+          p_file_type: string
           p_grade_level: string
+          p_is_public: boolean
           p_subject: string
           p_tags: string[]
-          p_is_public: boolean
+          p_title: string
+          p_user_id: string
         }
         Returns: string
       }
-      increment_resource_views: {
-        Args: {
-          resource_id: string
-        }
+      increment_lessons_count: { Args: { user_id: string }; Returns: undefined }
+      increment_resource_downloads: {
+        Args: { resource_id: string }
         Returns: undefined
       }
-      increment_resource_downloads: {
-        Args: {
-          resource_id: string
-        }
+      increment_resource_views: {
+        Args: { resource_id: string }
         Returns: undefined
       }
       log_ai_usage: {
         Args: {
-          p_user_id: string
-          p_request_type: string
+          p_error_message?: string
           p_model: string
-          p_tokens_used: number
+          p_request_type: string
           p_success: boolean
-          p_error_message: string
+          p_tokens_used: number
+          p_user_id: string
         }
         Returns: undefined
       }
@@ -523,3 +665,126 @@ export interface Database {
     }
   }
 }
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const
