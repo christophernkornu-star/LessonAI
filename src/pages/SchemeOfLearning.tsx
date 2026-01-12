@@ -187,7 +187,59 @@ export default function SchemeOfLearning() {
         });
       }
     }
-    return items;
+
+    // Group items by Week
+    const groupedItems = new Map<string, SchemeItem>();
+    
+    // Helper to join unique strings
+    const mergeFields = (existing: string, incoming: string, separator: string = "\n") => {
+      if (!incoming) return existing;
+      if (!existing) return incoming;
+      
+      // Check for exact match or substring to avoid simple duplication
+      const normExisting = existing.replace(/\s+/g, ' ').trim();
+      const normIncoming = incoming.replace(/\s+/g, ' ').trim();
+      
+      if (normExisting.includes(normIncoming)) return existing;
+      
+      return `${existing}${separator}${incoming}`;
+    };
+
+    // Helper specifically for resources to avoiding duplicating words/phrases
+    const mergeResources = (r1: string, r2: string) => {
+      if (!r1) return r2;
+      if (!r2) return r1;
+      const parts1 = r1.split(',').map(s => s.trim()).filter(Boolean);
+      const parts2 = r2.split(',').map(s => s.trim()).filter(Boolean);
+      const unique = Array.from(new Set([...parts1, ...parts2]));
+      return unique.join(', ');
+    };
+
+    for (const item of items) {
+      // Use Week (normalized) as the primary key. 
+      const key = `${item.week?.trim()}-${item.subject?.trim()}-${item.classLevel?.trim()}`;
+      
+      if (!groupedItems.has(key)) {
+        groupedItems.set(key, item);
+      } else {
+        const existing = groupedItems.get(key)!;
+        
+        // Merge relevant fields
+        // For Structure & Standards, we append if new
+        existing.strand = mergeFields(existing.strand, item.strand);
+        existing.subStrand = mergeFields(existing.subStrand, item.subStrand);
+        existing.contentStandard = mergeFields(existing.contentStandard, item.contentStandard);
+        existing.indicators = mergeFields(existing.indicators, item.indicators);
+        existing.exemplars = mergeFields(existing.exemplars, item.exemplars);
+        
+        // For Resources, we use the smarter merge
+        existing.resources = mergeResources(existing.resources, item.resources);
+        
+        // Keep the first instance of 'Week Ending', 'Term', etc.
+      }
+    }
+
+    return Array.from(groupedItems.values());
   };
 
   const handleGenerate = (item: SchemeItem) => {
