@@ -86,11 +86,14 @@ export default function SchemeOfLearning() {
           variant: "destructive",
         });
       } else {
-        setSchemeData(parsed);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+        setSchemeData(prev => {
+          const updated = [...prev, ...parsed];
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+          return updated;
+        });
         toast({
           title: "Success",
-          description: `Loaded ${parsed.length} rows from scheme.`,
+          description: `Added ${parsed.length} rows to your scheme list.`,
         });
       }
     } catch (error) {
@@ -102,6 +105,8 @@ export default function SchemeOfLearning() {
       });
     } finally {
       setIsLoading(false);
+      // Reset input so the same file can be selected again if needed
+      e.target.value = '';
     }
   };
 
@@ -191,18 +196,26 @@ export default function SchemeOfLearning() {
     // Group items by Week
     const groupedItems = new Map<string, SchemeItem>();
     
-    // Helper to join unique strings
+    // Helper to join unique strings using Set to ensure no data loss but clean duplication
     const mergeFields = (existing: string, incoming: string, separator: string = "\n") => {
       if (!incoming) return existing;
       if (!existing) return incoming;
       
-      // Check for exact match or substring to avoid simple duplication
-      const normExisting = existing.replace(/\s+/g, ' ').trim();
-      const normIncoming = incoming.replace(/\s+/g, ' ').trim();
+      const distinctValues = new Set<string>();
       
-      if (normExisting.includes(normIncoming)) return existing;
-      
-      return `${existing}${separator}${incoming}`;
+      // Add existing items
+      existing.split(separator)
+        .map(p => p.trim())
+        .filter(p => p.length > 0)
+        .forEach(p => distinctValues.add(p));
+        
+      // Add incoming items
+      incoming.split(separator)
+        .map(p => p.trim()) // simple match
+        .filter(p => p.length > 0)
+        .forEach(p => distinctValues.add(p));
+        
+      return Array.from(distinctValues).join(separator);
     };
 
     // Helper specifically for resources to avoiding duplicating words/phrases

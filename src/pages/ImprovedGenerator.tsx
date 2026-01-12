@@ -11,7 +11,7 @@ import { MultiSelectCombobox } from "@/components/ui/multi-select-combobox";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Sparkles, Loader2, ChevronLeft, ChevronRight, Save, WifiOff, Info, MapPin, ClipboardPaste } from "lucide-react";
+import { Sparkles, Loader2, ChevronLeft, ChevronRight, Save, WifiOff, Info, MapPin, ClipboardPaste, FileText } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { generateLessonNote, parseCurriculumPaste, type LessonData } from "@/services/aiService";
 import { LessonNotesService } from "@/services/lessonNotesService";
@@ -62,6 +62,9 @@ const ImprovedGenerator = () => {
   const [selectedIndicators, setSelectedIndicators] = useState<string[]>([]);
   const [availableExemplars, setAvailableExemplars] = useState<string[]>([]);
   const [selectedExemplars, setSelectedExemplars] = useState<string[]>([]);
+  const [schemeItems, setSchemeItems] = useState<any[]>([]);
+  const [isSchemeDialogOpen, setIsSchemeDialogOpen] = useState(false);
+  const [schemeSearch, setSchemeSearch] = useState("");
 
   const { data: lessonData, setData: setLessonData, lastSaved, isSaving, clearDraft } = useDraft(
     {
@@ -798,6 +801,52 @@ const ImprovedGenerator = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentStep]);
 
+  // Load scheme data
+  useEffect(() => {
+    const saved = localStorage.getItem("scheme_of_learning_data");
+    if (saved) {
+      try {
+        setSchemeItems(JSON.parse(saved));
+      } catch (e) { console.error(e); }
+    }
+  }, []);
+
+  const handleApplyScheme = (item: any) => {
+    setLessonData(prev => ({
+      ...prev,
+      level: item.classLevel || prev.level,
+      subject: item.subject || prev.subject,
+      term: item.term || prev.term,
+      weekNumber: item.week || prev.weekNumber,
+      weekEnding: item.weekEnding || prev.weekEnding,
+      strand: item.strand || prev.strand,
+      subStrand: item.subStrand || prev.subStrand,
+      contentStandard: item.contentStandard || prev.contentStandard,
+      indicators: item.indicators || prev.indicators,
+      exemplars: item.exemplars || prev.exemplars,
+      schemeResources: item.resources || "" // Store resources from scheme to be used in prompt
+    }));
+    
+    // Clear relevant errors
+    setValidationErrors({ ...validationErrors, level: "", subject: "" });
+    setIsSchemeDialogOpen(false);
+    toast({ 
+      title: "Scheme Data Loaded", 
+      description: `Loaded ${item.subject} Week ${item.week}`,
+    });
+  };
+
+  const filteredSchemeItems = schemeItems.filter(item => {
+    if (!schemeSearch) return true;
+    const search = schemeSearch.toLowerCase();
+    return (
+      item.subject?.toLowerCase().includes(search) ||
+      item.week?.toLowerCase().includes(search) ||
+      item.classLevel?.toLowerCase().includes(search) ||
+      item.strand?.toLowerCase().includes(search)
+    );
+  });
+
   if (isLoading) {
     return <GeneratorSkeleton />;
   }
@@ -841,7 +890,20 @@ const ImprovedGenerator = () => {
                 {/* Step 0: Basic Info */}
                 {currentStep === 0 && (
                   <div className="space-y-4 sm:space-y-6 animate-in fade-in-50 duration-500">
-                    <h3 className="text-lg sm:text-xl font-semibold">Basic Information</h3>
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-lg sm:text-xl font-semibold">Basic Information</h3>
+                      {schemeItems.length > 0 && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => setIsSchemeDialogOpen(true)}
+                          className="gap-2 text-primary border-primary hover:bg-primary/10"
+                        >
+                          <FileText className="h-4 w-4" />
+                          Load from Scheme
+                        </Button>
+                      )}
+                    </div>
                     
                     <div className="grid gap-4 sm:gap-6">
                       <div className="space-y-2">
@@ -1490,6 +1552,113 @@ const ImprovedGenerator = () => {
                     <ClipboardPaste className="mr-2 h-4 w-4" />
                   )}
                   Paste and Parse
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Scheme Selection Dialog */}
+        <Dialog open={isSchemeDialogOpen} onOpenChange={setIsSchemeDialogOpen}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Select Scheme of Learning</DialogTitle>
+              <DialogDescription>
+                Choose a scheme from the list below to apply its data to the form. You can also paste new data directly.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* Search and Filter */}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Search by subject, week, or class level"
+                  value={schemeSearch}
+                  onChange={(e) => setSchemeSearch(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSchemeSearch("");
+                    setSchemeItems(JSON.parse(localStorage.getItem("scheme_of_learning_data") || "[]"));
+                  }}
+                  disabled={isGenerating}
+                >
+                  Clear Search
+                </Button>
+              </div>
+
+              {/* Scheme Items List */}
+              <div className="max-h-[400px] overflow-y-auto">
+                {filteredSchemeItems.length > 0 ? (
+                  filteredSchemeItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="p-4 rounded-lg bg-muted cursor-pointer hover:bg-muted/80 transition"
+                      onClick={() => handleApplyScheme(item)}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="text-sm font-medium">{item.subject}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.classLevel} - {item.week}
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleApplyScheme(item);
+                          }}
+                        >
+                          <Save className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="mt-2">
+                        <p className="text-xs text-muted-foreground line-clamp-2">
+                          {item.indicators}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-center text-muted-foreground py-4">
+                    No schemes found. You can paste new data below.
+                  </p>
+                )}
+              </div>
+
+              {/* Paste New Scheme Data */}
+              <div className="space-y-2">
+                <Label htmlFor="newSchemeData">Or paste new scheme data</Label>
+                <Textarea
+                  id="newSchemeData"
+                  placeholder="Paste your scheme of learning data here..."
+                  rows={4}
+                  className="resize-none"
+                  value={pastedText}
+                  onChange={(e) => setPastedText(e.target.value)}
+                />
+                <Button
+                  onClick={async () => {
+                    try {
+                      const parsedData = JSON.parse(pastedText);
+                      if (Array.isArray(parsedData)) {
+                        localStorage.setItem("scheme_of_learning_data", JSON.stringify(parsedData));
+                        setSchemeItems(parsedData);
+                        toast({ title: "Data Imported", description: "New scheme data has been imported successfully." });
+                      } else {
+                        toast({ title: "Invalid Data", description: "Please ensure the pasted data is in the correct format.", variant: "destructive" });
+                      }
+                    } catch (error) {
+                      toast({ title: "Error", description: "Failed to import data. Please try again.", variant: "destructive" });
+                      console.error(error);
+                    }
+                  }}
+                >
+                  Import Scheme Data
                 </Button>
               </div>
             </div>

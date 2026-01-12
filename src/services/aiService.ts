@@ -439,7 +439,7 @@ ${data.template.structure}
 - Replace {PERFORMANCE_INDICATOR} with specific measurable outcomes starting with "By the end of the lesson, learners will be able to:"
 - Replace {CORE_COMPETENCIES} with relevant competencies (e.g., Critical Thinking, Creativity, Communication, Collaboration)
 - Replace {KEYWORDS} with key vocabulary terms for this lesson
-- Replace {REFERENCE} with ONLY the specific curriculum materials, textbooks, or resources used to generate this lesson. Do not list generic references.
+- Replace {REFERENCE} with specific resources from scheme: "${data.schemeResources || ""}" and other curriculum materials. Do not list generic references.
 - Replace {STARTER_DURATION}, {NEW_LEARNING_DURATION}, {REFLECTION_DURATION} with appropriate time allocations (e.g., "10 minutes", "30 minutes", "15 minutes")
 - For {STARTER_ACTIVITIES} and {REFLECTION_ACTIVITIES}: Describe the activity directly WITHOUT "Activity 1" prefixes.
 - For {NEW_LEARNING_ACTIVITIES}: Number the activities (Activity 1:, Activity 2:) starting on new lines and USE bold formatting (e.g. **Activity 1:**).
@@ -501,7 +501,8 @@ BEGIN THE FILLED TEMPLATE NOW:`;
 **Strand:** ${data.strand}
 **Sub-Strand:** ${data.subStrand}
 **Content Standard:** ${data.contentStandard}
-**Exemplars/Learning Indicators:** ${data.exemplars}${curriculumFilesInfo}${resourceFilesInfo}
+**Exemplars/Learning Indicators:** ${data.exemplars}
+**Scheme Resources:** ${data.schemeResources || "Standard teaching materials"}${curriculumFilesInfo}${resourceFilesInfo}
 
 ${ghanaContextPrompt}
 
