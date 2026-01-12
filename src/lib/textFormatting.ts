@@ -28,13 +28,14 @@ export function cleanAndSplitText(text: string): string[] {
     processed = processed.replace(/(\s)(Tier\s\d)/g, '\n$2');
   }
 
-  // Fix "Activity N:" merging
-  // First, strip existing stars if any, to normalize (User requested NO asterisks)
+  // Fix "Activity N:" merging and ensure bold formatting
+  // First, strip existing stars if any, to normalize
   processed = processed.replace(/\*\*(Activity\s+\d+:?)\*\*/gi, '$1');
   processed = processed.replace(/\*\*(Activity\s+\d+:?)/gi, '$1');
   
-  // Now ensure newline ONLY (No bold adding)
+  // Now ensure newline and add bold wrapping
   processed = processed.replace(/([^\n])\s*(Activity\s+\d+:?)/gi, '$1\n$2');
+  processed = processed.replace(/(Activity\s+\d+:?)/gi, '**$1**');
   
   return processed.split('\n');
 }

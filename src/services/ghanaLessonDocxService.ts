@@ -576,7 +576,7 @@ export async function generateGhanaLessonDocx(
             new TableRow({
               children: [
                 createCell(`PHASE 1: STARTER`, true, 1, false),
-                createCell(capitalizeWords(cleanActivityPrefix(lessonData.phases?.phase1_starter?.learnerActivities || "")), false, 1, false),
+                createCell(capitalizeWords(lessonData.phases?.phase1_starter?.learnerActivities || ""), false, 1, false),
                 createCell(capitalizeWords(lessonData.phases?.phase1_starter?.resources || ""), false, 1, false),
               ],
             }),
@@ -594,7 +594,7 @@ export async function generateGhanaLessonDocx(
             new TableRow({
               children: [
                 createCell(`PHASE 3: REFLECTION`, true, 1, false),
-                createCell(capitalizeWords(cleanActivityPrefix(lessonData.phases?.phase3_reflection?.learnerActivities || "")), false, 1, false),
+                createCell(capitalizeWords(lessonData.phases?.phase3_reflection?.learnerActivities || ""), false, 1, false),
                 createCell(capitalizeWords(lessonData.phases?.phase3_reflection?.resources || ""), false, 1, false),
               ],
             }),
