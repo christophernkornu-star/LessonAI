@@ -230,15 +230,21 @@ export default function SchemeOfLearning() {
 
     for (const item of items) {
       // Use Week (normalized) as the primary key. 
-      const key = `${item.week?.trim()}-${item.subject?.trim()}-${item.classLevel?.trim()}`;
+      // Key includes subject to keep different subjects separate (as requested: "except it has a different subject")
+      // We use lowercase for the key to handle case inconsistencies, but preserve the original casing in the object
+      const normalizedWeek = item.week?.trim().toLowerCase();
+      const normalizedSubject = item.subject?.trim().toLowerCase();
+      const normalizedLevel = item.classLevel?.trim().toLowerCase();
+      
+      const key = `${normalizedWeek}-${normalizedSubject}-${normalizedLevel}`;
       
       if (!groupedItems.has(key)) {
         groupedItems.set(key, item);
       } else {
         const existing = groupedItems.get(key)!;
         
-        // Merge relevant fields
-        // For Structure & Standards, we append if new
+        // Merge relevant fields for the same week & subject
+        // For Structure & Standards, we append if new to ensure no data is missing
         existing.strand = mergeFields(existing.strand, item.strand);
         existing.subStrand = mergeFields(existing.subStrand, item.subStrand);
         existing.contentStandard = mergeFields(existing.contentStandard, item.contentStandard);
@@ -248,7 +254,7 @@ export default function SchemeOfLearning() {
         // For Resources, we use the smarter merge
         existing.resources = mergeResources(existing.resources, item.resources);
         
-        // Keep the first instance of 'Week Ending', 'Term', etc.
+        // Note: We don't overwrite ID, Week, Subject, Term etc. as they are the grouping keys or assumed consistent
       }
     }
 
