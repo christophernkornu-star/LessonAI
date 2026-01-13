@@ -112,7 +112,7 @@ export default function SchemeOfLearning() {
 
   const parseCSV = (text: string): SchemeItem[] => {
     const lines = text.split(/\r?\n/).filter(line => line.trim());
-    if (lines.length < 2) return [];
+    if (lines.length < 1) return [];
 
     // Detect delimiter (comma or semicolon)
     const firstLine = lines[0];
@@ -120,28 +120,40 @@ export default function SchemeOfLearning() {
     const semiCount = (firstLine.match(/;/g) || []).length;
     const delimiter = semiCount > commaCount ? ';' : ',';
     
-    // Parse headers to map columns dynamically
-    const headers = firstLine.split(delimiter).map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''));
+    // Heuristic: Check if first line is a header
+    // Look for keywords AND absence of data patterns (like "Week 1", dates)
+    const normalizedFirstLine = firstLine.toLowerCase();
+    const hasHeaderKeywords = normalizedFirstLine.includes('week') || normalizedFirstLine.includes('subject') || normalizedFirstLine.includes('strand');
+    const looksLikeData = normalizedFirstLine.match(/week\s*\d/i) || normalizedFirstLine.match(/\d{1,2}\/\d{1,2}\/\d{4}/);
     
-    const headerMap: Record<string, number> = {};
-    headers.forEach((h, i) => {
-      if (h.includes('week') && h.includes('ending')) headerMap['weekEnding'] = i;
-      else if (h.includes('week')) headerMap['week'] = i;
-      else if (h.includes('term')) headerMap['term'] = i;
-      else if (h.includes('subject')) headerMap['subject'] = i;
-      else if (h.includes('class') || h.includes('level')) headerMap['classLevel'] = i;
-      else if (h.includes('sub-strand') || h.includes('sub strand') || h === 'sub strand') headerMap['subStrand'] = i;
-      else if (h.includes('strand')) headerMap['strand'] = i;
-      else if (h.includes('content') || h.includes('standard')) headerMap['contentStandard'] = i;
-      else if ((h.includes('indicator') || h.includes('learning')) && !h.includes('exemplar')) headerMap['indicators'] = i;
-      else if (h.includes('exemplar')) headerMap['exemplars'] = i;
-      else if (h.includes('resource')) headerMap['resources'] = i;
-    });
+    // If it mentions typical headers but DOESN'T look like specific data row, treat as header
+    // But if it says "Week 1", it's definitely data even if it contains "Week"
+    const hasHeader = hasHeaderKeywords && !looksLikeData;
+
+    let headerMap: Record<string, number> = {};
+    let startIndex = 0;
+
+    if (hasHeader) {
+      startIndex = 1;
+      const headers = firstLine.split(delimiter).map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''));
+      headers.forEach((h, i) => {
+        if (h.includes('week') && h.includes('ending')) headerMap['weekEnding'] = i;
+        else if (h.includes('week')) headerMap['week'] = i;
+        else if (h.includes('term')) headerMap['term'] = i;
+        else if (h.includes('subject')) headerMap['subject'] = i;
+        else if (h.includes('class') || h.includes('level') || h.includes('basic')) headerMap['classLevel'] = i;
+        else if (h.includes('sub-strand') || h.includes('sub strand') || h === 'sub strand') headerMap['subStrand'] = i;
+        else if (h.includes('strand')) headerMap['strand'] = i;
+        else if (h.includes('content') || h.includes('standard')) headerMap['contentStandard'] = i;
+        else if ((h.includes('indicator') || h.includes('learning')) && !h.includes('exemplar')) headerMap['indicators'] = i;
+        else if (h.includes('exemplar')) headerMap['exemplars'] = i;
+        else if (h.includes('resource') || h.includes('material')) headerMap['resources'] = i;
+      });
+    }
 
     const items: SchemeItem[] = [];
     
-    // Skip header
-    for (let i = 1; i < lines.length; i++) {
+    for (let i = startIndex; i < lines.length; i++) {
       let row: string[] = [];
       
       // Split respecting quotes
@@ -153,12 +165,11 @@ export default function SchemeOfLearning() {
       
       if (row.length <= 1 && !row[0]) continue; 
 
-      // Use header mapping if available, otherwise fallback to index
       if (Object.keys(headerMap).length > 0) {
         items.push({
           id: `scheme-${Date.now()}-${i}`,
           week: row[headerMap['week']] || "",
-          weekEnding: row[headerMap['weekEnding']] || "",
+          weekEnding: headerMap['weekEnding'] !== undefined ? row[headerMap['weekEnding']] : (row[1] || ""), // Fallback for week ending if mapped week but no ending
           term: row[headerMap['term']] || "",
           subject: row[headerMap['subject']] || "",
           classLevel: row[headerMap['classLevel']] || "",
@@ -171,8 +182,7 @@ export default function SchemeOfLearning() {
         });
       } else {
         // Fallback to standard order: Week, Week Ending, Term, Subject, Class, Strand, SubStrand, Content Standard, Indicators, Exemplars, Resources
-        // Note: If the user's CSV doesn't have exemplars column, this might shift resources. 
-        // But standard template usually has 10 columns now.
+        // The attached file format: Week 1, Date, Term, Subject, Class, Strand, Sub-Strand, Content Standard, Indicators, Exemplars(Maybe Empty), Resources
         
         const hasExemplars = row.length > 10;
         
@@ -230,21 +240,15 @@ export default function SchemeOfLearning() {
 
     for (const item of items) {
       // Use Week (normalized) as the primary key. 
-      // Key includes subject to keep different subjects separate (as requested: "except it has a different subject")
-      // We use lowercase for the key to handle case inconsistencies, but preserve the original casing in the object
-      const normalizedWeek = item.week?.trim().toLowerCase();
-      const normalizedSubject = item.subject?.trim().toLowerCase();
-      const normalizedLevel = item.classLevel?.trim().toLowerCase();
-      
-      const key = `${normalizedWeek}-${normalizedSubject}-${normalizedLevel}`;
+      const key = `${item.week?.trim()}-${item.subject?.trim()}-${item.classLevel?.trim()}`;
       
       if (!groupedItems.has(key)) {
         groupedItems.set(key, item);
       } else {
         const existing = groupedItems.get(key)!;
         
-        // Merge relevant fields for the same week & subject
-        // For Structure & Standards, we append if new to ensure no data is missing
+        // Merge relevant fields
+        // For Structure & Standards, we append if new
         existing.strand = mergeFields(existing.strand, item.strand);
         existing.subStrand = mergeFields(existing.subStrand, item.subStrand);
         existing.contentStandard = mergeFields(existing.contentStandard, item.contentStandard);
@@ -254,7 +258,7 @@ export default function SchemeOfLearning() {
         // For Resources, we use the smarter merge
         existing.resources = mergeResources(existing.resources, item.resources);
         
-        // Note: We don't overwrite ID, Week, Subject, Term etc. as they are the grouping keys or assumed consistent
+        // Keep the first instance of 'Week Ending', 'Term', etc.
       }
     }
 
