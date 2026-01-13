@@ -263,8 +263,31 @@ async function callDeepSeekAPI(prompt: string, systemMessage?: string): Promise<
   }
 }
 
-export async function generateLessonNote(data: LessonData): Promise<string> {
+export async function generateLessonNote(originalData: LessonData): Promise<string> {
   try {
+    // Clone data to avoid mutating the original
+    const data = { ...originalData };
+    
+    // LOGIC: Handle Strands for Single vs Multiple Lessons
+    // If numLessons is 1, restrict to the first strand/sub-strand.
+    // If numLessons > 1, allow full content (will be spread by AI).
+    const numLessons = data.numLessons || 1;
+    
+    if (numLessons === 1) {
+      const splitAndGetFirst = (text: string | undefined) => {
+        if (!text) return "";
+        // Split by newlines (used in Scheme grouping)
+        const parts = text.split('\n');
+        return parts[0].trim();
+      };
+      
+      data.strand = splitAndGetFirst(data.strand);
+      data.subStrand = splitAndGetFirst(data.subStrand);
+      data.contentStandard = splitAndGetFirst(data.contentStandard);
+      data.indicators = splitAndGetFirst(data.indicators);
+      data.exemplars = splitAndGetFirst(data.exemplars);
+    }
+    
     // Fetch selected files if any
     let curriculumFilesInfo = "";
     let resourceFilesInfo = "";
@@ -443,6 +466,7 @@ ${data.template.structure}
 - Replace {STARTER_DURATION}, {NEW_LEARNING_DURATION}, {REFLECTION_DURATION} with appropriate time allocations (e.g., "10 minutes", "30 minutes", "15 minutes")
 - For {STARTER_ACTIVITIES} and {REFLECTION_ACTIVITIES}: Describe the activity directly WITHOUT "Activity 1" prefixes.
 - For {NEW_LEARNING_ACTIVITIES}: Number the activities (Activity 1:, Activity 2:) starting on new lines and USE bold formatting (e.g. **Activity 1:**).
+  ${data.numLessons && data.numLessons > 1 ? '- **IMPORTANT - MULTIPLE LESSONS:** The provided Strand/Content covers multiple topics. Spread these topics across the ' + data.numLessons + ' lessons. Do NOT put more than one major strand topic in a single lesson. Lesson 1 should focus on the first topic, Lesson 2 on the second, etc.' : ''}
 - For {STARTER_RESOURCES}, {NEW_LEARNING_RESOURCES}, {REFLECTION_RESOURCES}, list ONLY essential, simple, and readily available materials (avoid long lists)
 - For sections like {INTRODUCTION}, {MAIN_ACTIVITIES}, {ASSESSMENT}, etc., write detailed, practical content
 
@@ -530,6 +554,16 @@ Include descriptions of relevant diagrams, charts, illustrations, or visual aids
    - Guided practice activities
    - Examples and demonstrations
    - IMPORTANT: Start every "Activity X:" on a new line and use bold formatting (e.g., **Activity 1:**).
+   ${data.numLessons && data.numLessons > 1 ? `
+   - **CRITICAL - MULTIPLE STRANDS/LESSONS:**
+     You have been provided with distinct Strands/Sub-strands for this week (separated by newlines).
+     You are creating a plan for ${data.numLessons} lessons.
+     **RULE:** You must STRICTLY separate the strands.
+     - **Lesson 1** must focus ONLY on the *first* Strand/Sub-strand provided.
+     - **Lesson 2** must focus ONLY on the *second* Strand/Sub-strand provided (if available).
+     - **Lesson 3** must focus ONLY on the *third* Strand/Sub-strand provided (if available).
+     - **DO NOT** combine multiple strands into a single lesson/activity session. 
+     - If you run out of unique strands, you may extend the last strand or review, but NEVER squash distinct strands together.` : ''}
 6. Assessment Methods
 7. Differentiation Strategies
 8. Closure/Summary (5 minutes)
