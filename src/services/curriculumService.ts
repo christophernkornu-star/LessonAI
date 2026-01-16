@@ -655,5 +655,69 @@ export class CurriculumService {
       return { totalItems: 0, uniqueSubjects: 0, uniqueGrades: 0 };
     }
   }
+
+  // Find exemplars for specific content standard
+  static async findRelatedExemplars(
+    userId: string | undefined, 
+    gradeLevel: string, 
+    subject: string, 
+    contentStandardText: string
+  ): Promise<string[]> {
+    try {
+      // 1. Get broader dataset for this subject/class
+      const curriculumItems = await this.getCurriculumByGradeAndSubject(gradeLevel, subject, userId);
+      
+      if (!curriculumItems || curriculumItems.length === 0) return [];
+
+      // 2. Extract code from the search text (e.g. "B3.3.1.1" from "B3.3.1.1 Demonstrate...")
+      // Codes usually look like B1.2.3.4 or B1.2.3.4.1
+      const codeMatch = contentStandardText.match(/([A-Z]\d+(\.\d+)+)/i);
+      const searchCode = codeMatch ? codeMatch[0] : null;
+
+      if (!searchCode) {
+        console.log("No standard code found in scheme text, skipping exemplar lookup.");
+        return [];
+      }
+
+      console.log(`Searching for exemplars for code: ${searchCode}`);
+
+      // 3. Search for the code in the curriculum items
+      for (const item of curriculumItems) {
+        // Check content standards
+        const standards = Array.isArray(item.content_standards) ? item.content_standards : [item.content_standards];
+        
+        // Is our code inside any of the standards in this DB row?
+        const isMatch = standards.some((s: string) => s && s.includes(searchCode));
+
+        if (isMatch) {
+          // Found the matching row! Return its exemplars.
+          // Exemplars might be stored as a single big string or JSON array
+          // Based on previous extractCurriculumFromText, it might be a string.
+          // But if it was parsed nicely, it might be separated.
+          // Let's assume it's a string, and we need to split it if it looks like a list.
+          
+          let exemplarsRaw = item.exemplars;
+          if (!exemplarsRaw) continue;
+
+          // If it's already an array (unlikely based on interface but possible in JS)
+          if (Array.isArray(exemplarsRaw)) return exemplarsRaw;
+          
+          if (typeof exemplarsRaw === 'string') {
+            // Heuristic split: Split by newlines or bullets
+            // Clean up
+            const clean = exemplarsRaw.split(/\r?\n|•|- /)
+                            .map(e => e.trim())
+                            .filter(e => e.length > 5); // Filter out tiny fragments
+            return clean;
+          }
+        }
+      }
+
+      return [];
+    } catch (e) {
+      console.error("Error finding related exemplars:", e);
+      return [];
+    }
+  }
 }
 

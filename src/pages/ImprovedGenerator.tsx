@@ -708,8 +708,10 @@ const ImprovedGenerator = () => {
         }
       }
     } else {
-      // If no indicators selected, clear available exemplars
-      setAvailableExemplars([]);
+      // If no indicators selected, clear selected exemplars.
+      // We do NOT clear availableExemplars here because they might have been 
+      // populated via the text-pairing lookup (Scheme load) and we want them visible.
+      // setAvailableExemplars([]);
       setSelectedExemplars([]);
     }
   }, [selectedIndicators, lessonData.contentStandard, availableContentStandards]);
@@ -811,7 +813,8 @@ const ImprovedGenerator = () => {
     }
   }, []);
 
-  const handleApplyScheme = (item: any) => {
+  const handleApplyScheme = async (item: any) => {
+    // 1. Apply basic data immediately
     setLessonData(prev => ({
       ...prev,
       level: item.classLevel || prev.level,
@@ -824,16 +827,40 @@ const ImprovedGenerator = () => {
       contentStandard: item.contentStandard || prev.contentStandard,
       indicators: item.indicators || prev.indicators,
       exemplars: item.exemplars || prev.exemplars,
-      schemeResources: item.resources || "" // Store resources from scheme to be used in prompt
+      schemeResources: item.resources || "" 
     }));
     
-    // Clear relevant errors
+    // Clear errors
     setValidationErrors({ ...validationErrors, level: "", subject: "" });
     setIsSchemeDialogOpen(false);
     toast({ 
       title: "Scheme Data Loaded", 
       description: `Loaded ${item.subject} Week ${item.week}`,
     });
+
+    // 2. Try to find better exemplars from the uploaded curriculum
+    if (item.contentStandard && item.classLevel && item.subject) {
+       toast({ title: "Looking up details...", description: "Checking curriculum for specific exemplars..." });
+       try {
+         const foundExemplars = await CurriculumService.findRelatedExemplars(
+           currentUser?.id,
+           item.classLevel,
+           item.subject,
+           item.contentStandard
+         );
+         
+         if (foundExemplars && foundExemplars.length > 0) {
+           setAvailableExemplars(foundExemplars);
+           // Don't auto-select, let user choose. Or maybe auto-select if empty?
+           // Currently we keep the scheme's text as default.
+           toast({ title: "Exemplars Found", description: `Found ${foundExemplars.length} matching exemplars.` });
+         } else {
+           setAvailableExemplars([]);
+         }
+       } catch (err) {
+         console.error("Failed exemplar lookup", err);
+       }
+    }
   };
 
   const filteredSchemeItems = schemeItems.filter(item => {
@@ -1260,45 +1287,35 @@ const ImprovedGenerator = () => {
 
                     <div className="space-y-2">
                       <Label htmlFor="exemplars">Exemplars</Label>
-                      {(() => {
-                        const selectedStandardObj = availableContentStandards.find(cs => 
-                          lessonData.contentStandard === cs.code || 
-                          lessonData.contentStandard.startsWith(`${cs.code}:`) ||
-                          lessonData.contentStandard.startsWith(`${cs.code} `)
-                        );
-                        const hasExemplarsInCurriculum = selectedStandardObj && selectedStandardObj.exemplars && selectedStandardObj.exemplars.length > 0;
-                        
-                        if (hasExemplarsInCurriculum) {
-                          return (
-                            <MultiSelectCombobox
+                      {availableExemplars.length > 0 && (
+                        <div className="mb-2">
+                           <p className="text-xs text-muted-foreground mb-1">Select from curriculum:</p>
+                           <MultiSelectCombobox
                               options={availableExemplars}
                               selected={selectedExemplars}
                               onChange={setSelectedExemplars}
-                              placeholder={selectedIndicators.length === 0 ? "Select indicators first..." : "Select exemplars..."}
+                              placeholder="Select exemplars from curriculum..."
                               searchPlaceholder="Search exemplars..."
-                              emptyText={selectedIndicators.length === 0 ? "Please select learning indicators first." : "No exemplars found for selected indicators."}
-                              disabled={selectedIndicators.length === 0}
-                            />
-                          );
-                        }
-                        
-                        // Fallback for manual entry or no curriculum data
-                        return (
-                          <div className="space-y-2">
-                             <Textarea
-                              id="exemplars"
-                              placeholder="Enter exemplars (one per line)..."
-                              value={lessonData.exemplars}
-                              onChange={(e) => setLessonData({ ...lessonData, exemplars: e.target.value })}
-                              rows={3}
-                              className="resize-none"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              No exemplars found in curriculum for this standard. You can type them manually.
-                            </p>
-                          </div>
-                        );
-                      })()}
+                              emptyText="No exemplars found."
+                           />
+                        </div>
+                      )}
+                      
+                      <div className="space-y-2">
+                         <Textarea
+                          id="exemplars"
+                          placeholder="Exemplars found in scheme (or selected above)..."
+                          value={lessonData.exemplars}
+                          onChange={(e) => setLessonData({ ...lessonData, exemplars: e.target.value })}
+                          rows={3}
+                          className="resize-none"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          {availableExemplars.length > 0 
+                            ? "You can combine selected items with manual edits in the box above."
+                            : "Manually enter exemplars if none were found in the curriculum."}
+                        </p>
+                      </div>
                     </div>
 
                     <div className="grid gap-6 md:grid-cols-2">
