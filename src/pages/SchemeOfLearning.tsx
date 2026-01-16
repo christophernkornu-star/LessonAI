@@ -342,46 +342,64 @@ export default function SchemeOfLearning() {
         </Card>
 
         {schemeData.length > 0 && (
-          <Card className="overflow-hidden">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Week</TableHead>
-                    <TableHead>Week Ending</TableHead>
-                    <TableHead>Term</TableHead>
-                    <TableHead>Subject</TableHead>
-                    <TableHead>Class</TableHead>
-                    <TableHead>Strand / Sub-Strand</TableHead>
-                    <TableHead>Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {schemeData.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.week}</TableCell>
-                      <TableCell>{item.weekEnding}</TableCell>
-                      <TableCell>{item.term}</TableCell>
-                      <TableCell>{item.subject}</TableCell>
-                      <TableCell>{item.classLevel}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{item.strand}</span>
-                          <span className="text-xs text-muted-foreground">{item.subStrand}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Button size="sm" onClick={() => handleGenerate(item)}>
-                          <Play className="mr-2 h-4 w-4" />
-                          Generate
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </Card>
+          <div className="space-y-8">
+            {Object.entries(
+              schemeData.reduce((acc, item) => {
+                const cls = item.classLevel || "Unspecified Class";
+                if (!acc[cls]) acc[cls] = [];
+                acc[cls].push(item);
+                return acc;
+              }, {} as Record<string, SchemeItem[]>)
+            ).sort((a, b) => {
+              // Try to sort naturally (e.g. Basic 2 before Basic 10)
+              return a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' });
+            }).map(([className, classItems]) => (
+              <Card key={className} className="overflow-hidden border-t-4 border-t-primary">
+                <div className="p-4 bg-muted/30 border-b flex justify-between items-center">
+                  <h2 className="text-xl font-bold text-foreground">{className}</h2>
+                  <span className="text-sm text-muted-foreground bg-background px-2 py-1 rounded border">
+                    {classItems.length} entries
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[80px]">Week</TableHead>
+                        <TableHead className="w-[100px]">Ending</TableHead>
+                        <TableHead className="w-[100px]">Term</TableHead>
+                        <TableHead className="w-[150px]">Subject</TableHead>
+                        <TableHead>Strand / Sub-Strand</TableHead>
+                        <TableHead className="w-[100px]">Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {classItems.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium bg-muted/10">{item.week}</TableCell>
+                          <TableCell>{item.weekEnding}</TableCell>
+                          <TableCell>{item.term}</TableCell>
+                          <TableCell className="font-medium text-primary">{item.subject}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <span className="font-medium">{item.strand}</span>
+                              <span className="text-xs text-muted-foreground">{item.subStrand}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Button size="sm" onClick={() => handleGenerate(item)}>
+                              <Play className="mr-2 h-4 w-4" />
+                              Generate
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </Card>
+            ))}
+          </div>
         )}
       </main>
     </div>
