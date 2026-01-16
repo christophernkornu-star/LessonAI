@@ -789,11 +789,16 @@ export function parseAIJsonResponse(response: string): GhanaLessonData | GhanaLe
   } catch (error) {
     console.error("Error parsing AI JSON response:", error);
     
-    // Attempt fallback for common JSON errors (like characters after last brace)
+    // Attempt fallback for common JSON errors (like characters after last brace or before first brace)
     try {
-        const match = response.match(/({[\s\S]*})/);
-        if (match) {
-            return JSON.parse(match[0]) as GhanaLessonData;
+        // Find the first occurrence of { or [
+        const firstOpen = response.search(/[{[]/);
+        // Find the last occurrence of } or ]
+        const lastClose = Math.max(response.lastIndexOf('}'), response.lastIndexOf(']'));
+        
+        if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
+            const potentialJson = response.substring(firstOpen, lastClose + 1);
+            return JSON.parse(potentialJson) as GhanaLessonData;
         }
     } catch (e) {}
 
