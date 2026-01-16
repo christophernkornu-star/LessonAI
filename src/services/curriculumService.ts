@@ -143,7 +143,7 @@ export class CurriculumService {
         });
         
         console.log(`Fallback found ${filtered.length} items`);
-        return filtered;
+        return filtered as unknown as CurriculumData[];
       }
 
       if (error) throw error;

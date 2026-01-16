@@ -411,7 +411,8 @@ Separate each lesson note with a horizontal rule (---).` : ''}
 - Sub-Strand: ${data.subStrand}
 - Content Standard: ${data.contentStandard}
 ${data.numLessons && data.numLessons > 1 ? '- **Task:** Split these Indicators/Exemplars across ' + data.numLessons + ' lessons.' : ''}
-- Exemplars/Learning Indicators: ${data.exemplars}${data.schemeResources ? `\n- Resources from Scheme: ${data.schemeResources}` : ''}${curriculumFilesInfo}${resourceFilesInfo}
+- Learning Indicators: ${data.indicators || "None provided"}
+- Exemplars: ${data.exemplars || "None provided"}${data.schemeResources ? `\n- Resources from Scheme: ${data.schemeResources}` : ''}${curriculumFilesInfo}${resourceFilesInfo}
 
 ${ghanaContextPrompt}
 
@@ -452,13 +453,13 @@ ${data.template.structure}
 - Replace {STRAND} with: ${data.strand}
 - Replace {SUB_STRAND} with: ${data.subStrand}
 - Replace {CONTENT_STANDARD} with: ${data.contentStandard}
-- Replace {EXEMPLARS}, {OBJECTIVES}, or {INDICATOR} with appropriate learning objectives based on: ${data.exemplars}
+- Replace {EXEMPLARS}, {OBJECTIVES}, or {INDICATOR} with appropriate learning objectives based on: ${data.indicators ? "Indicators: " + data.indicators : ""} ${data.exemplars ? "Exemplars: " + data.exemplars : ""}
 - Replace {LESSON_TITLE} with a descriptive title for this lesson
 - Replace {TERM} with the academic term (e.g., "First Term", "Second Term", "Third Term")
 - Replace {WEEK_ENDING} with: ${data.weekEnding || ""} (Leave empty if not provided)
 - Replace {DAY} with appropriate day (e.g., Monday, Tuesday)
 - Replace {DURATION} with appropriate lesson duration (e.g., 60 minutes, 1 hour)
-- Replace {CLASS_SIZE} with typical class size (e.g., 30-40 students)
+- Replace {CLASS_SIZE} with: ${data.classSize || "typical class size (e.g., 30-40 students)"}
 - Replace {PERFORMANCE_INDICATOR} with specific measurable outcomes starting with "By the end of the lesson, learners will be able to:"
 - Replace {CORE_COMPETENCIES} with relevant competencies (e.g., Critical Thinking, Creativity, Communication, Collaboration)
 - Replace {KEYWORDS} with key vocabulary terms for this lesson
@@ -531,10 +532,12 @@ BEGIN THE FILLED TEMPLATE NOW:`;
 
 **Subject:** ${data.subject}
 **Grade Level:** ${data.level}
+**Class Size:** ${data.classSize || "Typical (30-40)"}
 **Strand:** ${data.strand}
 **Sub-Strand:** ${data.subStrand}
 **Content Standard:** ${data.contentStandard}
-**Exemplars/Learning Indicators:** ${data.exemplars}
+**Learning Indicators:** ${data.indicators || "None provided"}
+**Exemplars:** ${data.exemplars || "None provided"}
 **Scheme Resources:** ${data.schemeResources || "Standard teaching materials"}${curriculumFilesInfo}${resourceFilesInfo}
 
 ${ghanaContextPrompt}
