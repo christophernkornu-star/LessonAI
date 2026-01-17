@@ -479,8 +479,10 @@ ${data.template.structure}
     - If you run out of unique strands, you may extend the last strand or review, but NEVER squash distinct strands together.` : ''}
 - For {STARTER_RESOURCES}, {NEW_LEARNING_RESOURCES}, {REFLECTION_RESOURCES}, list ONLY essential, simple, and readily available materials (avoid long lists)
 - For sections like {INTRODUCTION}, {MAIN_ACTIVITIES}, {ASSESSMENT}, etc., write detailed, practical content
+- **FORMATTING:** Use short, clear paragraphs. Avoid long "walls of text". Use bullet points (-) for lists. Separate distinct ideas with newlines.
 
 **CONTENT QUALITY REQUIREMENTS:**
+- **Paragraphing:** Break long text into smaller, readable paragraphs. Use double newlines (\n\n) to separate paragraphs in JSON strings.
 - **Teaching Philosophy:** ${data.philosophy || 'balanced'} - ${philosophyGuidance}
 - **Detail Level:** ${data.detailLevel || 'moderate'} - ${detailGuidance}
 - **Diagrams:** ${data.includeDiagrams ? 'Include diagram outlines as requested.' : 'Do not include diagram outlines.'}
@@ -547,6 +549,7 @@ ${philosophyGuidance}
 
 **DETAIL LEVEL:**
 ${detailGuidance}
+- **Formatting:** Use short, clear paragraphs. Avoid long blocks of text. Use bullet points where appropriate.
 
 ${data.includeDiagrams ? `**DIAGRAM OUTLINES:**
 Include descriptions of relevant diagrams, charts, illustrations, or visual aids throughout the lesson. For each diagram, provide:
