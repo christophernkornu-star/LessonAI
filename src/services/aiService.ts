@@ -465,7 +465,11 @@ ${data.template.structure}
 - Replace {KEYWORDS} with key vocabulary terms for this lesson
 - Replace {REFERENCE} with specific resources from scheme: "${data.schemeResources || ""}" and other curriculum materials. Do not list generic references.
 - Replace {STARTER_DURATION}, {NEW_LEARNING_DURATION}, {REFLECTION_DURATION} with appropriate time allocations (e.g., "10 minutes", "30 minutes", "15 minutes")
-- For {STARTER_ACTIVITIES} and {REFLECTION_ACTIVITIES}: Describe the activity directly WITHOUT "Activity 1" prefixes.
+- For {STARTER_ACTIVITIES}: Describe the starter/warm-up activities.
+- For {REFLECTION_ACTIVITIES}: 
+  1. Briefly summarize the lesson closure.
+  2. ALWAYS include a section titled "**Sample Class Exercises:**" with at least 3 concept application questions for students to solve. 
+  3. Ensure these questions test understanding of the lesson concepts in a practical way.
 - For {NEW_LEARNING_ACTIVITIES}: Number the activities (Activity 1:, Activity 2:) starting on new lines and USE bold formatting (e.g. **Activity 1:**).
   ${data.numLessons && data.numLessons > 1 ? `
   - **CRITICAL - MULTIPLE STRANDS/LESSONS:**
@@ -581,7 +585,8 @@ Include descriptions of relevant diagrams, charts, illustrations, or visual aids
      - If you run out of unique strands, you may extend the last strand or review, but NEVER squash distinct strands together.` : ''}
 6. Assessment Methods
 7. Differentiation Strategies
-8. Closure/Summary (5 minutes)
+8. Closure/Summary (5 minutes) - Include summary of key points.
+   - **Sample Class Exercises (Concept Application):** Include at least 3 questions for learners to practice.
 9. Homework/Extension Activities
 
 ${curriculumFilesInfo || resourceFilesInfo ? 'Reference and incorporate content from the provided curriculum documents and resource materials where appropriate.\n\n' : ''}Format the lesson note professionally with clear sections and practical, actionable content that a teacher can use directly in the classroom.`;

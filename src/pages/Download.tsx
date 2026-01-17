@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Download, CheckCircle, FileText, FileType, Printer } from "lucide-react";
+import { Download, CheckCircle, FileText, FileType, Printer, RotateCw, PlusCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { generateLessonNoteDocx, generateFileName } from "@/services/docxService";
@@ -401,9 +401,24 @@ const DownloadPage = () => {
                 Download as Word document (.docx) or export as PDF
               </p>
 
-              <div className="text-center">
+              <div className="flex flex-col gap-3 pt-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => navigate("/generator", { 
+                      state: { 
+                          restoreData: lessonData,
+                          autoGenerate: true 
+                      } 
+                  })} 
+                  className="w-full border-primary/20 hover:bg-primary/5 text-primary"
+                >
+                  <RotateCw className="mr-2 h-4 w-4" />
+                  Regenerate Lesson
+                </Button>
+                
                 <Button variant="ghost" onClick={() => navigate("/generator")} className="text-sm sm:text-base">
-                  Generate Another Lesson Note
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Create New Lesson
                 </Button>
               </div>
             </div>

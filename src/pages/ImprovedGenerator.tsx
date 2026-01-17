@@ -795,6 +795,29 @@ const ImprovedGenerator = () => {
       // Clear the state to prevent re-loading on simple refreshes if desired, 
       // but actually we want it to persist if they refresh immediately.
       // We can leave it.
+    } else if (location.state?.restoreData) {
+      const { restoreData, autoGenerate } = location.state;
+      console.log("Restoring lesson data:", restoreData);
+      
+      setLessonData(prev => ({
+        ...prev,
+        ...restoreData
+      }));
+      
+      if (restoreData.templateName) {
+        const t = lessonTemplates.find(lt => lt.name === restoreData.templateName);
+        if (t) setSelectedTemplate(t);
+      }
+
+      toast({
+        title: "Data Restored",
+        description: "Your previous lesson settings have been restored.",
+      });
+      
+      // If auto-generate is requested, move to review step
+      if (autoGenerate) {
+          setCurrentStep(2); 
+      }
     }
   }, [location.state]);
 
