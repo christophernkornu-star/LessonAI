@@ -403,8 +403,22 @@ const ImprovedGenerator = () => {
              console.error("Error fetching subjects", error);
           }
         }
+        
+        // 2. Load from STATIC curriculum (Fallback/Default)
+        // Check if any static subjects apply to this level
+        const staticSubjects = SUBJECTS.filter(s => {
+             // If subject has explicit levels defined, check matching
+             if (s.levels && s.levels.length > 0) {
+                 return s.levels.includes(selectedLevelValue) || s.levels.includes(selectedLevelLabel.toLowerCase().replace(" ", ""));
+             }
+             // If no levels defined, assume it applies to all? No, safely assume none.
+             // Actually, for "Mathematics", "English", they apply to basic1-9.
+             return true; 
+        });
+        
+        staticSubjects.forEach(s => addSubject(s.value, s.label));
 
-        // 2. Load from Scheme of Learning (Secondary Source)
+        // 3. Load from Scheme of Learning (Secondary Source)
         try {
           const savedScheme = localStorage.getItem("scheme_of_learning_data");
           if (savedScheme) {
