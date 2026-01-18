@@ -103,11 +103,8 @@ export function MultiSelectCombobox({
           align="start"
           sideOffset={4}
           onOpenAutoFocus={(e) => e.preventDefault()}
-          onInteractOutside={(e) => {
-            // Allow closing only when clicking outside
-          }}
         >
-          <Command className="rounded-lg">
+          <Command className="rounded-lg" shouldFilter={true}>
             <CommandInput 
               placeholder={searchPlaceholder} 
               className="border-0 focus:ring-0"
@@ -119,19 +116,29 @@ export function MultiSelectCombobox({
               {options.map((option, index) => {
                 const isSelected = selected.includes(option)
                 return (
-                  <CommandItem
+                  <div
                     key={`${option}-${index}`}
-                    value={option}
-                    onSelect={(value) => {
-                      handleSelect(option)
-                    }}
-                    onMouseDown={(e) => {
+                    role="option"
+                    aria-selected={isSelected}
+                    data-value={option}
+                    onClick={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
+                      handleSelect(option)
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleSelect(option)
+                      }
+                    }}
+                    tabIndex={0}
                     className={cn(
-                      "flex items-start gap-2 px-2 py-2.5 rounded-md cursor-pointer",
+                      "flex items-start gap-2 px-2 py-2.5 rounded-md cursor-pointer select-none",
                       "transition-colors duration-150",
+                      "hover:bg-accent hover:text-accent-foreground",
+                      "focus:bg-accent focus:text-accent-foreground focus:outline-none",
                       isSelected && "bg-primary/10"
                     )}
                   >
@@ -145,7 +152,7 @@ export function MultiSelectCombobox({
                       {isSelected && <Check className="h-3.5 w-3.5" />}
                     </div>
                     <span className="text-sm leading-relaxed flex-1">{option}</span>
-                  </CommandItem>
+                  </div>
                 )
               })}
             </CommandGroup>
