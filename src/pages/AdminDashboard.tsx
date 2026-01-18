@@ -294,21 +294,21 @@ const AdminDashboard = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-4 mb-8">
-            <TabsTrigger value="analytics" className="flex items-center gap-2">
+            <TabsTrigger value="analytics" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <BarChart3 className="w-4 h-4" />
-              Analytics
+              <span className="hidden sm:inline">Analytics</span>
             </TabsTrigger>
-            <TabsTrigger value="curriculum" className="flex items-center gap-2">
+            <TabsTrigger value="curriculum" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <BookOpen className="w-4 h-4" />
-              Curriculum Files
+              <span className="hidden sm:inline">Curriculum</span>
             </TabsTrigger>
-            <TabsTrigger value="template" className="flex items-center gap-2">
+            <TabsTrigger value="template" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <FileText className="w-4 h-4" />
-              Template Files
+              <span className="hidden sm:inline">Templates</span>
             </TabsTrigger>
-            <TabsTrigger value="resource" className="flex items-center gap-2">
+            <TabsTrigger value="resource" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <FolderOpen className="w-4 h-4" />
-              Resource Files
+              <span className="hidden sm:inline">Resources</span>
             </TabsTrigger>
           </TabsList>
 

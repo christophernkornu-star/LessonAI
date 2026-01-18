@@ -141,14 +141,14 @@ export default function TimetableManagement() {
           </Button>
         </div>
 
-        <div className="flex justify-between items-start mb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Timetable Management</h1>
-            <p className="text-muted-foreground mt-2">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Timetable Management</h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-2">
               Configure which days subjects are taught for each class.
             </p>
           </div>
-          <Button onClick={handleSave} disabled={!selectedClass || saving} className="bg-gradient-hero">
+          <Button onClick={handleSave} disabled={!selectedClass || saving} className="bg-gradient-hero w-full sm:w-auto">
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Save Timetable
           </Button>
@@ -160,7 +160,7 @@ export default function TimetableManagement() {
                 <BookOpen className="h-5 w-5 text-primary" />
                 Your Class Schedules
             </h2>
-            <div className="flex gap-3 overflow-x-auto pb-4 items-stretch">
+            <div className="flex gap-3 overflow-x-auto pb-4 items-stretch -mx-4 px-4 sm:mx-0 sm:px-0">
                 {configuredClasses.length === 0 && (
                     <div className="text-sm text-muted-foreground italic border-2 border-dashed rounded-lg p-4 flex items-center">
                         No classes configured yet. Click "Add Class" to start.

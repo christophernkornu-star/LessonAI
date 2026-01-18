@@ -548,37 +548,39 @@ export default function SchemeOfLearning() {
       <main className="container mx-auto px-4 py-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Scheme of Learning</h1>
-            <p className="text-muted-foreground">Upload your termly scheme to automate lesson generation.</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Scheme of Learning</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">Upload your termly scheme to automate lesson generation.</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => navigate("/dashboard")}>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button variant="outline" onClick={() => navigate("/dashboard")} className="flex-1 sm:flex-none">
               Back to Dashboard
             </Button>
             {schemeData.length > 0 && (
-              <Button variant="destructive" onClick={handleClear}>
+              <Button variant="destructive" onClick={handleClear} className="flex-1 sm:flex-none">
                 <Trash2 className="mr-2 h-4 w-4" />
-                Clear Scheme
+                <span className="hidden sm:inline">Clear Scheme</span>
+                <span className="sm:hidden">Clear</span>
               </Button>
             )}
           </div>
         </div>
 
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           <div className="space-y-4">
             <div className="flex flex-col gap-2">
               <Label>Upload Scheme (CSV, PDF, DOCX)</Label>
-              <div className="flex gap-4 items-center">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center">
                 <Input 
                   type="file" 
                   accept=".csv,.pdf,.docx,.doc" 
                   onChange={handleFileUpload}
                   disabled={isLoading}
-                  className="max-w-md"
+                  className="w-full sm:max-w-md"
                 />
-                <Button variant="outline" onClick={() => window.open('/scheme-template.csv', '_blank')}>
+                <Button variant="outline" onClick={() => window.open('/scheme-template.csv', '_blank')} className="w-full sm:w-auto">
                   <FileText className="mr-2 h-4 w-4" />
-                  Download Template
+                  <span className="sm:hidden">Template</span>
+                  <span className="hidden sm:inline">Download Template</span>
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">

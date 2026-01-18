@@ -282,9 +282,9 @@ export default function ProfileEdit() {
       <Navbar />
 
       <main className="container mx-auto px-4 py-8">
-        <div className="mb-6 flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-foreground">Edit Profile</h1>
-            <Button variant="outline" onClick={() => navigate("/dashboard")}>
+        <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Edit Profile</h1>
+            <Button variant="outline" onClick={() => navigate("/dashboard")} className="w-full sm:w-auto">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Dashboard
             </Button>

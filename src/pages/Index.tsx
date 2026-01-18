@@ -156,19 +156,19 @@ const Index = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="container mx-auto px-4 py-20">
-        <Card className="overflow-hidden bg-gradient-hero p-12 text-center shadow-medium">
-          <h3 className="mb-4 text-3xl font-bold text-primary-foreground">
+      <section className="container mx-auto px-4 py-12 sm:py-16 lg:py-20">
+        <Card className="overflow-hidden bg-gradient-hero p-6 sm:p-8 lg:p-12 text-center shadow-medium">
+          <h3 className="mb-3 sm:mb-4 text-2xl sm:text-3xl font-bold text-primary-foreground">
             Ready to Transform Your Lesson Planning?
           </h3>
-          <p className="mb-8 text-lg text-primary-foreground/90">
+          <p className="mb-6 sm:mb-8 text-base sm:text-lg text-primary-foreground/90 px-4">
             Join hundreds of teachers saving time with AI-powered lesson notes
           </p>
           <Button
             onClick={() => navigate("/generator")}
             size="lg"
             variant="secondary"
-            className="shadow-soft"
+            className="shadow-soft w-full sm:w-auto"
           >
             Get Started Now
           </Button>

@@ -252,14 +252,15 @@ export default function AssessmentGenerator() {
             </Card>
 
             {/* Action Buttons */}
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <Button
                 onClick={() => handleExport(false)}
                 className="flex-1"
                 size="lg"
               >
                 <Download className="mr-2 h-5 w-5" />
-                Download (Student Copy)
+                <span className="hidden sm:inline">Download (Student Copy)</span>
+                <span className="sm:hidden">Student Copy</span>
               </Button>
               <Button
                 onClick={() => handleExport(true)}
@@ -268,7 +269,8 @@ export default function AssessmentGenerator() {
                 size="lg"
               >
                 <FileText className="mr-2 h-5 w-5" />
-                Download (With Answers)
+                <span className="hidden sm:inline">Download (With Answers)</span>
+                <span className="sm:hidden">With Answers</span>
               </Button>
             </div>
 
@@ -309,7 +311,7 @@ export default function AssessmentGenerator() {
               </div>
 
               {/* Subject and Level */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Subject *</Label>
                   <Combobox
@@ -346,7 +348,7 @@ export default function AssessmentGenerator() {
               </div>
 
               {/* Difficulty and Number of Questions */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="difficulty">Difficulty *</Label>
                   <Select value={difficulty} onValueChange={(val) => setDifficulty(val as DifficultyLevel)}>
@@ -391,7 +393,7 @@ export default function AssessmentGenerator() {
               {/* Question Types */}
               <div className="space-y-3">
                 <Label>Question Types * (select at least one)</Label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {[
                     { value: "multiple_choice", label: "Multiple Choice" },
                     { value: "true_false", label: "True/False" },

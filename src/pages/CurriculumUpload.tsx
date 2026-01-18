@@ -647,14 +647,14 @@ export default function CurriculumUpload() {
             </div>
         </div>
 
-        <Card className="max-w-4xl mx-auto p-8">
+        <Card className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="manual">Manual Entry</TabsTrigger>
-              <TabsTrigger value="doc-upload">Doc Upload</TabsTrigger>
-              <TabsTrigger value="upload">JSON Upload</TabsTrigger>
-              <TabsTrigger value="csv">CSV/Excel Upload</TabsTrigger>
-              <TabsTrigger value="my-curriculum">My Curriculum</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 h-auto gap-1">
+              <TabsTrigger value="manual" className="text-xs sm:text-sm py-2">Manual</TabsTrigger>
+              <TabsTrigger value="doc-upload" className="text-xs sm:text-sm py-2">Doc Upload</TabsTrigger>
+              <TabsTrigger value="csv" className="text-xs sm:text-sm py-2">CSV Upload</TabsTrigger>
+              <TabsTrigger value="upload" className="text-xs sm:text-sm py-2">JSON</TabsTrigger>
+              <TabsTrigger value="my-curriculum" className="text-xs sm:text-sm py-2 col-span-2 sm:col-span-1">My Data</TabsTrigger>
             </TabsList>
 
             <TabsContent value="doc-upload">
