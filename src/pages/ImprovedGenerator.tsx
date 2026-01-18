@@ -672,6 +672,15 @@ const ImprovedGenerator = () => {
             lessonData.term || "First Term"
           );
           
+          // Fallback: If no timetable found for specific level string (e.g. "Basic 1" vs "basic1"), try normalization
+          if (!timetable) {
+             const normalizedLevel = lessonData.level.replace(/Basic\s+/i, "basic").replace(/Class\s+/i, "class").toLowerCase();
+             // Try variations manually if service strict match failed
+             // Note: TimetableService currently only supports strict match.
+             // We can't easily retry without modifying TimetableService or guessing heavily.
+             console.warn("Timetable strict match failed. Ensure level naming matches exactly.");
+          }
+          
           if (timetable) {
               // Get Class Size
               if (timetable.class_size) {
@@ -703,6 +712,7 @@ const ImprovedGenerator = () => {
                 if (subjectConfig) {
                   if (subjectConfig.days && subjectConfig.days.length > 0) {
                       scheduledDays = subjectConfig.days;
+                      console.log("Found scheduled days:", scheduledDays);
                   }
                   if (subjectConfig.frequency) {
                       numLessonsFromTimetable = subjectConfig.frequency;
@@ -710,6 +720,8 @@ const ImprovedGenerator = () => {
                   console.log("Using timetable:", { scheduledDays, numLessonsFromTimetable, classSizeFromTimetable });
                 }
              }
+          } else {
+             console.log("Timetable not found for", { userId: currentUser.id, level: lessonData.level, term: lessonData.term });
           }
         }
       } catch (ttError) {

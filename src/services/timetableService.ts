@@ -18,13 +18,47 @@ export interface TimetableData {
 
 export class TimetableService {
   static async getTimetable(userId: string, classLevel: string, term: string = "First Term"): Promise<TimetableData | null> {
-    const { data, error } = await supabase
+    // 1. Try exact match
+    let { data, error } = await supabase
       .from("timetables")
       .select("*")
       .eq("user_id", userId)
       .eq("class_level", classLevel)
       .eq("term", term)
-      .maybeSingle(); // Use maybeSingle to avoid 406 error if not found
+      .maybeSingle();
+
+    // 2. If not found, try normalized variations (Basic 1 <-> basic1 <-> B1)
+    if (!data && !error) {
+        let normalizedLevel = classLevel;
+        // Basic 1 -> basic1
+        if (classLevel.match(/^Basic \d+$/i)) {
+             normalizedLevel = classLevel.replace(" ", "").toLowerCase();
+        } 
+        // basic1 -> Basic 1
+        else if (classLevel.match(/^basic\d+$/i)) {
+             normalizedLevel = classLevel.replace("basic", "Basic ");
+             normalizedLevel = normalizedLevel.charAt(0).toUpperCase() + normalizedLevel.slice(1);
+        }
+        // B1 -> Basic 1
+        else if (classLevel.match(/^B\d+$/i)) {
+            normalizedLevel = classLevel.replace("B", "Basic ");
+        }
+
+        if (normalizedLevel !== classLevel) {
+            const { data: retryData, error: retryError } = await supabase
+                .from("timetables")
+                .select("*")
+                .eq("user_id", userId)
+                .eq("class_level", normalizedLevel)
+                .eq("term", term)
+                .maybeSingle();
+            
+            if (retryData) {
+                data = retryData;
+                error = retryError;
+            }
+        }
+    }
 
     if (error) {
       console.error("Error fetching timetable:", error);
