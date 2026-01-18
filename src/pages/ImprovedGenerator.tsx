@@ -1561,101 +1561,138 @@ const ImprovedGenerator = () => {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="contentStandard">Content Standard *</Label>
-                      <ComboboxWithInput
-                        options={availableContentStandards.map(cs => ({ 
-                          value: `${cs.code}: ${cs.description}`, 
-                          label: `${cs.code}: ${cs.description}` 
-                        }))}
-                        value={lessonData.contentStandard}
-                        onValueChange={(value) => {
-                          const selected = availableContentStandards.find(cs => `${cs.code}: ${cs.description}` === value);
-                          
-                          setLessonData({ 
-                            ...lessonData, 
-                            contentStandard: value,
-                            exemplars: "", 
-                            indicators: "" 
-                          });
-                          
-                          if (selected) {
-                            setAvailableIndicators(selected.indicators || []);
-                            setSelectedIndicators([]);
-                            setAvailableExemplars([]);
-                            setSelectedExemplars([]);
-                          } else {
-                            setAvailableIndicators([]);
-                            setSelectedIndicators([]);
-                            setAvailableExemplars([]);
-                            setSelectedExemplars([]);
-                          }
-                          
-                          setValidationErrors({ ...validationErrors, contentStandard: "" });
-                        }}
-                        placeholder="Type or select content standard"
-                        searchPlaceholder="Search standards..."
-                        disabled={!lessonData.subStrand}
-                        emptyText={!lessonData.subStrand ? "Select a sub-strand first" : "No standards found. Type manually."}
-                        allowCustom={true}
-                      />
+                    <div className="space-y-3">
+                      <Label htmlFor="contentStandard" className="text-sm font-medium">
+                        Content Standard *
+                      </Label>
+                      <div className="bg-muted/30 rounded-lg border border-border/50 p-3 sm:p-4">
+                        <ComboboxWithInput
+                          options={availableContentStandards.map(cs => ({ 
+                            value: `${cs.code}: ${cs.description}`, 
+                            label: `${cs.code}: ${cs.description}` 
+                          }))}
+                          value={lessonData.contentStandard}
+                          onValueChange={(value) => {
+                            const selected = availableContentStandards.find(cs => `${cs.code}: ${cs.description}` === value);
+                            
+                            setLessonData({ 
+                              ...lessonData, 
+                              contentStandard: value,
+                              exemplars: "", 
+                              indicators: "" 
+                            });
+                            
+                            if (selected) {
+                              setAvailableIndicators(selected.indicators || []);
+                              setSelectedIndicators([]);
+                              setAvailableExemplars([]);
+                              setSelectedExemplars([]);
+                            } else {
+                              setAvailableIndicators([]);
+                              setSelectedIndicators([]);
+                              setAvailableExemplars([]);
+                              setSelectedExemplars([]);
+                            }
+                            
+                            setValidationErrors({ ...validationErrors, contentStandard: "" });
+                          }}
+                          placeholder="Type or select content standard"
+                          searchPlaceholder="Search standards..."
+                          disabled={!lessonData.subStrand}
+                          emptyText={!lessonData.subStrand ? "Select a sub-strand first" : "No standards found. Type manually."}
+                          allowCustom={true}
+                        />
+                        {lessonData.contentStandard && (
+                          <p className="mt-2 text-xs text-muted-foreground line-clamp-2">
+                            Selected: {lessonData.contentStandard}
+                          </p>
+                        )}
+                      </div>
                       {validationErrors.contentStandard && (
                         <p className="text-sm text-destructive">{validationErrors.contentStandard}</p>
                       )}
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="indicators">Learning Indicators</Label>
-                      {availableIndicators.length > 0 ? (
-                        <MultiSelectCombobox
-                          options={availableIndicators}
-                          selected={selectedIndicators}
-                          onChange={setSelectedIndicators}
-                          placeholder="Select indicators..."
-                          searchPlaceholder="Search indicators..."
-                          emptyText="No indicators found."
-                        />
-                      ) : (
-                        <Textarea
-                          id="indicators"
-                          placeholder="Enter learning indicators..."
-                          value={lessonData.indicators}
-                          onChange={(e) => setLessonData({ ...lessonData, indicators: e.target.value })}
-                          rows={3}
-                          className="resize-none"
-                        />
-                      )}
+                    <div className="space-y-3">
+                      <Label htmlFor="indicators" className="text-sm font-medium flex items-center gap-2">
+                        Learning Indicators
+                        {selectedIndicators.length > 0 && (
+                          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                            {selectedIndicators.length} selected
+                          </span>
+                        )}
+                      </Label>
+                      <div className="bg-muted/30 rounded-lg border border-border/50 p-3 sm:p-4">
+                        {availableIndicators.length > 0 ? (
+                          <MultiSelectCombobox
+                            options={availableIndicators}
+                            selected={selectedIndicators}
+                            onChange={setSelectedIndicators}
+                            placeholder="Select learning indicators..."
+                            searchPlaceholder="Search indicators..."
+                            emptyText="No indicators found."
+                            maxDisplayed={3}
+                          />
+                        ) : (
+                          <Textarea
+                            id="indicators"
+                            placeholder="Enter learning indicators (e.g., B4.1.2.1.1 - Demonstrate understanding of...)"
+                            value={lessonData.indicators}
+                            onChange={(e) => setLessonData({ ...lessonData, indicators: e.target.value })}
+                            rows={3}
+                            className="resize-none text-sm bg-background"
+                          />
+                        )}
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {availableIndicators.length > 0 
+                            ? "Click to select multiple indicators from your curriculum"
+                            : "No indicators found in curriculum. Enter manually above."}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="exemplars">Exemplars</Label>
-                      {availableExemplars.length > 0 && (
-                        <div className="mb-2">
-                           <p className="text-xs text-muted-foreground mb-1">Select from curriculum:</p>
-                           <MultiSelectCombobox
+                    <div className="space-y-3">
+                      <Label htmlFor="exemplars" className="text-sm font-medium flex items-center gap-2">
+                        Exemplars
+                        {selectedExemplars.length > 0 && (
+                          <span className="text-xs bg-secondary/50 text-secondary-foreground px-2 py-0.5 rounded-full">
+                            {selectedExemplars.length} selected
+                          </span>
+                        )}
+                      </Label>
+                      <div className="bg-muted/30 rounded-lg border border-border/50 p-3 sm:p-4 space-y-3">
+                        {availableExemplars.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-2">Select from curriculum:</p>
+                            <MultiSelectCombobox
                               options={availableExemplars}
                               selected={selectedExemplars}
                               onChange={setSelectedExemplars}
-                              placeholder="Select exemplars from curriculum..."
+                              placeholder="Select exemplars..."
                               searchPlaceholder="Search exemplars..."
                               emptyText="No exemplars found."
-                           />
+                              maxDisplayed={2}
+                            />
+                          </div>
+                        )}
+                        
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-2">
+                            {availableExemplars.length > 0 ? "Or add/edit manually:" : "Enter exemplars:"}
+                          </p>
+                          <Textarea
+                            id="exemplars"
+                            placeholder="E.g., Students will demonstrate ability to identify and explain..."
+                            value={lessonData.exemplars}
+                            onChange={(e) => setLessonData({ ...lessonData, exemplars: e.target.value })}
+                            rows={3}
+                            className="resize-none text-sm bg-background"
+                          />
                         </div>
-                      )}
-                      
-                      <div className="space-y-2">
-                         <Textarea
-                          id="exemplars"
-                          placeholder="Exemplars found in scheme (or selected above)..."
-                          value={lessonData.exemplars}
-                          onChange={(e) => setLessonData({ ...lessonData, exemplars: e.target.value })}
-                          rows={3}
-                          className="resize-none"
-                        />
                         <p className="text-xs text-muted-foreground">
                           {availableExemplars.length > 0 
-                            ? "You can combine selected items with manual edits in the box above."
-                            : "Manually enter exemplars if none were found in the curriculum."}
+                            ? "Combine selected items with manual edits for comprehensive coverage."
+                            : "Describe what learners will be able to do by the end of the lesson."}
                         </p>
                       </div>
                     </div>
