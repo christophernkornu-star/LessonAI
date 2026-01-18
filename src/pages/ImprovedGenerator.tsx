@@ -139,22 +139,64 @@ const ImprovedGenerator = () => {
     };
   }, []); // Only runs once on mount
 
-  // Update class size when grade level changes if profile has specific size
+  // Update class size and lesson details from Timetable when grade level or subject changes
   useEffect(() => {
-    if (userProfile?.class_sizes && lessonData.level) {
-      // Check if we have a specific size for this class/level
-      const specificSize = userProfile.class_sizes[lessonData.level];
-      if (specificSize) {
-        setLessonData(prev => {
-          // Only update if it's different to avoid loops/unnecessary renders
-          if (prev.classSize !== specificSize.toString()) {
-            return { ...prev, classSize: specificSize.toString() };
-          }
-          return prev;
-        });
+    const fetchTimetableDetails = async () => {
+      if (!currentUser?.id || !lessonData.level) return;
+
+      try {
+        // Fetch timetable for the selected class and term
+        const timetable = await TimetableService.getTimetable(
+          currentUser.id, 
+          lessonData.level, 
+          lessonData.term || "First Term"
+        );
+        
+        if (timetable) {
+          setLessonData(prev => {
+            const updates: Partial<typeof prev> = {};
+            
+            // Update class size from timetable
+            if (timetable.class_size && prev.classSize !== timetable.class_size.toString()) {
+              updates.classSize = timetable.class_size.toString();
+            }
+
+            // Update numLessons from subject config if subject is selected
+            if (prev.subject && timetable.subject_config) {
+              const subjectConfig = timetable.subject_config[prev.subject];
+              if (subjectConfig && subjectConfig.frequency) {
+                 if (prev.numLessons !== subjectConfig.frequency) {
+                   updates.numLessons = subjectConfig.frequency;
+                 }
+              }
+            }
+            
+            if (Object.keys(updates).length > 0) {
+              return { ...prev, ...updates };
+            }
+            return prev;
+          });
+        } else {
+            // Fallback to legacy userProfile.class_sizes if no timetable found
+            if (userProfile?.class_sizes) {
+                const specificSize = userProfile.class_sizes[lessonData.level];
+                if (specificSize) {
+                    setLessonData(prev => {
+                        if (prev.classSize !== specificSize.toString()) {
+                            return { ...prev, classSize: specificSize.toString() };
+                        }
+                        return prev;
+                    });
+                }
+            }
+        }
+      } catch (err) {
+        console.error("Error fetching timetable details:", err);
       }
-    }
-  }, [lessonData.level, userProfile]);
+    };
+
+    fetchTimetableDetails();
+  }, [lessonData.level, lessonData.subject, lessonData.term, currentUser, userProfile]);
 
   // Load available levels from database on mount and merge with static levels
   useEffect(() => {
@@ -495,7 +537,12 @@ const ImprovedGenerator = () => {
 
       try {
         if (currentUser && lessonData.level && lessonData.subject) {
-          const timetable = await TimetableService.getTimetable(currentUser.id, lessonData.level);
+          const timetable = await TimetableService.getTimetable(
+            currentUser.id, 
+            lessonData.level, 
+            lessonData.term || "First Term"
+          );
+          
           if (timetable) {
               // Get Class Size
               if (timetable.class_size) {
@@ -504,10 +551,16 @@ const ImprovedGenerator = () => {
 
               // Get Subject Config
               if (timetable.subject_config) {
-                const subjectConfig = timetable.subject_config[lessonData.subject];
-                if (subjectConfig && subjectConfig.days && subjectConfig.days.length > 0) {
-                  scheduledDays = subjectConfig.days;
-                  numLessonsFromTimetable = subjectConfig.frequency;
+                // Try exact match or case insensitive
+                const subjectConfig = timetable.subject_config[lessonData.subject]; 
+                  
+                if (subjectConfig) {
+                  if (subjectConfig.days && subjectConfig.days.length > 0) {
+                      scheduledDays = subjectConfig.days;
+                  }
+                  if (subjectConfig.frequency) {
+                      numLessonsFromTimetable = subjectConfig.frequency;
+                  }
                   console.log("Using timetable:", { scheduledDays, numLessonsFromTimetable, classSizeFromTimetable });
                 }
              }
@@ -519,9 +572,10 @@ const ImprovedGenerator = () => {
 
       const dataWithTemplate: LessonData = {
         ...lessonData,
-        numLessons: numLessonsFromTimetable || lessonData.numLessons || 1, // Prefer timetable, then manual input, then 1 
+        // Prefer manual input (lessonData), fallback to timetable, then defaults
+        numLessons: lessonData.numLessons || numLessonsFromTimetable || 1, 
         scheduledDays: scheduledDays,
-        classSize: classSizeFromTimetable || lessonData.classSize, // Prefer timetable class size
+        classSize: lessonData.classSize || classSizeFromTimetable, 
         template: selectedTemplate || undefined,
         selectedCurriculumFiles: selectedCurriculumFiles.length > 0 ? selectedCurriculumFiles : undefined,
         selectedResourceFiles: selectedResourceFiles.length > 0 ? selectedResourceFiles : undefined,
