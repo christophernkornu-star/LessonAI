@@ -723,8 +723,11 @@ const ImprovedGenerator = () => {
                              if (k.length > 3 && targetSubject.length > 3) {
                                  score = 50;
                                  
-                                 // Boost if it's a prefix match
+                                 // Boost if it's a prefix match (e.g. "Math" matches "Mathematics")
                                  if (k.startsWith(targetSubject) || targetSubject.startsWith(k)) score += 20;
+
+                                  // Boost if it's "Our World Our People" matching "OWOP" or key words
+                                 if (targetSubject.includes("world") && k.includes("world")) score += 30;
                              }
                         }
 
@@ -745,6 +748,15 @@ const ImprovedGenerator = () => {
                   if (subjectConfig.days && Array.isArray(subjectConfig.days) && subjectConfig.days.length > 0) {
                       scheduledDays = [...subjectConfig.days]; // Clone to ensure no ref issues
                       console.log("Found scheduled days:", scheduledDays);
+                      
+                      // Notify user explicitly about the schedule found
+                       toast({
+                        title: "📅 Schedule Match Found!",
+                        description: `Using ${lessonData.subject} schedule: ${scheduledDays.join(" & ")}.`,
+                        duration: 5000,
+                        className: "bg-blue-50 border-l-4 border-blue-500 text-blue-800"
+                      });
+
                   } else {
                       console.warn("Timetable entry found but NO DAYS configured:", subjectConfig);
                   }
@@ -754,14 +766,7 @@ const ImprovedGenerator = () => {
                   }
                   
                   if (scheduledDays && scheduledDays.length > 0) {
-                      toast({
-                        title: "Timetable Schedule Found",
-                        // Show the exact days we found - helpful for debugging
-                        description: `Using schedule: ${scheduledDays.join(", ")} (${scheduledDays.length} lessons)`,
-                        duration: 4000,
-                        variant: "default",
-                        className: "bg-green-50 border-green-200" 
-                      });
+                      /* Toast moved to earlier block for better visibility */
                   } else {
                       // Explicit warning if subject found but days missing
                        toast({

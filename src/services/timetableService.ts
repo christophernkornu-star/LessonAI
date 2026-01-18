@@ -18,13 +18,14 @@ export interface TimetableData {
 
 export class TimetableService {
   static async getTimetable(userId: string, classLevel: string, term: string = "First Term"): Promise<TimetableData | null> {
-    // 1. Try exact match
+    // 1. Try exact match using ilike for case-insensitivity on class_level
+    // We also use ilike for term to be safe
     let { data, error } = await supabase
       .from("timetables")
       .select("*")
       .eq("user_id", userId)
-      .eq("class_level", classLevel)
-      .eq("term", term)
+      .ilike("class_level", classLevel) 
+      .ilike("term", term)
       .maybeSingle();
 
     // 2. If not found, try normalized variations (Basic 1 <-> basic1 <-> B1)
