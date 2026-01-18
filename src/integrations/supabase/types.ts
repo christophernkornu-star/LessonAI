@@ -614,6 +614,109 @@ export type Database = {
           },
         ]
       }
+      timetables: {
+        Row: {
+          class_level: string
+          class_size: number | null
+          created_at: string
+          id: string
+          subject_config: Json
+          term: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          class_level: string
+          class_size?: number | null
+          created_at?: string
+          id?: string
+          subject_config?: Json
+          term: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          class_level?: string
+          class_size?: number | null
+          created_at?: string
+          id?: string
+          subject_config?: Json
+          term?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timetables_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schemes: {
+        Row: {
+          id: string
+          user_id: string
+          week: string | null
+          week_ending: string | null
+          term: string | null
+          subject: string | null
+          class_level: string | null
+          strand: string | null
+          sub_strand: string | null
+          content_standard: string | null
+          indicators: string | null
+          exemplars: string | null
+          resources: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          week?: string | null
+          week_ending?: string | null
+          term?: string | null
+          subject?: string | null
+          class_level?: string | null
+          strand?: string | null
+          sub_strand?: string | null
+          content_standard?: string | null
+          indicators?: string | null
+          exemplars?: string | null
+          resources?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          week?: string | null
+          week_ending?: string | null
+          term?: string | null
+          subject?: string | null
+          class_level?: string | null
+          strand?: string | null
+          sub_strand?: string | null
+          content_standard?: string | null
+          indicators?: string | null
+          exemplars?: string | null
+          resources?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schemes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

@@ -15,6 +15,7 @@ import { Sparkles, Loader2, ChevronLeft, ChevronRight, Save, WifiOff, Info, MapP
 import { useNavigate, useLocation } from "react-router-dom";
 import { generateLessonNote, parseCurriculumPaste, type LessonData } from "@/services/aiService";
 import { LessonNotesService } from "@/services/lessonNotesService";
+import { TimetableService } from "@/services/timetableService";
 import { useToast } from "@/hooks/use-toast";
 import { useDraft } from "@/hooks/use-draft";
 import { useOnlineStatus } from "@/hooks/use-online-status";
@@ -487,8 +488,40 @@ const ImprovedGenerator = () => {
     setIsGenerating(true);
 
     try {
+      // Fetch timetable configuration if available
+      let scheduledDays: string[] | undefined;
+      let numLessonsFromTimetable: number | undefined;
+      let classSizeFromTimetable: string | undefined;
+
+      try {
+        if (currentUser && lessonData.level && lessonData.subject) {
+          const timetable = await TimetableService.getTimetable(currentUser.id, lessonData.level);
+          if (timetable) {
+              // Get Class Size
+              if (timetable.class_size) {
+                  classSizeFromTimetable = timetable.class_size.toString();
+              }
+
+              // Get Subject Config
+              if (timetable.subject_config) {
+                const subjectConfig = timetable.subject_config[lessonData.subject];
+                if (subjectConfig && subjectConfig.days && subjectConfig.days.length > 0) {
+                  scheduledDays = subjectConfig.days;
+                  numLessonsFromTimetable = subjectConfig.frequency;
+                  console.log("Using timetable:", { scheduledDays, numLessonsFromTimetable, classSizeFromTimetable });
+                }
+             }
+          }
+        }
+      } catch (ttError) {
+        console.warn("Failed to fetch timetable, proceeding with defaults", ttError);
+      }
+
       const dataWithTemplate: LessonData = {
         ...lessonData,
+        numLessons: numLessonsFromTimetable || lessonData.numLessons || 1, // Prefer timetable, then manual input, then 1 
+        scheduledDays: scheduledDays,
+        classSize: classSizeFromTimetable || lessonData.classSize, // Prefer timetable class size
         template: selectedTemplate || undefined,
         selectedCurriculumFiles: selectedCurriculumFiles.length > 0 ? selectedCurriculumFiles : undefined,
         selectedResourceFiles: selectedResourceFiles.length > 0 ? selectedResourceFiles : undefined,

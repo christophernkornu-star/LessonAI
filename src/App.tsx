@@ -20,6 +20,7 @@ import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 import SchemeOfLearning from "./pages/SchemeOfLearning";
+import TimetableManagement from "./pages/TimetableManagement";
 
 const queryClient = new QueryClient();
 
@@ -65,12 +66,14 @@ const App = () => {
             <Route path="/curriculum" element={<CurriculumUpload />} />
             <Route path="/curriculum-upload" element={<CurriculumUpload />} />
             <Route path="/scheme" element={<SchemeOfLearning />} />
+            <Route path="/schemes" element={<SchemeOfLearning />} />
             <Route path="/generator" element={<ImprovedGenerator />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/download" element={<Download />} />
             <Route path="/admin" element={<AdminLogin />} />
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            <Route path="/timetable" element={<TimetableManagement />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

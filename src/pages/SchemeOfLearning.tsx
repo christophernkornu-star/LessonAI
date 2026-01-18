@@ -5,11 +5,16 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, Play, Trash2, Save } from "lucide-react";
+import { Upload, FileText, Play, Trash2, Save, Download, Globe } from "lucide-react";
 import { extractTextFromBrowserFile } from "@/services/fileParsingService";
 import { parseSchemeOfLearning } from "@/services/aiService";
 import { Navbar } from "@/components/Navbar";
+import { CurriculumService } from "@/services/curriculumService";
+import { SUBJECTS, CLASS_LEVELS } from "@/data/curriculum";
+import { supabase } from "@/integrations/supabase/client";
 
 interface SchemeItem {
   id: string;
@@ -33,17 +38,162 @@ export default function SchemeOfLearning() {
   const { toast } = useToast();
   const [schemeData, setSchemeData] = useState<SchemeItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importLevel, setImportLevel] = useState("");
+  const [importSubject, setImportSubject] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        setSchemeData(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to load saved scheme", e);
+    const init = async () => {
+      // 1. Get User
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id || null);
+
+      if (!user) return;
+
+      // 2. Load from Supabase (Source of Truth)
+      const { data, error } = await supabase
+        .from('schemes')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (data && data.length > 0) {
+        // Transform DB schema to App interface
+        const loadedSchemes: SchemeItem[] = data.map(item => ({
+          id: item.id,
+          week: item.week || "",
+          weekEnding: item.week_ending || "",
+          term: item.term || "",
+          subject: item.subject || "",
+          classLevel: item.class_level || "",
+          strand: item.strand || "",
+          subStrand: item.sub_strand || "",
+          contentStandard: item.content_standard || "",
+          indicators: item.indicators || "",
+          exemplars: item.exemplars || "",
+          resources: item.resources || "",
+        }));
+        setSchemeData(loadedSchemes);
+      } else {
+        // Fallback to localStorage if DB is empty (migration scenario)
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          try {
+             // Optional: You could auto-migrate here, but let's just load for now
+             setSchemeData(JSON.parse(saved));
+          } catch (e) {
+            console.error("Failed to load saved scheme", e);
+          }
+        }
       }
-    }
+    };
+
+    init();
   }, []);
+
+  const saveToSupabase = async (items: SchemeItem[]) => {
+     if (!userId) return;
+     
+     // Convert to DB format
+     const dbItems = items.map(item => ({
+        user_id: userId,
+        week: item.week,
+        week_ending: item.weekEnding,
+        term: item.term,
+        subject: item.subject,
+        class_level: item.classLevel,
+        strand: item.strand,
+        sub_strand: item.subStrand,
+        content_standard: item.contentStandard,
+        indicators: item.indicators,
+        exemplars: item.exemplars,
+        resources: item.resources,
+     }));
+     // Note: This is a full sync/replace approach for simplicity given the bulk import nature
+     // Ideally we upsert, but we don't have stable external IDs. 
+     // For this turn, we will insert new ones. 
+     // IMPROVEMENT: On real app, we should manage diffs.
+     // For now, let's just insert the NEW items only?
+     
+     // Actually, let's iterate and insert one by one or batch insert the *new* ones.
+     // The upload handler filters duplicates already.
+  };
+
+  const handleSystemImport = async () => {
+    if (!importLevel || !importSubject) {
+        toast({ title: "Validation Error", description: "Please select both Class Level and Subject", variant: "destructive" });
+        return;
+    }
+
+    setIsLoading(true);
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const curriculum = await CurriculumService.getCurriculumByGradeAndSubject(importLevel, importSubject, user?.id);
+        
+        if (curriculum.length === 0) {
+            toast({ 
+                title: "No Data Found", 
+                description: `No curriculum data found for ${importSubject} - ${importLevel} in the system database.`, 
+                variant: "destructive" 
+            });
+            setIsLoading(false);
+            return;
+        }
+
+        const newItems: SchemeItem[] = curriculum.map((item, index) => ({
+            id: `sys-${Date.now()}-${index}`,
+            week: `Week ${index + 1}`, // Auto assign weeks sequentially
+            weekEnding: "",
+            term: "First Term", // Default
+            subject: importSubject, // Use label if possible, but we stored values. Let's start with what we have.
+            classLevel: importLevel,
+            strand: item.strand || "General",
+            subStrand: item.sub_strand || "",
+            contentStandard: Array.isArray(item.content_standards) ? item.content_standards.join("; ") : (item.content_standards || ""),
+            indicators: Array.isArray(item.learning_indicators) ? item.learning_indicators.join("; ") : (item.learning_indicators || ""),
+            exemplars: item.exemplars || "",
+            resources: ""
+        }));
+
+        setSchemeData(prev => {
+            const updated = [...prev, ...newItems];
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+            
+            // Sync to Database
+            if (userId) {
+                const dbRecords = newItems.map(item => ({
+                    user_id: userId,
+                    week: item.week,
+                    week_ending: item.weekEnding,
+                    term: item.term,
+                    subject: item.subject,
+                    class_level: item.classLevel,
+                    strand: item.strand,
+                    sub_strand: item.subStrand,
+                    content_standard: item.contentStandard,
+                    indicators: item.indicators,
+                    exemplars: item.exemplars,
+                    resources: item.resources,
+                }));
+                
+                supabase.from('schemes').insert(dbRecords).then(({ error }) => {
+                    if (error) console.error("Failed to sync to DB:", error);
+                });
+            }
+            
+            return updated;
+        });
+
+        toast({ title: "Import Successful", description: `Loaded ${newItems.length} items from system curriculum.` });
+        setImportDialogOpen(false);
+
+    } catch (error) {
+        console.error("Import error:", error);
+        toast({ title: "Import Failed", description: "Could not load curriculum data.", variant: "destructive" });
+    } finally {
+        setIsLoading(false);
+    }
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -110,6 +260,28 @@ export default function SchemeOfLearning() {
 
           const updated = [...prev, ...newItems];
           localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+
+            // Sync to Database
+            if (userId) {
+                const dbRecords = newItems.map(item => ({
+                    user_id: userId,
+                    week: item.week,
+                    week_ending: item.weekEnding,
+                    term: item.term,
+                    subject: item.subject,
+                    class_level: item.classLevel,
+                    strand: item.strand,
+                    sub_strand: item.subStrand,
+                    content_standard: item.contentStandard,
+                    indicators: item.indicators,
+                    exemplars: item.exemplars,
+                    resources: item.resources,
+                }));
+                
+                supabase.from('schemes').insert(dbRecords).then(({ error }) => {
+                    if (error) console.error("Failed to sync to DB:", error);
+                });
+            }
           
           if (skippedCount > 0) {
             toast({
@@ -317,31 +489,54 @@ export default function SchemeOfLearning() {
     });
   };
 
-  const handleClear = () => {
+  const handleClear = async () => {
     if (confirm("Are you sure you want to clear the current scheme?")) {
       setSchemeData([]);
       localStorage.removeItem(STORAGE_KEY);
+      
+      if (userId) {
+          const { error } = await supabase.from('schemes').delete().eq('user_id', userId);
+          if (error) console.error("Failed to clear DB:", error);
+      }
     }
   };
 
-  const handleDeleteClass = (className: string) => {
+  const handleDeleteClass = async (className: string) => {
     if (confirm(`Are you sure you want to delete ALL schemes for ${className}? This action cannot be undone.`)) {
       setSchemeData(prev => {
         const updated = prev.filter(item => item.classLevel !== className);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
         return updated;
       });
+      
+      if (userId) {
+          const { error } = await supabase.from('schemes').delete().eq('user_id', userId).eq('class_level', className);
+          if (error) console.error("Failed to delete class from DB:", error);
+      }
+      
       toast({ title: "Class Deleted", description: `Removed all data for ${className}` });
     }
   };
 
-  const handleDeleteSubject = (className: string, subjectName: string) => {
+  const handleDeleteSubject = async (className: string, subjectName: string) => {
     if (confirm(`Are you sure you want to delete ${subjectName} from ${className}?`)) {
       setSchemeData(prev => {
         const updated = prev.filter(item => !(item.classLevel === className && item.subject === subjectName));
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
         return updated;
       });
+      
+      if (userId) {
+          const { error } = await supabase
+            .from('schemes')
+            .delete()
+            .eq('user_id', userId)
+            .eq('class_level', className)
+            .eq('subject', subjectName);
+            
+          if (error) console.error("Failed to delete subject from DB:", error);
+      }
+      
       toast({ title: "Subject Deleted", description: `Removed ${subjectName} from ${className}` });
     }
   };
@@ -389,6 +584,58 @@ export default function SchemeOfLearning() {
               <p className="text-xs text-muted-foreground">
                 Format: Week, Week Ending, Term, Subject, Class, Strand, Sub-Strand, Content Standard, Indicators, Resources
               </p>
+            </div>
+            
+            <div className="flex gap-4 items-center pl-0 sm:pl-4 border-l-0 sm:border-l">
+                <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button variant="secondary" className="w-full sm:w-auto">
+                            <Globe className="mr-2 h-4 w-4" />
+                            Import from System
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Import System Curriculum</DialogTitle>
+                            <DialogDescription>
+                                Select a class and subject to load standard curriculum data into your scheme.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="class" className="text-right">Class</Label>
+                                <Select onValueChange={setImportLevel} value={importLevel}>
+                                    <SelectTrigger className="col-span-3">
+                                        <SelectValue placeholder="Select Class Level" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {CLASS_LEVELS.map((level) => (
+                                            <SelectItem key={level.value} value={level.label}>{level.label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="subject" className="text-right">Subject</Label>
+                                <Select onValueChange={setImportSubject} value={importSubject}>
+                                    <SelectTrigger className="col-span-3">
+                                        <SelectValue placeholder="Select Subject" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {SUBJECTS.map((subject) => (
+                                            <SelectItem key={subject.value} value={subject.label}>{subject.label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button onClick={handleSystemImport} disabled={isLoading}>
+                                {isLoading ? "Loading..." : "Import Data"}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
           </div>
         </Card>

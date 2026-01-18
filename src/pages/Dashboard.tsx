@@ -21,6 +21,7 @@ import {
   Calendar,
   Award,
   Upload,
+  Clock,
 } from "lucide-react";
 import { SimpleBarChart } from "@/components/charts/SimpleBarChart";
 import { SimplePieChart } from "@/components/charts/SimplePieChart";
@@ -112,7 +113,11 @@ export default function Dashboard() {
         .single();
 
       if (profileData) {
-        setProfile(profileData);
+        setProfile({
+          ...profileData,
+          subjects_taught: (Array.isArray(profileData.subjects_taught) ? profileData.subjects_taught : []) as string[],
+          classes_taught: (Array.isArray(profileData.classes_taught) ? profileData.classes_taught : []) as string[],
+        } as unknown as Profile);
       }
 
       // Load lesson notes
@@ -331,6 +336,14 @@ export default function Dashboard() {
               >
                 <Calendar className="mr-2 h-5 w-5" />
                 Scheme of Learning
+              </Button>
+              <Button
+                onClick={() => navigate("/timetable")}
+                className="bg-white/10 text-white border border-white/20 hover:bg-white/20 w-full sm:w-auto"
+                size="lg"
+              >
+                <Clock className="mr-2 h-5 w-5" />
+                Timetable
               </Button>
               <Button
                 onClick={() => navigate("/assessments")}

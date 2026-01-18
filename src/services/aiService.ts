@@ -63,6 +63,7 @@ export interface LessonData {
   
   // New field matching the user requirement
   numLessons?: number; // Defaults to 1 if undefined
+  scheduledDays?: string[]; // Specific days for the lessons (e.g. ["Monday", "Wednesday"])
 }
 
 // Helper to log usage
@@ -475,12 +476,14 @@ ${data.template.structure}
   - **CRITICAL - MULTIPLE STRANDS/LESSONS:**
     You have been provided with multiple Strands/Sub-strands for this week (separated by newlines).
     You are creating a plan for ${data.numLessons} lessons.
+    ${data.scheduledDays && data.scheduledDays.length > 0 ? `**SCHEDULE:** This subject is taught on: ${data.scheduledDays.join(', ')}. Assign each lesson to the correct day in order.` : ''}
     **RULE:** You must STRICTLY separate the strands.
-    - **Lesson 1** must focus ONLY on the *first* Strand/Sub-strand provided.
-    - **Lesson 2** must focus ONLY on the *second* Strand/Sub-strand provided (if available).
-    - **Lesson 3** must focus ONLY on the *third* Strand/Sub-strand provided (if available).
+    - **Lesson 1** ${data.scheduledDays?.[0] ? `(Day: ${data.scheduledDays[0]})` : ''} must focus ONLY on the *first* Strand/Sub-strand provided.
+    - **Lesson 2** ${data.scheduledDays?.[1] ? `(Day: ${data.scheduledDays[1]})` : ''} must focus ONLY on the *second* Strand/Sub-strand provided (if available).
+    - **Lesson 3** ${data.scheduledDays?.[2] ? `(Day: ${data.scheduledDays[2]})` : ''} must focus ONLY on the *third* Strand/Sub-strand provided (if available).
     - **DO NOT** combine multiple strands into a single lesson/activity session. 
     - If you run out of unique strands, you may extend the last strand or review, but NEVER squash distinct strands together.` : ''}
+    - Replace {DAY} with the specific day assigned to each lesson (e.g. ${data.scheduledDays ? data.scheduledDays.join(' or ') : 'Monday, Tuesday'}).
 - For {STARTER_RESOURCES}, {NEW_LEARNING_RESOURCES}, {REFLECTION_RESOURCES}, list ONLY essential, simple, and readily available materials (avoid long lists)
 - For sections like {INTRODUCTION}, {MAIN_ACTIVITIES}, {ASSESSMENT}, etc., write detailed, practical content
 - **FORMATTING:** Use short, clear paragraphs. Avoid long "walls of text". Use bullet points (-) for lists. Separate distinct ideas with newlines.
@@ -577,10 +580,11 @@ Include descriptions of relevant diagrams, charts, illustrations, or visual aids
    - **CRITICAL - MULTIPLE STRANDS/LESSONS:**
      You have been provided with distinct Strands/Sub-strands for this week (separated by newlines).
      You are creating a plan for ${data.numLessons} lessons.
+     ${data.scheduledDays && data.scheduledDays.length > 0 ? `**SCHEDULE:** This subject is taught on: ${data.scheduledDays.join(', ')}. Assign each lesson to the correct day in order.` : ''}
      **RULE:** You must STRICTLY separate the strands.
-     - **Lesson 1** must focus ONLY on the *first* Strand/Sub-strand provided.
-     - **Lesson 2** must focus ONLY on the *second* Strand/Sub-strand provided (if available).
-     - **Lesson 3** must focus ONLY on the *third* Strand/Sub-strand provided (if available).
+     - **Lesson 1** ${data.scheduledDays?.[0] ? `(Day: ${data.scheduledDays[0]})` : ''} must focus ONLY on the *first* Strand/Sub-strand provided.
+     - **Lesson 2** ${data.scheduledDays?.[1] ? `(Day: ${data.scheduledDays[1]})` : ''} must focus ONLY on the *second* Strand/Sub-strand provided (if available).
+     - **Lesson 3** ${data.scheduledDays?.[2] ? `(Day: ${data.scheduledDays[2]})` : ''} must focus ONLY on the *third* Strand/Sub-strand provided (if available).
      - **DO NOT** combine multiple strands into a single lesson/activity session. 
      - If you run out of unique strands, you may extend the last strand or review, but NEVER squash distinct strands together.` : ''}
 6. Assessment Methods

@@ -49,7 +49,7 @@ export function Navbar() {
             <Sparkles className="mr-2 h-4 w-4" />
             Generate
           </Button>
-           <Button variant="ghost" className="justify-start w-full sm:w-auto" onClick={() => { navigate("/template-management"); setIsOpen(false); }}>
+           <Button variant="ghost" className="justify-start w-full sm:w-auto" onClick={() => { navigate("/templates"); setIsOpen(false); }}>
             <FileText className="mr-2 h-4 w-4" />
             Templates
           </Button>
