@@ -142,33 +142,47 @@ const ImprovedGenerator = () => {
   // Update class size and lesson details from Timetable when grade level or subject changes
   useEffect(() => {
     const fetchTimetableDetails = async () => {
-      if (!currentUser?.id || !lessonData.level) return;
+      // Don't run if we don't have a level
+      if (!lessonData.level) return;
+
+      // Note: We need currentUser ID. If it's not loaded yet, this effect might run but return early.
+      // But if currentUser changes later, this effect should re-run because it's in dependency.
+      if (!currentUser?.id) return;
 
       try {
+        console.log("Fetching timetable for level:", lessonData.level);
+
         // Resolve the level label (e.g. "Basic 4") from the selected value (e.g. "basic4")
+        // We use the availableLevels list which maps values to labels
         const selectedLevelObj = availableLevels.find(l => l.value === lessonData.level || l.label === lessonData.level);
         const selectedLevelLabel = selectedLevelObj?.label || lessonData.level;
+        const selectedLevelValue = selectedLevelObj?.value || lessonData.level;
 
-        // Try searching with the Label first (most likely in DB), then the exact value
+        console.log("Resolved level label:", selectedLevelLabel);
+
+        // Try searching with the Label first (most likely in DB since Timetable saves Labels), then the exact value
         let timetable = await TimetableService.getTimetable(
           currentUser.id, 
           selectedLevelLabel, 
           lessonData.term || "First Term"
         );
 
-        if (!timetable && selectedLevelLabel !== lessonData.level) {
-             // Try strict match if label didn't work
+        if (!timetable && selectedLevelLabel !== selectedLevelValue) {
+             // Try searching with Value if Label didn't work (e.g. maybe they saved "basic4")
+             console.log("Retrying with level value:", selectedLevelValue);
              timetable = await TimetableService.getTimetable(
                 currentUser.id, 
-                lessonData.level, 
+                selectedLevelValue, 
                 lessonData.term || "First Term"
              );
         }
         
         if (timetable) {
+          console.log("Found timetable:", timetable);
+          
           // Force update logic
-          const newSize = timetable.class_size ? timetable.class_size.toString() : lessonData.classSize;
-          let newNumLessons = lessonData.numLessons;
+          const newSize = timetable.class_size ? timetable.class_size.toString() : "";
+          let newNumLessons = 0; // Don't default to lessonData.numLessons here, we want to see if we find a match
 
           // Update numLessons from subject config if subject is selected
           if (lessonData.subject && timetable.subject_config) {
@@ -187,15 +201,25 @@ const ImprovedGenerator = () => {
           }
           
           setLessonData(prev => {
-              if (prev.classSize !== newSize || prev.numLessons !== newNumLessons) {
-                  return { ...prev, classSize: newSize, numLessons: newNumLessons };
+              const updates: any = {};
+              if (newSize && prev.classSize !== newSize) {
+                  updates.classSize = newSize;
+              }
+              if (newNumLessons > 0 && prev.numLessons !== newNumLessons) {
+                  updates.numLessons = newNumLessons;
+              }
+              
+              if (Object.keys(updates).length > 0) {
+                  console.log("Updating lesson data with timetable info:", updates);
+                  return { ...prev, ...updates };
               }
               return prev;
           });
         } else {
+            console.log("No timetable found for this level.");
             // Fallback to legacy userProfile.class_sizes if no timetable found
             if (userProfile?.class_sizes) {
-                const specificSize = userProfile.class_sizes[lessonData.level];
+                const specificSize = userProfile.class_sizes[lessonData.level] || userProfile.class_sizes[selectedLevelLabel];
                 if (specificSize) {
                     setLessonData(prev => {
                         if (prev.classSize !== specificSize.toString()) {
@@ -1122,12 +1146,15 @@ const ImprovedGenerator = () => {
                           options={availableLevels}
                           value={lessonData.level}
                           onValueChange={(value) => {
+                            // Find the label for this value if possible, to store consistent data
+                            // Actually, let's keep storing value, but ensure our lookups handle it.
+                            console.log("Selected level:", value);
                             setLessonData({ ...lessonData, level: value, subject: "", strand: "", subStrand: "" });
                             setValidationErrors({ ...validationErrors, level: "" });
                           }}
-                          placeholder="Select class level"
+                          placeholder={availableLevels.length > 0 ? "Select class level" : "Loading levels..."}
                           searchPlaceholder="Search levels..."
-                          emptyText="No levels found. Please import curriculum."
+                          emptyText="No levels found."
                         />
                         {validationErrors.level && (
                           <p className="text-sm text-destructive">{validationErrors.level}</p>
