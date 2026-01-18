@@ -752,6 +752,7 @@ const ImprovedGenerator = () => {
                     console.log(`No timetable config found for subject: ${lessonData.subject}`);
                     */
                 }
+             }
           } else {
              console.log("Timetable not found for", { userId: currentUser.id, level: lessonData.level, term: lessonData.term });
           }
