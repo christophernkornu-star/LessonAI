@@ -680,8 +680,25 @@ const ImprovedGenerator = () => {
 
               // Get Subject Config
               if (timetable.subject_config) {
-                // Try exact match or case insensitive
-                const subjectConfig = timetable.subject_config[lessonData.subject]; 
+                // Try exact match or fuzzy match
+                let subjectConfig = timetable.subject_config[lessonData.subject]; 
+
+                if (!subjectConfig) {
+                    // Try case-insensitive and fuzzy matching
+                    // This handles cases like "History" mapping to "History of Ghana"
+                    const targetSubject = lessonData.subject.toLowerCase();
+                    const configKey = Object.keys(timetable.subject_config).find(key => {
+                        const k = key.toLowerCase();
+                        // Check if one contains the other
+                        // e.g. "History of Ghana" (target) includes "History" (key) -> Match
+                        return targetSubject.includes(k) || k.includes(targetSubject);
+                    });
+                    
+                    if (configKey) {
+                        subjectConfig = timetable.subject_config[configKey];
+                        console.log(`Fuzzy matched timetable subject: ${configKey} for ${lessonData.subject}`);
+                    }
+                }
                   
                 if (subjectConfig) {
                   if (subjectConfig.days && subjectConfig.days.length > 0) {

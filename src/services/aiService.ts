@@ -458,7 +458,7 @@ ${data.template.structure}
 - Replace {LESSON_TITLE} with a descriptive title for this lesson
 - Replace {TERM} with the academic term (e.g., "First Term", "Second Term", "Third Term")
 - Replace {WEEK_ENDING} with: ${data.weekEnding || ""} (Leave empty if not provided)
-- Replace {DAY} with appropriate day (e.g., Monday, Tuesday)
+- Replace {DAY} with: ${data.scheduledDays && data.scheduledDays.length > 0 ? `the scheduled day (use "${data.scheduledDays[0]}" for Lesson 1${data.scheduledDays.length > 1 ? `, "${data.scheduledDays[1]}" for Lesson 2` : ''}${data.scheduledDays.length > 2 ? `, "${data.scheduledDays[2]}" for Lesson 3` : ''})` : "the day of the week"}
 - Replace {DURATION} with appropriate lesson duration (e.g., 60 minutes, 1 hour)
 - Replace {CLASS_SIZE} with: ${data.classSize || "typical class size (e.g., 30-40 students)"}
 - Replace {PERFORMANCE_INDICATOR} with specific measurable outcomes starting with "By the end of the lesson, learners will be able to:"

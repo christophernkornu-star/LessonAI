@@ -68,8 +68,18 @@ export class CurriculumService {
       
       let query = supabase
         .from("curriculum")
-        .select("*")
-        .ilike("subject", `%${subject}%`);
+        .select("*");
+
+      // Robust subject matching: Try exact subject or significant parts (e.g., "History" from "History of Ghana")
+      const searchSubject = subject.toLowerCase();
+      const subjectParts = searchSubject.split(/[\s-]+/).filter(w => w.length > 3 && !['and', 'the', 'for', 'with', 'studies'].includes(w));
+      
+      let subjectFilter = `subject.ilike.%${subject}%`;
+      // If the subject has multiple words, try matching the first significant word
+      if (subjectParts.length > 0) {
+          subjectFilter += `,subject.ilike.%${subjectParts[0]}%`;
+      }
+      query = query.or(subjectFilter);
 
       // Handle grade level variations (e.g., "Basic 4", "B4", "Class 4")
       if (normalizedGradeLevel.toLowerCase().startsWith("basic ")) {

@@ -680,23 +680,6 @@ export async function generateGhanaLessonDocx(
               spacing: { before: 400 },
             }),
           ],
-          footers: {
-            default: new Footer({
-              children: [
-                new Paragraph({
-                  alignment: AlignmentType.RIGHT,
-                  children: [
-                    new TextRun({
-                      text: "FortSoft Solutions",
-                      size: 18, // 9pt
-                      font: "Segoe UI",
-                      italics: true,
-                    }),
-                  ],
-                }),
-              ],
-            }),
-          },
         };
     });
 
