@@ -465,7 +465,9 @@ ${data.template.structure}
 - Replace {CORE_COMPETENCIES} with relevant competencies (e.g., Critical Thinking, Creativity, Communication, Collaboration)
 - Replace {KEYWORDS} with key vocabulary terms for this lesson
 - Replace {REFERENCE} with specific resources from scheme: "${data.schemeResources || ""}" and other curriculum materials. Do not list generic references.
-- Replace {STARTER_DURATION}, {NEW_LEARNING_DURATION}, {REFLECTION_DURATION} with appropriate time allocations (e.g., "10 minutes", "30 minutes", "15 minutes")
+- Replace {STARTER_DURATION} with "10 mins"
+- Replace {NEW_LEARNING_DURATION} with "40 mins"
+- Replace {REFLECTION_DURATION} with "10 mins"
 - For {STARTER_ACTIVITIES}: Describe the starter/warm-up activities.
 - For {REFLECTION_ACTIVITIES}: 
   1. Briefly summarize the lesson closure.
