@@ -730,10 +730,11 @@ const ImprovedGenerator = () => {
 
       const dataWithTemplate: LessonData = {
         ...lessonData,
-        // Prefer manual input (lessonData), fallback to timetable, then defaults
-        numLessons: lessonData.numLessons || numLessonsFromTimetable || 1, 
+        // Priority: Timetable Value -> Manual Input -> Default 1
+        // If timetable has frequency, we strictly use it to match the days
+        numLessons: numLessonsFromTimetable || lessonData.numLessons || 1, 
         scheduledDays: scheduledDays,
-        classSize: lessonData.classSize || classSizeFromTimetable, 
+        classSize: classSizeFromTimetable || lessonData.classSize, 
         template: selectedTemplate || undefined,
         selectedCurriculumFiles: selectedCurriculumFiles.length > 0 ? selectedCurriculumFiles : undefined,
         selectedResourceFiles: selectedResourceFiles.length > 0 ? selectedResourceFiles : undefined,
