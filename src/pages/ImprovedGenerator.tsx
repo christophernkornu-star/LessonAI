@@ -58,7 +58,7 @@ const ImprovedGenerator = () => {
   const [pastedText, setPastedText] = useState("");
   const [isParsingPaste, setIsParsingPaste] = useState(false);
   const [availableSubjects, setAvailableSubjects] = useState<Array<{ value: string; label: string }>>([]);
-  const [availableLevels, setAvailableLevels] = useState<Array<{ value: string; label: string }>>([]);
+  const [availableLevels, setAvailableLevels] = useState<Array<{ value: string; label: string }>>(CLASS_LEVELS);
   const [availableIndicators, setAvailableIndicators] = useState<string[]>([]);
   const [selectedIndicators, setSelectedIndicators] = useState<string[]>([]);
   const [availableExemplars, setAvailableExemplars] = useState<string[]>([]);
@@ -332,14 +332,14 @@ const ImprovedGenerator = () => {
         }
       }
       
-      const sortedLevels = Array.from(levelMap.values()).sort((a, b) => {
+      // Ensure specific sorting
+      const finalLevels = Array.from(levelMap.values()).sort((a, b) => {
           // Custom sort: Basic 1 -> Basic 10, then JHS, SHS, etc.
           const getNum = (str: string) => {
              const m = str.match(/\d+/);
              return m ? parseInt(m[0]) : 999;
           };
           
-          // Prioritize "Basic" levels
           const isBasicA = a.label.includes("Basic");
           const isBasicB = b.label.includes("Basic");
           if (isBasicA && !isBasicB) return -1;
@@ -348,10 +348,22 @@ const ImprovedGenerator = () => {
           return getNum(a.label) - getNum(b.label);
       });
       
-      setAvailableLevels(sortedLevels);
+      setAvailableLevels(finalLevels);
+      
+      // Fix potential draft data mismatch (Label stored instead of Value)
+      // If current lessonData.level matches a LABEL in our list, swap it to VALUE
+      if (lessonData.level) {
+          const matchLabel = finalLevels.find(l => l.label === lessonData.level);
+          const matchValue = finalLevels.find(l => l.value === lessonData.level);
+          
+          if (matchLabel && !matchValue) {
+              console.log("Fixing mismatch: converting Label to Value", lessonData.level, "->", matchLabel.value);
+              setLessonData(prev => ({ ...prev, level: matchLabel.value }));
+          }
+      }
     };
     loadMetadata();
-  }, [currentUser]);
+  }, [currentUser, lessonData.level]); // Added lessonData.level dependency only for the fix logic check, checking it safely inside
 
   // Load subjects when level changes
   useEffect(() => {
