@@ -17,7 +17,8 @@ export function useDraft<T>(initialData: T, options: UseDraftOptions) {
     if (savedDraft) {
       try {
         const parsed = JSON.parse(savedDraft);
-        setData(parsed.data);
+        // Merge with initialData to ensure new fields/defaults are preserved
+        setData({ ...initialData, ...parsed.data });
         setLastSaved(new Date(parsed.timestamp));
       } catch (error) {
         console.error('Failed to load draft:', error);

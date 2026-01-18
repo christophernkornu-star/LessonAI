@@ -166,36 +166,31 @@ const ImprovedGenerator = () => {
         }
         
         if (timetable) {
-          setLessonData(prev => {
-            const updates: Partial<typeof prev> = {};
-            
-            // Update class size from timetable
-            if (timetable.class_size && prev.classSize !== timetable.class_size.toString()) {
-              updates.classSize = timetable.class_size.toString();
-            }
+          // Force update logic
+          const newSize = timetable.class_size ? timetable.class_size.toString() : lessonData.classSize;
+          let newNumLessons = lessonData.numLessons;
 
-            // Update numLessons from subject config if subject is selected
-            if (prev.subject && timetable.subject_config) {
+          // Update numLessons from subject config if subject is selected
+          if (lessonData.subject && timetable.subject_config) {
                // Try exact match or case insensitive match for subject
-              let subjectConfig = timetable.subject_config[prev.subject];
+              let subjectConfig = timetable.subject_config[lessonData.subject];
               
               if (!subjectConfig) {
                   // Case insensitive search
-                  const subjectKey = Object.keys(timetable.subject_config).find(k => k.toLowerCase() === prev.subject.toLowerCase());
+                  const subjectKey = Object.keys(timetable.subject_config).find(k => k.toLowerCase() === lessonData.subject.toLowerCase());
                   if (subjectKey) subjectConfig = timetable.subject_config[subjectKey];
               }
 
               if (subjectConfig && subjectConfig.frequency) {
-                 if (prev.numLessons !== subjectConfig.frequency) {
-                   updates.numLessons = subjectConfig.frequency;
-                 }
+                   newNumLessons = subjectConfig.frequency;
               }
-            }
-            
-            if (Object.keys(updates).length > 0) {
-              return { ...prev, ...updates };
-            }
-            return prev;
+          }
+          
+          setLessonData(prev => {
+              if (prev.classSize !== newSize || prev.numLessons !== newNumLessons) {
+                  return { ...prev, classSize: newSize, numLessons: newNumLessons };
+              }
+              return prev;
           });
         } else {
             // Fallback to legacy userProfile.class_sizes if no timetable found
@@ -247,40 +242,69 @@ const ImprovedGenerator = () => {
       // Load Levels from DB (Global + Personal)
       if (currentUser) {
         try {
-          // Changed: Now loads ALL globally public levels + user's own levels
-          const dbLevels = await CurriculumService.getUniqueGradeLevels(currentUser.id);
-          dbLevels.forEach(dbLevel => {
-              // Check if this DB level matches a known static level (e.g. "Basic 4")
-              const staticMatch = CLASS_LEVELS.find(l => l.label === dbLevel);
-              
-              if (staticMatch) {
-                 // Use static definition which has the 'canonical' value (e.g. "basic4")
-                 levelMap.set(dbLevel, staticMatch);
-              } else if (!levelMap.has(dbLevel)) {
-                 // New custom level
-                 levelMap.set(dbLevel, { value: dbLevel, label: dbLevel });
-              }
-          });
+            // Changed: Now loads ALL globally public levels + user's own levels
+            // We wrap this in a try/catch specifically for the DB call so it doesn't block the rest
+            try {
+                const dbLevels = await CurriculumService.getUniqueGradeLevels(currentUser.id);
+                dbLevels.forEach(dbLevel => {
+                    const staticMatch = CLASS_LEVELS.find(l => l.label === dbLevel);
+                    if (staticMatch) {
+                        levelMap.set(dbLevel, staticMatch);
+                    } else if (!levelMap.has(dbLevel)) {
+                        levelMap.set(dbLevel, { value: dbLevel, label: dbLevel });
+                    }
+                });
+            } catch (dbError) {
+                console.warn("Could not load levels from CurriculumService", dbError);
+            }
 
-          // Also load levels from Timetables
-          const timetables = await TimetableService.getAllTimetables(currentUser.id);
-          timetables.forEach(tt => {
-              const ttLevel = tt.class_level;
-               // Check if this Timetable level matches a known static level
-              const staticMatch = CLASS_LEVELS.find(l => l.label === ttLevel || l.value === ttLevel);
-              
-              if (staticMatch) {
-                  // Ensure we use the canonical key to avoid duplicates
-                  levelMap.set(staticMatch.label, staticMatch);
-                  // Also map the original if it's different, pointing to the canonical one
-                  if (ttLevel !== staticMatch.label) levelMap.set(ttLevel, staticMatch);
-              } else if (!levelMap.has(ttLevel)) {
-                  levelMap.set(ttLevel, { value: ttLevel, label: ttLevel });
-              }
-          });
+            // Also load levels from Timetables
+            try {
+                const timetables = await TimetableService.getAllTimetables(currentUser.id);
+                if (timetables && timetables.length > 0) {
+                    timetables.forEach(tt => {
+                        const ttLevel = tt.class_level;
+                        const staticMatch = CLASS_LEVELS.find(l => l.label === ttLevel || l.value === ttLevel);
+                        
+                        if (staticMatch) {
+                            levelMap.set(staticMatch.label, staticMatch);
+                            // Ensure the stored level string also maps to the static match
+                            if (ttLevel !== staticMatch.label) levelMap.set(ttLevel, staticMatch);
+                        } else if (!levelMap.has(ttLevel)) {
+                            levelMap.set(ttLevel, { value: ttLevel, label: ttLevel });
+                        }
+                    });
+                }
+            } catch (ttError) {
+                 console.warn("Could not load levels from TimetableService", ttError);
+            }
+
+            // Also load levels from Schemes (DB)
+            try {
+                const { data: schemes } = await supabase
+                    .from('schemes')
+                    .select('class_level')
+                    .eq('user_id', currentUser.id);
+                
+                if (schemes && schemes.length > 0) {
+                     schemes.forEach(s => {
+                        const sLevel = s.class_level;
+                        if (sLevel) {
+                            const staticMatch = CLASS_LEVELS.find(l => l.label === sLevel || l.value === sLevel);
+                            if (staticMatch) {
+                                levelMap.set(staticMatch.label, staticMatch);
+                            } else if (!levelMap.has(sLevel)) {
+                                levelMap.set(sLevel, { value: sLevel, label: sLevel });
+                            }
+                        }
+                     });
+                }
+            } catch (schemeError) {
+                console.warn("Could not load levels from Schemes", schemeError);
+            }
 
         } catch (error) {
-          console.error("Error fetching levels", error);
+          console.error("Error in fetching levels block", error);
         }
       }
       
