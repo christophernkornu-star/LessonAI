@@ -573,9 +573,10 @@ export async function generateGhanaLessonDocx(
             }),
 
             // Phase 1 - STARTER
+            // NOTE: Using a single string with newline is handled by cleanAndSplitText inside createCell
             new TableRow({
               children: [
-                createCell(`PHASE 1: STARTER ${lessonData.phases?.phase1_starter?.duration ? `\n(${lessonData.phases.phase1_starter.duration})` : ''}`, true, 1, false),
+                createCell(`PHASE 1: STARTER\n(10 mins)`, true, 1, false),
                 createCell(capitalizeWords(lessonData.phases?.phase1_starter?.learnerActivities || ""), false, 1, false),
                 createCell(capitalizeWords(lessonData.phases?.phase1_starter?.resources || ""), false, 1, false),
               ],
@@ -584,7 +585,7 @@ export async function generateGhanaLessonDocx(
             // Phase 2 - NEW LEARNING
             new TableRow({
               children: [
-                createCell(`PHASE 2: NEW LEARNING ${lessonData.phases?.phase2_newLearning?.duration ? `\n(${lessonData.phases.phase2_newLearning.duration})` : ''}`, true, 1, false),
+                createCell(`PHASE 2: NEW LEARNING\n(40 mins)`, true, 1, false),
                 createCell(capitalizeWords(lessonData.phases?.phase2_newLearning?.learnerActivities || ""), false, 1, false),
                 createCell(capitalizeWords(lessonData.phases?.phase2_newLearning?.resources || ""), false, 1, false),
               ],
@@ -593,7 +594,7 @@ export async function generateGhanaLessonDocx(
             // Phase 3 - REFLECTION
             new TableRow({
               children: [
-                createCell(`PHASE 3: REFLECTION ${lessonData.phases?.phase3_reflection?.duration ? `\n(${lessonData.phases.phase3_reflection.duration})` : ''}`, true, 1, false),
+                createCell(`PHASE 3: REFLECTION\n(10 mins)`, true, 1, false),
                 createCell(capitalizeWords(lessonData.phases?.phase3_reflection?.learnerActivities || ""), false, 1, false),
                 createCell(capitalizeWords(lessonData.phases?.phase3_reflection?.resources || ""), false, 1, false),
               ],
