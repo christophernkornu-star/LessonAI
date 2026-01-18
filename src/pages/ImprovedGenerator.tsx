@@ -717,6 +717,15 @@ const ImprovedGenerator = () => {
                   if (subjectConfig.frequency) {
                       numLessonsFromTimetable = subjectConfig.frequency;
                   }
+                  
+                  if (scheduledDays && scheduledDays.length > 0) {
+                      toast({
+                        title: "Timetable Synced",
+                        description: `Found ${scheduledDays.length} lessons on ${scheduledDays.join(" & ")}.`,
+                        duration: 4000
+                      });
+                  }
+                  
                   console.log("Using timetable:", { scheduledDays, numLessonsFromTimetable, classSizeFromTimetable });
                 }
              }
@@ -728,11 +737,15 @@ const ImprovedGenerator = () => {
         console.warn("Failed to fetch timetable, proceeding with defaults", ttError);
       }
 
+      // Ensure consistency: If we found specific days, the number of lessons should match
+      const finalNumLessons = (scheduledDays && scheduledDays.length > 0) 
+            ? scheduledDays.length 
+            : (numLessonsFromTimetable || lessonData.numLessons || 1);
+
       const dataWithTemplate: LessonData = {
         ...lessonData,
-        // Priority: Timetable Value -> Manual Input -> Default 1
-        // If timetable has frequency, we strictly use it to match the days
-        numLessons: numLessonsFromTimetable || lessonData.numLessons || 1, 
+        // Priority: Timetable Days count -> Timetable Freq -> Manual Input -> Default 1
+        numLessons: finalNumLessons,
         scheduledDays: scheduledDays,
         classSize: classSizeFromTimetable || lessonData.classSize, 
         template: selectedTemplate || undefined,
