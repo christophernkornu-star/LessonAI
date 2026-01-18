@@ -700,7 +700,11 @@ const ImprovedGenerator = () => {
                         const k = key.toLowerCase();
                         // Check if one contains the other
                         // e.g. "History of Ghana" (target) includes "History" (key) -> Match
-                        return targetSubject.includes(k) || k.includes(targetSubject);
+                        // Also try: "Creative Arts" (target) vs "Creative Arts & Design" (key)
+                        // Or: "Creative Arts" (key) vs "Creative Arts & Design" (target)
+                        return targetSubject.includes(k) || k.includes(targetSubject) || 
+                               (targetSubject === "creative arts" && k.includes("creative")) ||
+                               (k === "creative arts" && targetSubject.includes("creative"));
                     });
                     
                     if (configKey) {
@@ -710,25 +714,44 @@ const ImprovedGenerator = () => {
                 }
                   
                 if (subjectConfig) {
-                  if (subjectConfig.days && subjectConfig.days.length > 0) {
-                      scheduledDays = subjectConfig.days;
+                  // CRITICAL: Ensure we actually capture the days!
+                  if (subjectConfig.days && Array.isArray(subjectConfig.days) && subjectConfig.days.length > 0) {
+                      scheduledDays = [...subjectConfig.days]; // Clone to ensure no ref issues
                       console.log("Found scheduled days:", scheduledDays);
+                  } else {
+                      console.warn("Timetable entry found but NO DAYS configured:", subjectConfig);
                   }
+
                   if (subjectConfig.frequency) {
                       numLessonsFromTimetable = subjectConfig.frequency;
                   }
                   
                   if (scheduledDays && scheduledDays.length > 0) {
                       toast({
-                        title: "Timetable Synced",
-                        description: `Found ${scheduledDays.length} lessons on ${scheduledDays.join(" & ")}.`,
-                        duration: 4000
+                        title: "Timetable Schedule Found",
+                        // Show the exact days we found - helpful for debugging
+                        description: `Using schedule: ${scheduledDays.join(", ")} (${scheduledDays.length} lessons)`,
+                        duration: 4000,
+                        variant: "default",
+                        className: "bg-green-50 border-green-200" 
+                      });
+                  } else {
+                      // Explicit warning if subject found but days missing
+                       toast({
+                        title: "Timetable Warning",
+                        description: `Found configuration for ${lessonData.subject} but no days are selected. Using default schedule.`,
+                        duration: 4000,
+                        variant: "destructive"
                       });
                   }
                   
                   console.log("Using timetable:", { scheduledDays, numLessonsFromTimetable, classSizeFromTimetable });
+                } else { 
+                    // Subject not found in config
+                    /* Optional: Warn user if in debug mode
+                    console.log(`No timetable config found for subject: ${lessonData.subject}`);
+                    */
                 }
-             }
           } else {
              console.log("Timetable not found for", { userId: currentUser.id, level: lessonData.level, term: lessonData.term });
           }
@@ -742,6 +765,9 @@ const ImprovedGenerator = () => {
             ? scheduledDays.length 
             : (numLessonsFromTimetable || lessonData.numLessons || 1);
 
+      // Force default days to be the scheduled days if available, to prevent AI hallucination
+      // If we have scheduledDays, we pass them. The AI prompt logic will use them.
+      
       const dataWithTemplate: LessonData = {
         ...lessonData,
         // Priority: Timetable Days count -> Timetable Freq -> Manual Input -> Default 1
@@ -749,6 +775,10 @@ const ImprovedGenerator = () => {
         scheduledDays: scheduledDays,
         classSize: classSizeFromTimetable || lessonData.classSize, 
         template: selectedTemplate || undefined,
+        
+        // IMPORTANT: If we have scheduled days, FORCE the 'weekEnding' logic or others to align if needed?
+        // No, weekEnding is a date. 
+        
         selectedCurriculumFiles: selectedCurriculumFiles.length > 0 ? selectedCurriculumFiles : undefined,
         selectedResourceFiles: selectedResourceFiles.length > 0 ? selectedResourceFiles : undefined,
       };
