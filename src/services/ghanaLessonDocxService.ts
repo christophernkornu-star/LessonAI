@@ -573,10 +573,28 @@ export async function generateGhanaLessonDocx(
             }),
 
             // Phase 1 - STARTER
-            // NOTE: Using a single string with newline is handled by cleanAndSplitText inside createCell
             new TableRow({
               children: [
-                createCell(`PHASE 1: STARTER\n(10 mins)`, true, 1, false),
+                new TableCell({
+                  width: { size: 1701, type: WidthType.DXA },
+                  children: [
+                    new Paragraph({
+                      children: [
+                        new TextRun({ text: "PHASE 1: STARTER", bold: true, size: 20, font: "Segoe UI" }),
+                      ],
+                      spacing: { before: 80, after: 40 }, 
+                    }),
+                    new Paragraph({
+                      children: [
+                         new TextRun({ text: "(10 mins)", bold: true, size: 18, font: "Segoe UI" }),
+                      ],
+                      spacing: { before: 0, after: 80 },
+                    }),
+                  ],
+                  borders: tableBorders,
+                  verticalAlign: VerticalAlign.TOP,
+                  margins: { top: 100, bottom: 100, left: 100, right: 100 },
+                }),
                 createCell(capitalizeWords(lessonData.phases?.phase1_starter?.learnerActivities || ""), false, 1, false),
                 createCell(capitalizeWords(lessonData.phases?.phase1_starter?.resources || ""), false, 1, false),
               ],
@@ -585,7 +603,26 @@ export async function generateGhanaLessonDocx(
             // Phase 2 - NEW LEARNING
             new TableRow({
               children: [
-                createCell(`PHASE 2: NEW LEARNING\n(40 mins)`, true, 1, false),
+                 new TableCell({
+                  width: { size: 1701, type: WidthType.DXA },
+                  children: [
+                    new Paragraph({
+                      children: [
+                        new TextRun({ text: "PHASE 2: NEW LEARNING", bold: true, size: 20, font: "Segoe UI" }),
+                      ],
+                      spacing: { before: 80, after: 40 }, 
+                    }),
+                    new Paragraph({
+                      children: [
+                         new TextRun({ text: "(40 mins)", bold: true, size: 18, font: "Segoe UI" }),
+                      ],
+                      spacing: { before: 0, after: 80 },
+                    }),
+                  ],
+                  borders: tableBorders,
+                  verticalAlign: VerticalAlign.TOP,
+                  margins: { top: 100, bottom: 100, left: 100, right: 100 },
+                }),
                 createCell(capitalizeWords(lessonData.phases?.phase2_newLearning?.learnerActivities || ""), false, 1, false),
                 createCell(capitalizeWords(lessonData.phases?.phase2_newLearning?.resources || ""), false, 1, false),
               ],
@@ -594,7 +631,26 @@ export async function generateGhanaLessonDocx(
             // Phase 3 - REFLECTION
             new TableRow({
               children: [
-                createCell(`PHASE 3: REFLECTION\n(10 mins)`, true, 1, false),
+                 new TableCell({
+                  width: { size: 1701, type: WidthType.DXA },
+                  children: [
+                    new Paragraph({
+                      children: [
+                        new TextRun({ text: "PHASE 3: REFLECTION", bold: true, size: 20, font: "Segoe UI" }),
+                      ],
+                      spacing: { before: 80, after: 40 }, 
+                    }),
+                    new Paragraph({
+                      children: [
+                         new TextRun({ text: "(10 mins)", bold: true, size: 18, font: "Segoe UI" }),
+                      ],
+                      spacing: { before: 0, after: 80 },
+                    }),
+                  ],
+                  borders: tableBorders,
+                  verticalAlign: VerticalAlign.TOP,
+                  margins: { top: 100, bottom: 100, left: 100, right: 100 },
+                }),
                 createCell(capitalizeWords(lessonData.phases?.phase3_reflection?.learnerActivities || ""), false, 1, false),
                 createCell(capitalizeWords(lessonData.phases?.phase3_reflection?.resources || ""), false, 1, false),
               ],
