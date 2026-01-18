@@ -80,7 +80,7 @@ const ImprovedGenerator = () => {
       philosophy: "balanced",
       detailLevel: "moderate",
       includeDiagrams: false,
-      location: "",
+      location: "Biriwa, Central Region",
       term: "First Term",
       weekNumber: "Week 1",
       weekEnding: "",
@@ -145,12 +145,25 @@ const ImprovedGenerator = () => {
       if (!currentUser?.id || !lessonData.level) return;
 
       try {
-        // Fetch timetable for the selected class and term
-        const timetable = await TimetableService.getTimetable(
+        // Resolve the level label (e.g. "Basic 4") from the selected value (e.g. "basic4")
+        const selectedLevelObj = availableLevels.find(l => l.value === lessonData.level || l.label === lessonData.level);
+        const selectedLevelLabel = selectedLevelObj?.label || lessonData.level;
+
+        // Try searching with the Label first (most likely in DB), then the exact value
+        let timetable = await TimetableService.getTimetable(
           currentUser.id, 
-          lessonData.level, 
+          selectedLevelLabel, 
           lessonData.term || "First Term"
         );
+
+        if (!timetable && selectedLevelLabel !== lessonData.level) {
+             // Try strict match if label didn't work
+             timetable = await TimetableService.getTimetable(
+                currentUser.id, 
+                lessonData.level, 
+                lessonData.term || "First Term"
+             );
+        }
         
         if (timetable) {
           setLessonData(prev => {
@@ -163,7 +176,15 @@ const ImprovedGenerator = () => {
 
             // Update numLessons from subject config if subject is selected
             if (prev.subject && timetable.subject_config) {
-              const subjectConfig = timetable.subject_config[prev.subject];
+               // Try exact match or case insensitive match for subject
+              let subjectConfig = timetable.subject_config[prev.subject];
+              
+              if (!subjectConfig) {
+                  // Case insensitive search
+                  const subjectKey = Object.keys(timetable.subject_config).find(k => k.toLowerCase() === prev.subject.toLowerCase());
+                  if (subjectKey) subjectConfig = timetable.subject_config[subjectKey];
+              }
+
               if (subjectConfig && subjectConfig.frequency) {
                  if (prev.numLessons !== subjectConfig.frequency) {
                    updates.numLessons = subjectConfig.frequency;
@@ -196,7 +217,7 @@ const ImprovedGenerator = () => {
     };
 
     fetchTimetableDetails();
-  }, [lessonData.level, lessonData.subject, lessonData.term, currentUser, userProfile]);
+  }, [lessonData.level, lessonData.subject, lessonData.term, currentUser, userProfile, availableLevels]);
 
   // Load available levels from database on mount and merge with static levels
   useEffect(() => {
@@ -240,6 +261,24 @@ const ImprovedGenerator = () => {
                  levelMap.set(dbLevel, { value: dbLevel, label: dbLevel });
               }
           });
+
+          // Also load levels from Timetables
+          const timetables = await TimetableService.getAllTimetables(currentUser.id);
+          timetables.forEach(tt => {
+              const ttLevel = tt.class_level;
+               // Check if this Timetable level matches a known static level
+              const staticMatch = CLASS_LEVELS.find(l => l.label === ttLevel || l.value === ttLevel);
+              
+              if (staticMatch) {
+                  // Ensure we use the canonical key to avoid duplicates
+                  levelMap.set(staticMatch.label, staticMatch);
+                  // Also map the original if it's different, pointing to the canonical one
+                  if (ttLevel !== staticMatch.label) levelMap.set(ttLevel, staticMatch);
+              } else if (!levelMap.has(ttLevel)) {
+                  levelMap.set(ttLevel, { value: ttLevel, label: ttLevel });
+              }
+          });
+
         } catch (error) {
           console.error("Error fetching levels", error);
         }
