@@ -116,15 +116,26 @@ const DownloadPage = () => {
           // Normalize to array for processing metadata
           const parsedArray = Array.isArray(parsedResult) ? parsedResult : [parsedResult];
           
-          // Merge user-provided metadata (Term, Week Number) with ALL lesson objects
-          if (lessonData) {
-             parsedArray.forEach(data => {
-                data.term = lessonData.term || data.term;
-                data.weekNumber = lessonData.weekNumber || data.weekNumber;
-                data.weekEnding = lessonData.weekEnding || data.weekEnding;
-                data.class = lessonData.level || data.class;
-             });
-          }
+          // Process each lesson object to merge metadata and enforce strict formatting rules
+          parsedArray.forEach(data => {
+            if (lessonData) {
+               data.term = lessonData.term || data.term;
+               data.weekNumber = lessonData.weekNumber || data.weekNumber;
+               data.weekEnding = lessonData.weekEnding || data.weekEnding;
+               data.class = lessonData.level || data.class;
+            }
+            
+            // STRICT REQUIREMENT: "NaCCA [subject] Curriculum for [Class]"
+            // This ensures consistent reference formatting across both template and programmatic generation
+            data.reference = `NaCCA ${data.subject || ''} Curriculum for ${data.class || ''}`;
+
+            // STRICT REQUIREMENT: Fixed Phase Durations (10/40/10)
+            if (data.phases) {
+                if (data.phases.phase1_starter) data.phases.phase1_starter.duration = "10 mins";
+                if (data.phases.phase2_newLearning) data.phases.phase2_newLearning.duration = "40 mins";
+                if (data.phases.phase3_reflection) data.phases.phase3_reflection.duration = "10 mins";
+            }
+          });
           
           // Check if a template file URL is available (template-based approach)
           const templateUrl = sessionStorage.getItem("ghanaTemplateUrl");
