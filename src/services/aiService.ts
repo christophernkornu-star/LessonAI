@@ -483,8 +483,11 @@ ${data.template.structure}
     - **Lesson 3** ${data.scheduledDays?.[2] ? `(Day: ${data.scheduledDays[2]})` : ''} must focus ONLY on the *third* Strand/Sub-strand provided (if available).
     - **DO NOT** combine multiple strands into a single lesson/activity session. 
     - If you run out of unique strands, you may extend the last strand or review, but NEVER squash distinct strands together.` : ''}
-    - Replace {DAY} with the specific day assigned to each lesson as listed above (Lesson 1=${data.scheduledDays?.[0] || "Day 1"}, Lesson 2=${data.scheduledDays?.[1] || "Day 2"}). 
-    - **SCHEDULE REQUIREMENT:** You MUST use the days provided above. DO NOT invent days like "Day 3" or use generic days if specific ones are listed.
+    - Replace {DAY} with the specific day assigned to each lesson as listed above:
+      * For Lesson 1, use: "${data.scheduledDays?.[0] || 'Monday'}"
+      * For Lesson 2, use: "${data.scheduledDays?.[1] || 'Wednesday'}"
+      * For Lesson 3, use: "${data.scheduledDays?.[2] || 'Friday'}"
+    - **SCHEDULE REQUIREMENT:** You MUST use the exact days provided above. DO NOT invent days or use default patterns like "Monday, Tuesday" unless they are explicitly listed above.
 - For {STARTER_RESOURCES}, {NEW_LEARNING_RESOURCES}, {REFLECTION_RESOURCES}, list ONLY essential, simple, and readily available materials (avoid long lists)
 - For sections like {INTRODUCTION}, {MAIN_ACTIVITIES}, {ASSESSMENT}, etc., write detailed, practical content
 - **FORMATTING:** Use short, clear paragraphs. Avoid long "walls of text". Use bullet points (-) for lists. Separate distinct ideas with newlines.

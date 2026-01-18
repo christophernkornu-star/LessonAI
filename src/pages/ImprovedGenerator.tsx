@@ -689,27 +689,54 @@ const ImprovedGenerator = () => {
 
               // Get Subject Config
               if (timetable.subject_config) {
-                // Try exact match or fuzzy match
                 let subjectConfig = timetable.subject_config[lessonData.subject]; 
 
+                // If no exact match, try robust fuzzy matching
                 if (!subjectConfig) {
-                    // Try case-insensitive and fuzzy matching
-                    // This handles cases like "History" mapping to "History of Ghana"
-                    const targetSubject = lessonData.subject.toLowerCase();
-                    const configKey = Object.keys(timetable.subject_config).find(key => {
-                        const k = key.toLowerCase();
-                        // Check if one contains the other
-                        // e.g. "History of Ghana" (target) includes "History" (key) -> Match
-                        // Also try: "Creative Arts" (target) vs "Creative Arts & Design" (key)
-                        // Or: "Creative Arts" (key) vs "Creative Arts & Design" (target)
-                        return targetSubject.includes(k) || k.includes(targetSubject) || 
-                               (targetSubject === "creative arts" && k.includes("creative")) ||
-                               (k === "creative arts" && targetSubject.includes("creative"));
+                    const targetSubject = lessonData.subject.toLowerCase().trim();
+                    
+                    // Priority 1: Check for exact word containment (e.g. "Creative Arts" in "Creative Arts & Design")
+                    // But avoid partial word matches (e.g. "Art" in "Language Arts") if possible.
+                    
+                    let bestMatchKey = "";
+                    let bestMatchScore = 0;
+
+                    Object.keys(timetable.subject_config).forEach(key => {
+                        const k = key.toLowerCase().trim();
+                        let score = 0;
+                        
+                        // Exact match (already checked above, but good for completeness)
+                        if (k === targetSubject) score = 100;
+                        
+                        // "Creative Arts" specific handling
+                        else if ((targetSubject === "creative arts" || targetSubject === "creative arts & design") && 
+                                 (k.includes("creative") && k.includes("arts"))) {
+                             score = 95;
+                        }
+                        // "History" specific handling
+                        else if (targetSubject.includes("history") && k.includes("history")) {
+                             score = 90;
+                        }
+                        // Containment with word boundaries
+                        else if (k.includes(targetSubject) || targetSubject.includes(k)) {
+                             // Penalize very short matches to avoid "Art" matching "Earth" or "Language Arts"
+                             if (k.length > 3 && targetSubject.length > 3) {
+                                 score = 50;
+                                 
+                                 // Boost if it's a prefix match
+                                 if (k.startsWith(targetSubject) || targetSubject.startsWith(k)) score += 20;
+                             }
+                        }
+
+                        if (score > bestMatchScore) {
+                            bestMatchScore = score;
+                            bestMatchKey = key;
+                        }
                     });
                     
-                    if (configKey) {
-                        subjectConfig = timetable.subject_config[configKey];
-                        console.log(`Fuzzy matched timetable subject: ${configKey} for ${lessonData.subject}`);
+                    if (bestMatchKey && bestMatchScore > 0) {
+                        subjectConfig = timetable.subject_config[bestMatchKey];
+                        console.log(`Fuzzy matched timetable subject: '${bestMatchKey}' for '${lessonData.subject}' (Score: ${bestMatchScore})`);
                     }
                 }
                   
