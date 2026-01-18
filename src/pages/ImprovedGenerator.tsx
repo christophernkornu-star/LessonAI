@@ -420,21 +420,11 @@ const ImprovedGenerator = () => {
           }
         }
         
-        // 2. Load from STATIC curriculum (Fallback/Default)
-        // Check if any static subjects apply to this level
-        const staticSubjects = SUBJECTS.filter(s => {
-             // If subject has explicit levels defined, check matching
-             if (s.levels && s.levels.length > 0) {
-                 return s.levels.includes(selectedLevelValue) || s.levels.includes(selectedLevelLabel.toLowerCase().replace(" ", ""));
-             }
-             // If no levels defined, assume it applies to all? No, safely assume none.
-             // Actually, for "Mathematics", "English", they apply to basic1-9.
-             return true; 
-        });
-        
-        staticSubjects.forEach(s => addSubject(s.value, s.label));
+        // 2. REMOVED: Static curriculum fallback
+        // User requested subjects to load ONLY from uploaded curriculum CSV
+        // Static subjects are no longer added automatically
 
-        // 3. Load from Scheme of Learning (Secondary Source)
+        // 3. Load from Scheme of Learning (Secondary Source - still useful for scheme-specific subjects)
         try {
           const savedScheme = localStorage.getItem("scheme_of_learning_data");
           if (savedScheme) {
@@ -480,15 +470,24 @@ const ImprovedGenerator = () => {
         
         setAvailableSubjects(subjects);
         
+        // Show helpful message if no subjects found for this level
+        if (subjects.length === 0 && currentUser) {
+          toast({
+            title: "No Subjects Found",
+            description: `No curriculum data found for ${selectedLevelLabel}. Please upload a curriculum CSV for this class level.`,
+            variant: "destructive",
+            duration: 5000,
+          });
+        }
+        
         // Auto-select if only one subject
         if (subjects.length === 1 && !lessonData.subject) {
-             // Optional: automatically select the single available subject
-             // setLessonData(prev => ({ ...prev, subject: subjects[0].value }));
+             setLessonData(prev => ({ ...prev, subject: subjects[0].value }));
         }
 
-        if (lessonData.subject && !subjects.some(s => s.value === lessonData.subject)) {
-            // Keep it anyway if user manually typed it or it came from scheme, 
-            // but effectively invalid if not in the list
+        // Clear subject if it's not in the new list
+        if (lessonData.subject && subjects.length > 0 && !subjects.some(s => s.value === lessonData.subject || s.label === lessonData.subject)) {
+            setLessonData(prev => ({ ...prev, subject: "", strand: "", subStrand: "", contentStandard: "", indicators: "", exemplars: "" }));
         }
       } else {
         setAvailableSubjects([]);
@@ -1325,7 +1324,7 @@ const ImprovedGenerator = () => {
                           }}
                           placeholder="Select subject"
                           searchPlaceholder="Search subjects..."
-                          emptyText={!lessonData.level ? "Select a class level first" : "No subjects found for this level."}
+                          emptyText={!lessonData.level ? "Select a class level first" : "No subjects found. Upload curriculum for this level."}
                           disabled={!lessonData.level}
                         />
                         {validationErrors.subject && (
