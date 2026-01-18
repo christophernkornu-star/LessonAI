@@ -301,7 +301,7 @@ function generateGhanaLessonHTML(data: GhanaLessonData): string {
       </tr>
       <tr>
         <td style="width: 15%;"><strong>Reference:</strong></td>
-        <td style="width: 85%;">${data.reference}</td>
+        <td style="width: 85%;">NaCCA ${data.subject || ''} Curriculum for ${data.class || ''}</td>
       </tr>
     </table>
 

@@ -464,7 +464,7 @@ ${data.template.structure}
 - Replace {PERFORMANCE_INDICATOR} with specific measurable outcomes starting with "By the end of the lesson, learners will be able to:"
 - Replace {CORE_COMPETENCIES} with relevant competencies (e.g., Critical Thinking, Creativity, Communication, Collaboration)
 - Replace {KEYWORDS} with key vocabulary terms for this lesson
-- Replace {REFERENCE} with specific resources from scheme: "${data.schemeResources || ""}" and other curriculum materials. Do not list generic references.
+- Replace {REFERENCE} with EXACTLY: "NaCCA ${data.subject} Curriculum for ${data.level}" - DO NOT add any other text, materials, or resources to this field.
 - Replace {STARTER_DURATION} with "10 mins"
 - Replace {NEW_LEARNING_DURATION} with "40 mins"
 - Replace {REFLECTION_DURATION} with "10 mins"
