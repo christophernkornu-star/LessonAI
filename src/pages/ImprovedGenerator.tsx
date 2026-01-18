@@ -666,22 +666,17 @@ const ImprovedGenerator = () => {
 
       try {
         if (currentUser && lessonData.level && lessonData.subject) {
-          const timetable = await TimetableService.getTimetable(
+          // Use the new ROBUST fuzzy finder instead of strict getTimetable
+          const timetable = await TimetableService.findTimetable(
             currentUser.id, 
             lessonData.level, 
             lessonData.term || "First Term"
           );
           
-          // Fallback: If no timetable found for specific level string (e.g. "Basic 1" vs "basic1"), try normalization
-          if (!timetable) {
-             const normalizedLevel = lessonData.level.replace(/Basic\s+/i, "basic").replace(/Class\s+/i, "class").toLowerCase();
-             // Try variations manually if service strict match failed
-             // Note: TimetableService currently only supports strict match.
-             // We can't easily retry without modifying TimetableService or guessing heavily.
-             console.warn("Timetable strict match failed. Ensure level naming matches exactly.");
-          }
-          
           if (timetable) {
+              // Valid timetable found!
+              console.log("Timetable loaded:", timetable.class_level);
+              
               // Get Class Size
               if (timetable.class_size) {
                   classSizeFromTimetable = timetable.class_size.toString();
