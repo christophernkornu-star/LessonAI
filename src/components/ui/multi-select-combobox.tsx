@@ -41,12 +41,17 @@ export function MultiSelectCombobox({
 }: MultiSelectComboboxProps) {
   const [open, setOpen] = React.useState(false)
 
-  const handleSelect = (item: string) => {
+  const handleSelect = (item: string, e?: React.MouseEvent | React.KeyboardEvent) => {
+    // Prevent popover from closing
+    e?.preventDefault()
+    e?.stopPropagation()
+    
     if (selected.includes(item)) {
       onChange(selected.filter((i) => i !== item))
     } else {
       onChange([...selected, item])
     }
+    // Keep popover open - don't call setOpen(false)
   }
 
   const handleRemove = (item: string, e: React.MouseEvent) => {
@@ -97,6 +102,10 @@ export function MultiSelectCombobox({
           className="w-[var(--radix-popover-trigger-width)] p-0 shadow-lg border-border/50" 
           align="start"
           sideOffset={4}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={(e) => {
+            // Allow closing only when clicking outside
+          }}
         >
           <Command className="rounded-lg">
             <CommandInput 
@@ -113,7 +122,13 @@ export function MultiSelectCombobox({
                   <CommandItem
                     key={`${option}-${index}`}
                     value={option}
-                    onSelect={() => handleSelect(option)}
+                    onSelect={(value) => {
+                      handleSelect(option)
+                    }}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                    }}
                     className={cn(
                       "flex items-start gap-2 px-2 py-2.5 rounded-md cursor-pointer",
                       "transition-colors duration-150",
@@ -140,15 +155,15 @@ export function MultiSelectCombobox({
 
       {/* Selected items displayed as modern chips */}
       {selected.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 p-2 bg-muted/30 rounded-lg border border-border/50">
+        <div className="flex flex-wrap gap-1.5 p-2.5 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/20">
           {displayedItems.map((item, index) => (
             <Badge 
               key={`${item}-${index}`} 
-              variant="secondary" 
+              variant="default" 
               className={cn(
-                "max-w-full text-xs font-normal py-1 px-2 pr-1",
-                "bg-background border border-border/50 shadow-sm",
-                "hover:bg-accent transition-colors"
+                "max-w-full text-xs font-medium py-1.5 px-2.5 pr-1.5",
+                "bg-primary/90 text-primary-foreground border-0",
+                "hover:bg-primary transition-colors shadow-sm"
               )}
               title={item}
             >
@@ -159,8 +174,8 @@ export function MultiSelectCombobox({
                 type="button"
                 className={cn(
                   "ml-1.5 p-0.5 rounded-full",
-                  "hover:bg-destructive/20 hover:text-destructive",
-                  "transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
+                  "hover:bg-primary-foreground/20",
+                  "transition-colors focus:outline-none focus:ring-1 focus:ring-primary-foreground/50"
                 )}
                 onClick={(e) => handleRemove(item, e)}
               >
@@ -169,14 +184,14 @@ export function MultiSelectCombobox({
             </Badge>
           ))}
           {remainingCount > 0 && (
-            <Badge variant="outline" className="text-xs font-normal py-1 px-2">
+            <Badge variant="secondary" className="text-xs font-medium py-1.5 px-2.5 bg-secondary text-secondary-foreground">
               +{remainingCount} more
             </Badge>
           )}
           {selected.length > 1 && (
             <button
               type="button"
-              className="text-xs text-muted-foreground hover:text-destructive ml-auto transition-colors"
+              className="text-xs text-primary hover:text-destructive ml-auto transition-colors font-medium"
               onClick={handleClearAll}
             >
               Clear all

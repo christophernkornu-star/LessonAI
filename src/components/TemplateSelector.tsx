@@ -32,14 +32,14 @@ export function TemplateSelector({ selectedTemplateId, onSelectTemplate }: Templ
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline" className="w-full justify-start h-auto py-3">
-          <FileText className="mr-2 h-4 w-4 flex-shrink-0" />
-          <div className="flex flex-col items-start">
-            <span className="font-medium">
+        <Button variant="outline" className="w-full justify-start h-auto py-3 px-3">
+          <FileText className="mr-2 h-4 w-4 flex-shrink-0 self-start mt-0.5" />
+          <div className="flex flex-col items-start min-w-0 flex-1 text-left">
+            <span className="font-medium text-sm sm:text-base break-words whitespace-normal">
               {selectedTemplate ? selectedTemplate.name : "Browse Templates"}
             </span>
             {selectedTemplate && (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground break-words whitespace-normal line-clamp-2 sm:line-clamp-none">
                 {selectedTemplate.description}
               </span>
             )}
