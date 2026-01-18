@@ -74,6 +74,11 @@ export async function generateLessonNoteFromTemplate(
     });
 
     // Set the template data
+    // STRICT REQUIREMENT: Ensure Reference follows "NaCCA [Subject] Curriculum for [Class]"
+    const cleanSubject = data.subject || "Subject";
+    const cleanClass = data.class || "Class";
+    const strictReference = `NaCCA ${cleanSubject} Curriculum for ${cleanClass}`;
+
     doc.setData({
       weekEnding: data.weekEnding,
       day: data.day,
@@ -89,20 +94,24 @@ export async function generateLessonNoteFromTemplate(
       performanceIndicator: data.performanceIndicator,
       coreCompetencies: data.coreCompetencies,
       keywords: data.keywords,
-      reference: data.reference,
+      
+      // Force strict reference
+      reference: strictReference,
+      Reference: strictReference, // Case insensitive fallback
+      REFERENCE: strictReference, // Case insensitive fallback
 
       // Phase 1 - Starter
-      phase1_duration: data.phases.phase1_starter.duration,
+      phase1_duration: "10 mins",
       phase1_activities: data.phases.phase1_starter.learnerActivities,
       phase1_resources: data.phases.phase1_starter.resources,
 
       // Phase 2 - New Learning
-      phase2_duration: data.phases.phase2_newLearning.duration,
+      phase2_duration: "40 mins",
       phase2_activities: data.phases.phase2_newLearning.learnerActivities,
       phase2_resources: data.phases.phase2_newLearning.resources,
 
       // Phase 3 - Reflection
-      phase3_duration: data.phases.phase3_reflection.duration,
+      phase3_duration: "10 mins",
       phase3_activities: data.phases.phase3_reflection.learnerActivities,
       phase3_resources: data.phases.phase3_reflection.resources,
     });

@@ -550,6 +550,7 @@ export async function generateGhanaLessonDocx(
             new TableRow({
               children: [
                 createCell(`Reference:`, false, 1, false, true),
+                // STRICT REQUIREMENT: "NaCCA [subject] Curriculum for [Class]"
                 createCell(`NaCCA ${formatSubject(lessonData.subject || '')} Curriculum for ${formatClass(lessonData.class || '')}`, false, 1, false),
               ],
             }),
