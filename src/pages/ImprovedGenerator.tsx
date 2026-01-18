@@ -195,9 +195,27 @@ const ImprovedGenerator = () => {
           if (lessonData.subject && timetable.subject_config) {
                // Find subject config (case insensitive key search)
                const targetSubject = lessonData.subject.toLowerCase();
-               const configKey = Object.keys(timetable.subject_config).find(
+               
+               // Try exact match first
+               let configKey = Object.keys(timetable.subject_config).find(
                    k => k.toLowerCase() === targetSubject
                );
+
+               // If not found, try fuzzy match (e.g. "History" matches "History of Ghana")
+               if (!configKey) {
+                   configKey = Object.keys(timetable.subject_config).find(k => {
+                       const keyLower = k.toLowerCase();
+                       // Check if the Selected Subject includes the Configured Subject (User's case: "History of Ghana" includes "History")
+                       if (targetSubject.includes(keyLower)) return true;
+                       // Check if the Configured Subject includes the Selected Subject
+                       if (keyLower.includes(targetSubject)) return true;
+                       
+                       // Special case handling for "Language" vs "English", "Maths" vs "Mathematics"
+                       if ((keyLower === "maths" && targetSubject === "mathematics") || (keyLower === "mathematics" && targetSubject === "maths")) return true;
+                       
+                       return false;
+                   });
+               }
 
                if (configKey) {
                    const config = timetable.subject_config[configKey];
