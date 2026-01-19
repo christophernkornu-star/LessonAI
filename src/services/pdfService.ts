@@ -189,7 +189,8 @@ function generateGhanaLessonHTML(data: GhanaLessonData): string {
     
     // Process each line
     const processedLines = lines.map(line => {
-      let trimmed = line.trim();
+      // DIRECT FIX: Remove trailing ** from lines
+      let trimmed = line.trim().replace(/\*\*\s*$/, '');
       if (!trimmed) return '<br/>'; // Maintain empty lines
 
       // Handle Markdown Headers (h1, h2, h3)
@@ -204,30 +205,32 @@ function generateGhanaLessonHTML(data: GhanaLessonData): string {
       if (trimmed.match(/^[-*•]\s/)) {
         trimmed = trimmed.replace(/^[-*•]\s/, '');
         isListItem = true;
-      } else if (trimmed.match(/^\d+[.)]\s/)) {
-        // preserve numbered lists markers but treat as list item for spacing
-        // isListItem = true; 
       }
 
-      // Handle "Activity X" patterns (match DOCX logic)
-      let activityMatched = false;
-      if (trimmed.match(/Activity\s+\d+:.*?\*\*/i)) {
-          // Replace: Activity 1: Content ** -> **Activity 1:** **Content**
-          trimmed = trimmed.replace(/(Activity\s+\d+:\s*)(.*?)\s*\*\*/gi, '**$1** **$2**');
-          activityMatched = true;
-      }
-      if (!activityMatched) {
-          trimmed = trimmed.replace(/(Activity\s+\d+)/gi, '**$1**');
+      // Check if this is an Activity/Step/Part/Phase line - make it bold
+      if (/^(Activity|Step|Part|Phase|Group)\s+\d+/i.test(trimmed)) {
+        // Remove ALL ** and wrap the whole line in bold
+        trimmed = '**' + trimmed.replace(/\*\*/g, '') + '**';
       }
 
       // Handle labels ending in colon (e.g. "Step 1:") by bolding them
-      // This is a common pattern in the generated content
-      trimmed = trimmed.replace(/^([A-Za-z0-9\s\(\)]+:)/, '**$1**');
+      // But skip if already has ** (like Activity lines)
+      if (!trimmed.startsWith('**') && trimmed.match(/^[A-Za-z0-9\s\(\)]+:$/)) {
+        trimmed = `**${trimmed}**`;
+      }
 
       // Handle Numbered Patterns: Match "1." or "1)" at START of line and BOLD it
       if (trimmed.match(/^\d+[.)]/)) {
-          // Replace "1. Text" with "**1.** Text" logic
           trimmed = trimmed.replace(/^(\d+[.)])/, '**$1**');
+      }
+      
+      // Clean any remaining orphan ** before parsing
+      // Count ** pairs and remove orphans
+      const asteriskCount = (trimmed.match(/\*\*/g) || []).length;
+      if (asteriskCount % 2 !== 0) {
+        // Remove trailing orphan **
+        trimmed = trimmed.replace(/\*\*\s*$/, '');
+      }
       }
 
       // Parse inline markdown

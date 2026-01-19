@@ -383,6 +383,19 @@ ${data.location ? `8. **LOCATION SPECIFIC CONTEXT:** The school is located in **
    - If the location is a coastal area, use ocean/fishing examples. If forest belt, use farming/forestry examples. If northern savannah, use relevant agricultural/climate examples.
    - Mention local markets, festivals, or sites familiar to students in ${data.location}.` : ''}
 
+**CRITICAL LANGUAGE INSTRUCTION:**
+- For "Ghanaian Language" subject: ALL content MUST be written in ENGLISH ONLY.
+- DO NOT use any Twi, Fante, Akan, Ewe, Ga, Dagbani, or any other Ghanaian local language words.
+- Lesson activities, instructions, examples, and all text must be in plain English.
+- This applies regardless of whether the lesson is about teaching a local language - the lesson note itself must be in English.
+
+**FORMATTING REQUIREMENTS:**
+- Start each new thought, idea, or concept on a NEW LINE.
+- Use double newlines (blank line) between different sections or major ideas.
+- Number activities clearly (1), 2), 3) or Activity 1:, Activity 2:) with each on its own line.
+- Avoid long run-on paragraphs - break them into digestible chunks.
+- Use bullet points for lists of items.
+
 **GHANAIAN EXAMPLES TO USE:**
 ${subjectExamples.map(ex => `- ${ex}`).join('\n')}
 

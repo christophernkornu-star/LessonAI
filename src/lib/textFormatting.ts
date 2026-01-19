@@ -57,18 +57,54 @@ export function cleanAndSplitText(text: string): string[] {
   
   // Split on sentence-ending keywords that indicate new thoughts/sections
   const newThoughtKeywords = [
-    'Next,', 'Then,', 'Finally,', 'Additionally,', 'Moreover,', 
-    'Furthermore,', 'However,', 'Therefore,', 'In conclusion,', 
-    'To summarize,', 'For example,', 'For instance,', 'In addition,',
-    'As a result,', 'Consequently,', 'Meanwhile,', 'Subsequently,',
-    'Afterwards,', 'Before this,', 'After this,'
+    // Sequence/Order
+    'Next,', 'Then,', 'Finally,', 'First,', 'Second,', 'Third,', 'Firstly,', 'Secondly,', 'Thirdly,',
+    'Lastly,', 'To begin,', 'To start,', 'Initially,',
+    // Addition
+    'Additionally,', 'Moreover,', 'Furthermore,', 'In addition,', 'Also,', 'Besides,',
+    'Equally important,', 'What is more,',
+    // Contrast/Transition
+    'However,', 'Nevertheless,', 'On the other hand,', 'Conversely,', 'In contrast,',
+    'Although,', 'Despite this,', 'Yet,', 'Still,', 'Nonetheless,',
+    // Cause/Effect
+    'Therefore,', 'As a result,', 'Consequently,', 'Hence,', 'Thus,', 'Accordingly,',
+    'For this reason,', 'Because of this,',
+    // Examples
+    'For example,', 'For instance,', 'Such as,', 'Specifically,', 'In particular,',
+    'To illustrate,', 'As an example,',
+    // Summary/Conclusion
+    'In conclusion,', 'To summarize,', 'In summary,', 'To conclude,', 'Overall,',
+    'In short,', 'Briefly,', 'To sum up,',
+    // Time
+    'Meanwhile,', 'Subsequently,', 'Afterwards,', 'Before this,', 'After this,',
+    'During this,', 'At the same time,', 'Later,', 'Earlier,',
+    // Emphasis
+    'Indeed,', 'In fact,', 'Certainly,', 'Undoubtedly,', 'Clearly,',
+    'Obviously,', 'Of course,', 'Importantly,', 'Significantly,',
+    // Instruction/Direction
+    'Note that', 'Remember that', 'Ensure that', 'Make sure', 'Be sure to',
+    'It is important to', 'Students should', 'Learners should', 'Teachers should',
+    'Ask students to', 'Have students', 'Guide students', 'Allow students',
+    'Encourage students', 'Instruct students'
   ];
   
   for (const keyword of newThoughtKeywords) {
     const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`([.!?])\\s*(${escapedKeyword})`, 'gi');
+    // Match after sentence ending OR at start of text after space
+    const regex = new RegExp(`([.!?])\\s+(${escapedKeyword})`, 'gi');
     processed = processed.replace(regex, '$1\n$2');
+    // Also handle cases where keyword appears mid-text after a period
+    const regex2 = new RegExp(`\\.\\s+(${escapedKeyword})`, 'gi');
+    processed = processed.replace(regex2, '.\n$1');
   }
+  
+  // Split long sentences that start new instructions (common in lesson notes)
+  // Pattern: sentence ending + capital letter starting new instruction
+  processed = processed.replace(/([.!?])\s{2,}([A-Z])/g, '$1\n$2');
+  
+  // Ensure "The teacher" / "The learner" / "Students" starts on new line when it begins a new instruction
+  processed = processed.replace(/([.!?])\s+(The teacher|The learner|Students|Learners|Pupils)/g, '$1\n$2');
+  processed = processed.replace(/([.!?])\s+(Ask |Tell |Show |Explain |Demonstrate |Guide |Have |Let |Allow |Encourage )/g, '$1\n$2');
 
   // ACTIVITY/STEP/PART/PHASE/GROUP FORMATTING
   // These headers should be on their own line and fully bolded

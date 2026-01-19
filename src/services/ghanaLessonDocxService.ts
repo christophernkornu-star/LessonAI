@@ -151,10 +151,18 @@ function createCell(
     const lines = cleanAndSplitText(text);
     
     for (const line of lines) {
-        let trimmedLine = line.trim();
+        // DIRECT FIX: Remove trailing ** from lines like "Activity 3: Title**"
+        let trimmedLine = line.trim().replace(/\*\*\s*$/, '');
         if (!trimmedLine) continue;
         
         let isLineBold = false;
+
+        // Check if this is an Activity/Step/Part/Phase line - make it bold
+        if (/^(Activity|Step|Part|Phase|Group)\s+\d+/i.test(trimmedLine)) {
+            // Remove any ** markers and make the whole line bold
+            trimmedLine = trimmedLine.replace(/^\*\*/, '').replace(/\*\*$/, '').replace(/\*\*/g, '');
+            isLineBold = true;
+        }
 
         // Handle Markdown Headers (e.g. # Title, ## Subtitle)
         if (trimmedLine.match(/^#+\s/)) {
@@ -168,28 +176,45 @@ function createCell(
         }
 
         // Handle list items ending in colon (bold them)
-        // e.g. "• Group 1 (Support):" or "1. Step One:"
         if ((trimmedLine.startsWith('• ') || trimmedLine.match(/^\d+[.)]\s/)) && trimmedLine.trim().endsWith(':')) {
             isLineBold = true;
         }
         
-        // Handle "Activity X: ... **" pattern (bold the content, remove trailing **)
-        // Global replace to handle multiple occurrences
-        let activityMatched = false;
-        
-        // REMOVED AUTOMATIC BOLDING LIBRARIES FOR ACTIVITY LABELS AS PER USER REQUEST
-        
         const children: TextRun[] = [];
-        const tokens = parseMarkdownLine(trimmedLine);
+        // Remove ALL ** from the line before creating text runs
+        const cleanedLine = trimmedLine.replace(/\*\*/g, '');
         
-        for (const token of tokens) {
+        // If line should be bold, just add it directly
+        if (isLineBold) {
             children.push(new TextRun({ 
-                text: token.text, 
-                bold: isLineBold || bold || token.bold, 
-                italics: token.italic,
+                text: cleanedLine, 
+                bold: true,
                 size: 20, 
                 font: "Segoe UI" 
             }));
+        } else {
+            // Parse for any remaining markdown formatting
+            const tokens = parseMarkdownLine(cleanedLine);
+        
+            for (const token of tokens) {
+                children.push(new TextRun({ 
+                    text: token.text, 
+                    bold: bold || token.bold, 
+                    italics: token.italic,
+                    size: 20, 
+                    font: "Segoe UI" 
+                }));
+            }
+            
+            // Fallback if no tokens
+            if (children.length === 0 && cleanedLine) {
+                children.push(new TextRun({ 
+                    text: cleanedLine, 
+                    bold: bold,
+                    size: 20, 
+                    font: "Segoe UI" 
+                }));
+            }
         }
         
         paragraphs.push(new Paragraph({
