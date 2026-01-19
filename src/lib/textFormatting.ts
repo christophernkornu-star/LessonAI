@@ -13,11 +13,32 @@ export function cleanAndSplitText(text: string): string[] {
 
   let processed = text;
 
-  // Fix jumbled numbered lists (e.g. "1. Item 2. Item")
+  // Clean up trailing asterisks from text like "Activity 2: Title**"
+  // Match patterns like "Activity N: Some text**" and remove trailing **
+  processed = processed.replace(/(\*\*[^*]+)\*\*(\*\*)?/g, (match, content) => {
+    // If content starts with **, keep it as markdown bold
+    if (content.startsWith('**')) {
+      return content + '**';
+    }
+    return match;
+  });
+  
+  // Fix malformed bold markers (trailing ** without opening)
+  processed = processed.replace(/([^*])\*\*$/gm, '$1');
+  processed = processed.replace(/([^*])\*\*(\s)/g, '$1$2');
+  
+  // Clean "Activity N: Title**" pattern - remove trailing ** and wrap whole thing in bold
+  processed = processed.replace(/(Activity\s+\d+:?\s*[^*\n]+)\*\*/gi, '**$1**');
+  
+  // Fix jumbled numbered lists with period (e.g. "1. Item 2. Item")
   if (processed.match(/\s\d+\.\s/)) {
     processed = processed.replace(/(\s)(\d+\.\s)/g, '\n$2');
   }
 
+  // Fix jumbled numbered lists with parenthesis (e.g. "text 1) Item 2) Item")
+  // Ensure numbers with ) start on newline
+  processed = processed.replace(/([^\n\d])(\s*)(\d+\)\s)/g, '$1\n$3');
+  
   // Fix jumbled lettered lists (e.g. " a) Item b) Item")
   if (processed.match(/\s[a-zA-Z][\)\.]\s/)) {
     processed = processed.replace(/(\s)([a-zA-Z][\)\.]\s)/g, '\n$2');
@@ -27,15 +48,59 @@ export function cleanAndSplitText(text: string): string[] {
   if (processed.match(/\sTier\s\d/)) {
     processed = processed.replace(/(\s)(Tier\s\d)/g, '\n$2');
   }
+  
+  // Split on sentence-ending keywords that indicate new thoughts/sections
+  // Keywords: "Next,", "Then,", "Finally,", "Additionally,", "Moreover,", "Furthermore,"
+  // "However,", "Therefore,", "In conclusion,", "To summarize,"
+  const newThoughtKeywords = [
+    'Next,', 'Then,', 'Finally,', 'Additionally,', 'Moreover,', 
+    'Furthermore,', 'However,', 'Therefore,', 'In conclusion,', 
+    'To summarize,', 'For example,', 'For instance,', 'In addition,',
+    'As a result,', 'Consequently,', 'Meanwhile,', 'Subsequently,',
+    'Afterwards,', 'Before this,', 'After this,'
+  ];
+  
+  for (const keyword of newThoughtKeywords) {
+    const regex = new RegExp(`([.!?])\\s*(${keyword.replace(',', ',?')})`, 'gi');
+    processed = processed.replace(regex, '$1\n$2');
+  }
 
   // Fix "Activity N:" merging and ensure bold formatting
   // First, strip existing stars if any, to normalize
-  processed = processed.replace(/\*\*(Activity\s+\d+:?)\*\*/gi, '$1');
+  processed = processed.replace(/\*\*(Activity\s+\d+:?[^*]*)\*\*/gi, '$1');
   processed = processed.replace(/\*\*(Activity\s+\d+:?)/gi, '$1');
   
-  // Now ensure newline and add bold wrapping
-  processed = processed.replace(/([^\n])\s*(Activity\s+\d+:?)/gi, '$1\n$2');
-  processed = processed.replace(/(Activity\s+\d+:?)/gi, '**$1**');
+  // Now ensure newline and add bold wrapping for Activity labels
+  processed = processed.replace(/([^\n])\s*(Activity\s+\d+:)/gi, '$1\n$2');
+  // Bold the entire "Activity N: Title" line
+  processed = processed.replace(/(Activity\s+\d+:\s*[^\n]*)/gi, '**$1**');
+  
+  // Clean up any double asterisks that got created
+  processed = processed.replace(/\*\*\*\*/g, '**');
+  
+  // Clean up asterisks at end of lines that aren't part of bold markers
+  processed = processed.replace(/\*\*$/gm, '');
+  
+  // Handle "Step N:" patterns similarly
+  processed = processed.replace(/([^\n])(\s*)(Step\s+\d+:)/gi, '$1\n**$3**');
+  processed = processed.replace(/^(Step\s+\d+:)/gim, '**$1**');
+  
+  // Handle "Part N:" patterns
+  processed = processed.replace(/([^\n])(\s*)(Part\s+\d+:)/gi, '$1\n**$3**');
+  processed = processed.replace(/^(Part\s+\d+:)/gim, '**$1**');
+  
+  // Handle "Phase N:" patterns
+  processed = processed.replace(/([^\n])(\s*)(Phase\s+\d+:)/gi, '$1\n**$3**');
+  processed = processed.replace(/^(Phase\s+\d+:)/gim, '**$1**');
+  
+  // Handle "Group N:" patterns (common in differentiated activities)
+  processed = processed.replace(/([^\n])(\s*)(Group\s+\d+[^:]*:)/gi, '$1\n**$3**');
+  
+  // Clean up multiple consecutive newlines
+  processed = processed.replace(/\n{3,}/g, '\n\n');
+  
+  // Clean double bold markers
+  processed = processed.replace(/\*\*\*\*+/g, '**');
   
   return processed.split('\n');
 }
@@ -45,7 +110,26 @@ export function cleanAndSplitText(text: string): string[] {
  */
 export function parseMarkdownLine(text: string): TextToken[] {
   const tokens: TextToken[] = [];
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  
+  // First, clean any trailing ** that aren't part of a bold pair
+  let cleanedText = text;
+  
+  // Remove orphan trailing **
+  if (cleanedText.endsWith('**') && !cleanedText.slice(0, -2).includes('**')) {
+    cleanedText = cleanedText.slice(0, -2);
+  }
+  
+  // Handle case where ** appears at end without matching opening
+  const asteriskCount = (cleanedText.match(/\*\*/g) || []).length;
+  if (asteriskCount % 2 !== 0) {
+    // Odd number of **, remove the last one
+    const lastIndex = cleanedText.lastIndexOf('**');
+    if (lastIndex !== -1) {
+      cleanedText = cleanedText.slice(0, lastIndex) + cleanedText.slice(lastIndex + 2);
+    }
+  }
+  
+  const parts = cleanedText.split(/(\*\*[^*]+\*\*)/g);
 
   for (const part of parts) {
     if (part.startsWith('**') && part.endsWith('**')) {
