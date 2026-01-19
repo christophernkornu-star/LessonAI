@@ -123,14 +123,12 @@ export async function generateLessonNoteDocx(
     let tableRows: string[][] = [];
 
     for (let i = 0; i < lines.length; i++) {
-      // DIRECT FIX: Remove trailing ** from lines
-      let line = lines[i].trim().replace(/\*\*\s*$/, '');
+      // DIRECT FIX: Remove ALL ** markers for clean detection
+      let line = lines[i].trim().replace(/^\*\*/, '').replace(/\*\*\s*$/, '').replace(/\*\*/g, '');
       let isLineBold = false;
 
       // Check if this is an Activity/Step/Part/Phase line - make it bold
       if (/^(Activity|Step|Part|Phase|Group)\s+\d+/i.test(line)) {
-        // Remove ALL ** and make the whole line bold
-        line = line.replace(/\*\*/g, '');
         isLineBold = true;
       }
 

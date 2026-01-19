@@ -189,8 +189,8 @@ function generateGhanaLessonHTML(data: GhanaLessonData): string {
     
     // Process each line
     const processedLines = lines.map(line => {
-      // DIRECT FIX: Remove trailing ** from lines
-      let trimmed = line.trim().replace(/\*\*\s*$/, '');
+      // DIRECT FIX: Remove ALL ** markers first for clean detection
+      let trimmed = line.trim().replace(/^\*\*/, '').replace(/\*\*\s*$/, '').replace(/\*\*/g, '');
       if (!trimmed) return '<br/>'; // Maintain empty lines
 
       // Handle Markdown Headers (h1, h2, h3)
@@ -209,8 +209,8 @@ function generateGhanaLessonHTML(data: GhanaLessonData): string {
 
       // Check if this is an Activity/Step/Part/Phase line - make it bold
       if (/^(Activity|Step|Part|Phase|Group)\s+\d+/i.test(trimmed)) {
-        // Remove ALL ** and wrap the whole line in bold
-        trimmed = '**' + trimmed.replace(/\*\*/g, '') + '**';
+        // Wrap the clean line in bold markers
+        trimmed = '**' + trimmed + '**';
       }
 
       // Handle labels ending in colon (e.g. "Step 1:") by bolding them
@@ -230,7 +230,6 @@ function generateGhanaLessonHTML(data: GhanaLessonData): string {
       if (asteriskCount % 2 !== 0) {
         // Remove trailing orphan **
         trimmed = trimmed.replace(/\*\*\s*$/, '');
-      }
       }
 
       // Parse inline markdown

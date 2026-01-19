@@ -151,16 +151,14 @@ function createCell(
     const lines = cleanAndSplitText(text);
     
     for (const line of lines) {
-        // DIRECT FIX: Remove trailing ** from lines like "Activity 3: Title**"
-        let trimmedLine = line.trim().replace(/\*\*\s*$/, '');
+        // DIRECT FIX: Remove ALL ** markers from line for clean detection
+        let trimmedLine = line.trim().replace(/^\*\*/, '').replace(/\*\*\s*$/, '').replace(/\*\*/g, '');
         if (!trimmedLine) continue;
         
         let isLineBold = false;
 
         // Check if this is an Activity/Step/Part/Phase line - make it bold
         if (/^(Activity|Step|Part|Phase|Group)\s+\d+/i.test(trimmedLine)) {
-            // Remove any ** markers and make the whole line bold
-            trimmedLine = trimmedLine.replace(/^\*\*/, '').replace(/\*\*$/, '').replace(/\*\*/g, '');
             isLineBold = true;
         }
 
