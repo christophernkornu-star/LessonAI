@@ -89,12 +89,12 @@ async function logAIUsage(
   }
 }
 
-export async function callAIAPI(prompt: string, systemMessage?: string): Promise<string> {
+export async function callAIAPI(prompt: string, systemMessage?: string, numLessons?: number): Promise<string> {
   // Strictly use DeepSeek API
-  return callDeepSeekAPI(prompt, systemMessage);
+  return callDeepSeekAPI(prompt, systemMessage, numLessons);
 }
 
-async function callGroqAPI(prompt: string, systemMessage?: string): Promise<string> {
+async function callGroqAPI(prompt: string, systemMessage?: string, numLessons?: number): Promise<string> {
   // Validate API key
   if (!GROQ_API_KEY || GROQ_API_KEY === "YOUR_GROQ_KEY_HERE") {
     throw new Error("Groq API key is not configured. Get a FREE key at https://console.groq.com and add VITE_GROQ_API_KEY to your .env file.");
@@ -105,8 +105,17 @@ async function callGroqAPI(prompt: string, systemMessage?: string): Promise<stri
 
   const defaultSystemMessage = "You are an expert educational content creator specializing in creating comprehensive, professional lesson plans for Ghanaian teachers following the National Pre-tertiary Curriculum.";
   
+  // Calculate max_tokens based on number of lessons (each lesson needs ~2500 tokens)
+  const baseTokens = 4000;
+  const tokensPerLesson = 2500;
+  const calculatedMaxTokens = numLessons && numLessons > 1 
+    ? Math.min(baseTokens + (numLessons * tokensPerLesson), 16000) // Cap at 16k for Groq
+    : baseTokens;
+  
+  console.log(`Requesting ${calculatedMaxTokens} max_tokens for ${numLessons || 1} lesson(s)`);
+  
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000); // 1 minute timeout
+  const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout for multi-lesson
 
   try {
     const response = await fetch(GROQ_API_URL, {
@@ -128,7 +137,7 @@ async function callGroqAPI(prompt: string, systemMessage?: string): Promise<stri
           }
         ],
         temperature: 0.7,
-        max_tokens: 4000,
+        max_tokens: calculatedMaxTokens,
       }),
       signal: controller.signal
     });
@@ -185,7 +194,7 @@ async function callGroqAPI(prompt: string, systemMessage?: string): Promise<stri
 }
 
 
-async function callDeepSeekAPI(prompt: string, systemMessage?: string): Promise<string> {
+async function callDeepSeekAPI(prompt: string, systemMessage?: string, numLessons?: number): Promise<string> {
   // Validate API key
   if (!DEEPSEEK_API_KEY || DEEPSEEK_API_KEY === "YOUR_API_KEY_HERE") {
     console.error("DeepSeek API key missing:", DEEPSEEK_API_KEY);
@@ -196,8 +205,20 @@ async function callDeepSeekAPI(prompt: string, systemMessage?: string): Promise<
   console.log("Making request to DeepSeek API via Vite Proxy...");
 
   const defaultSystemMessage = "You are an expert educational content creator specializing in creating comprehensive, professional lesson plans for Ghanaian teachers following the National Pre-tertiary Curriculum.";
+  
+  // Calculate max_tokens based on number of lessons (each lesson needs ~2500 tokens)
+  const baseTokens = 4000;
+  const tokensPerLesson = 2500;
+  const calculatedMaxTokens = numLessons && numLessons > 1 
+    ? Math.min(baseTokens + (numLessons * tokensPerLesson), 32000) // Cap at 32k for DeepSeek
+    : baseTokens;
+  
+  console.log(`Requesting ${calculatedMaxTokens} max_tokens for ${numLessons || 1} lesson(s)`);
+  
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+  // Increase timeout for multi-lesson generation (30 seconds per lesson)
+  const timeoutMs = numLessons && numLessons > 1 ? Math.max(120000, numLessons * 30000) : 120000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     // Use local proxy configured in vite.config.ts to bypass CORS
@@ -220,7 +241,7 @@ async function callDeepSeekAPI(prompt: string, systemMessage?: string): Promise<
           }
         ],
         temperature: 0.7,
-        max_tokens: 4000,
+        max_tokens: calculatedMaxTokens,
       }),
       signal: controller.signal
     });
@@ -631,7 +652,8 @@ ${data.numLessons && data.numLessons > 1 ? `
 **FINAL REMINDER:** You MUST generate EXACTLY ${data.numLessons} complete lesson notes, each separated by "---". Count your lessons before finishing - if you have fewer than ${data.numLessons}, continue generating more.` : ''}`;
     }
 
-    const text = await callAIAPI(prompt);
+    // Pass numLessons to callAIAPI so it can allocate enough tokens
+    const text = await callAIAPI(prompt, undefined, data.numLessons);
     return text;
   } catch (error) {
     console.error("Error generating lesson note:", error);

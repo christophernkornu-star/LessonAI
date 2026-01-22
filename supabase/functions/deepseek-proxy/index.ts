@@ -12,11 +12,18 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { prompt, systemMessage, apiKey } = await req.json();
+    const { prompt, systemMessage, apiKey, maxTokens, numLessons } = await req.json();
 
     if (!apiKey) {
       throw new Error('API key is required');
     }
+
+    // Calculate max_tokens based on number of lessons if not explicitly provided
+    const baseTokens = 4000;
+    const tokensPerLesson = 2500;
+    const calculatedMaxTokens = maxTokens || (numLessons && numLessons > 1 
+      ? Math.min(baseTokens + (numLessons * tokensPerLesson), 32000)
+      : baseTokens);
 
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
@@ -37,7 +44,7 @@ serve(async (req: Request) => {
           }
         ],
         temperature: 0.7,
-        max_tokens: 4000,
+        max_tokens: calculatedMaxTokens,
       }),
     });
 
