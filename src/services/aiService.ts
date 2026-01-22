@@ -408,12 +408,15 @@ ${differentiationStrategies}
     if (data.template) {
       // Use the selected template structure as the exact base
       prompt = `You are an expert educational content creator for Ghana's education system. You will be given a lesson note template with exact headings and structure. Your task is to FILL IN the template with actual content while keeping the EXACT structure and headings.
-${data.numLessons && data.numLessons > 1 ? `\n**IMPORTANT: MULTIPLE LESSONS REQUIRED**
-You are required to generate **${data.numLessons} SEPARATE LESSON NOTES** in a single document.
+${data.numLessons && data.numLessons > 1 ? `\n**CRITICAL: MULTIPLE LESSONS REQUIRED - GENERATE EXACTLY ${data.numLessons} LESSONS**
+You MUST generate **EXACTLY ${data.numLessons} SEPARATE LESSON NOTES**.
+⚠️ DO NOT generate fewer than ${data.numLessons} lessons. If you are asked for 5 lessons, you MUST create all 5.
 Spread the provided Learning Indicators/Exemplars across these ${data.numLessons} lessons logically.
 For example, if there are 4 exemplars and 2 lessons are requested, cover Exemplars 1-2 in Lesson 1, and Exemplars 3-4 in Lesson 2.
+If you have fewer indicators than lessons, create review/practice lessons for the remaining slots.
 At the top of EACH lesson note, clearly write "LESSON X OF ${data.numLessons}" where X is the lesson number.
-Separate each lesson note with a horizontal rule (---).` : ''}
+OUTPUT FORMAT: Return a JSON ARRAY with EXACTLY ${data.numLessons} lesson objects: [{lesson1}, {lesson2}, {lesson3}, ...]
+Your response MUST start with [ and end with ]` : ''}
 
 **Template Name:** ${data.template.name}
 **Template Description:** ${data.template.description}
@@ -539,10 +542,13 @@ ${data.template.structure}
 **OUTPUT FORMAT:**
 ${data.template?.structure.trim().startsWith('{') ? `
 ⚠️ ATTENTION: This is a JSON template!
-- Your FIRST character must be: {
-- Your LAST character must be: }
-- NO text before the opening {
-- NO text after the closing }
+${data.numLessons && data.numLessons > 1 ? `- You are generating ${data.numLessons} lessons, so return a JSON ARRAY
+- Your FIRST character must be: [
+- Your LAST character must be: ]
+- Format: [{lesson1}, {lesson2}, {lesson3}, ...] with EXACTLY ${data.numLessons} objects` : `- Your FIRST character must be: {
+- Your LAST character must be: }`}
+- NO text before the opening ${data.numLessons && data.numLessons > 1 ? '[' : '{'}
+- NO text after the closing ${data.numLessons && data.numLessons > 1 ? ']' : '}'}
 - NO markdown code fences
 - ONLY pure JSON
 ` : `
@@ -557,7 +563,15 @@ BEGIN THE FILLED TEMPLATE NOW:`;
     } else {
       // Use default prompt if no template selected
       prompt = `You are an expert educational content creator for Ghana's education system. Generate a comprehensive, professional lesson note based on the following information:
-
+${data.numLessons && data.numLessons > 1 ? `
+**⚠️ CRITICAL: MULTIPLE LESSONS REQUIRED - GENERATE EXACTLY ${data.numLessons} LESSONS**
+You MUST generate **EXACTLY ${data.numLessons} SEPARATE LESSON NOTES**.
+DO NOT generate fewer than ${data.numLessons} lessons. If you are asked for 5 lessons, you MUST create all 5.
+Spread the provided Learning Indicators/Exemplars across these ${data.numLessons} lessons logically.
+If you have fewer indicators than lessons, create review/practice lessons for the remaining slots.
+Clearly label each lesson as "LESSON 1 OF ${data.numLessons}", "LESSON 2 OF ${data.numLessons}", etc.
+Separate each lesson with a line containing only "---"
+` : ''}
 **Subject:** ${data.subject}
 **Grade Level:** ${data.level}
 **Class Size:** ${data.classSize || "Typical (30-40)"}
@@ -612,7 +626,9 @@ Include descriptions of relevant diagrams, charts, illustrations, or visual aids
    - **Sample Class Exercises (Concept Application):** Include at least 3 questions for learners to practice.
 9. Homework/Extension Activities
 
-${curriculumFilesInfo || resourceFilesInfo ? 'Reference and incorporate content from the provided curriculum documents and resource materials where appropriate.\n\n' : ''}Format the lesson note professionally with clear sections and practical, actionable content that a teacher can use directly in the classroom.`;
+${curriculumFilesInfo || resourceFilesInfo ? 'Reference and incorporate content from the provided curriculum documents and resource materials where appropriate.\n\n' : ''}Format the lesson note professionally with clear sections and practical, actionable content that a teacher can use directly in the classroom.
+${data.numLessons && data.numLessons > 1 ? `
+**FINAL REMINDER:** You MUST generate EXACTLY ${data.numLessons} complete lesson notes, each separated by "---". Count your lessons before finishing - if you have fewer than ${data.numLessons}, continue generating more.` : ''}`;
     }
 
     const text = await callAIAPI(prompt);

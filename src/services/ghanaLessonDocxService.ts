@@ -801,22 +801,44 @@ export function generateGhanaLessonFileName(lessonData: GhanaLessonData | GhanaL
 }
 
 /**
- * Parse JSON from AI response (handles cases where JSON might be wrapped in code blocks or multiple lessons separated by ---)
+ * Parse JSON from AI response (handles cases where JSON might be wrapped in code blocks, arrays, or multiple lessons separated by ---)
  */
 export function parseAIJsonResponse(response: string): GhanaLessonData | GhanaLessonData[] {
   try {
     // Remove markdown code blocks if present
     let cleanJson = response.trim();
     
-    // Check for "---" separator logic first (multiple lessons)
+    // Remove markdown code fences
+    if (cleanJson.startsWith('```')) {
+      cleanJson = cleanJson.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+    
+    // PRIORITY 1: Check if it's a JSON array (multiple lessons)
+    const trimmedForCheck = cleanJson.trim();
+    if (trimmedForCheck.startsWith('[') && trimmedForCheck.includes('{')) {
+      try {
+        const parsed = JSON.parse(trimmedForCheck);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Validate each item has essential lesson fields
+          const validLessons = parsed.filter((item: any) => item.subject || item.phases || item.strand);
+          if (validLessons.length > 0) {
+            console.log(`Parsed ${validLessons.length} lessons from JSON array`);
+            return validLessons.length === 1 ? validLessons[0] : validLessons;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to parse as JSON array, trying other methods...");
+      }
+    }
+    
+    // PRIORITY 2: Check for "---" separator logic (legacy multiple lessons format)
     if (cleanJson.includes('---')) {
         const parts = cleanJson.split('---');
         const results: GhanaLessonData[] = [];
-        let parsingError = null;
 
         for (const part of parts) {
             const trimmedPart = part.trim();
-            if (!trimmedPart || trimmedPart.length < 5) continue; // Skip empty or too short parts
+            if (!trimmedPart || trimmedPart.length < 5) continue;
 
             try {
                 let jsonPart = trimmedPart;
@@ -824,45 +846,56 @@ export function parseAIJsonResponse(response: string): GhanaLessonData | GhanaLe
                     jsonPart = jsonPart.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
                 }
                 const parsed = JSON.parse(jsonPart);
-                // Validate essential fields to check if it's really the lesson data
                 if (parsed.subject || parsed.phases) {
                     results.push(parsed as GhanaLessonData);
                 }
             } catch (e) {
                 console.warn("Failed to parse partial JSON block:", e);
-                parsingError = e;
             }
         }
 
         if (results.length > 0) {
+            console.log(`Parsed ${results.length} lessons from --- separator format`);
             return results.length === 1 ? results[0] : results;
         }
-        
-        // If we failed to extract any parts but expected to, don't throw yet, try whole string parse
     }
 
-    // Standard Single JSON parsing
-    if (cleanJson.startsWith('```')) {
-      cleanJson = cleanJson.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    // PRIORITY 3: Standard Single JSON parsing
+    const parsed = JSON.parse(cleanJson);
+    
+    // Check if parsed result is an array
+    if (Array.isArray(parsed)) {
+      const validLessons = parsed.filter((item: any) => item.subject || item.phases || item.strand);
+      if (validLessons.length > 0) {
+        return validLessons.length === 1 ? validLessons[0] : validLessons;
+      }
     }
     
-    // Try to parse the collected string
-    const parsed = JSON.parse(cleanJson);
     return parsed as GhanaLessonData;
     
   } catch (error) {
     console.error("Error parsing AI JSON response:", error);
     
-    // Attempt fallback for common JSON errors (like characters after last brace or before first brace)
+    // Attempt fallback for common JSON errors
     try {
-        // Find the first occurrence of { or [
+        // Find the first occurrence of [ or {
         const firstOpen = response.search(/[{[]/);
         // Find the last occurrence of } or ]
         const lastClose = Math.max(response.lastIndexOf('}'), response.lastIndexOf(']'));
         
         if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
             const potentialJson = response.substring(firstOpen, lastClose + 1);
-            return JSON.parse(potentialJson) as GhanaLessonData;
+            const fallbackParsed = JSON.parse(potentialJson);
+            
+            // Handle array result from fallback
+            if (Array.isArray(fallbackParsed)) {
+              const validLessons = fallbackParsed.filter((item: any) => item.subject || item.phases || item.strand);
+              if (validLessons.length > 0) {
+                return validLessons.length === 1 ? validLessons[0] : validLessons;
+              }
+            }
+            
+            return fallbackParsed as GhanaLessonData;
         }
     } catch (e) {}
 
