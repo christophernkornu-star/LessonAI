@@ -1291,6 +1291,14 @@ const ImprovedGenerator = () => {
 
   const handleApplyScheme = async (item: any) => {
     setIsFromScheme(true);
+    
+    // Helper to clean "STRAND X:" prefixes
+    const cleanPrefix = (str: string) => {
+        if (!str) return "";
+        // Removes "STRAND 1: ", "STRAND ONE (1): ", "Sub-strand 2: " etc.
+        return str.replace(/^(STRAND|SUB-STRAND)\s+\w+(\s+\(\d+\))?:\s*/i, "");
+    };
+
     // 1. Apply basic data immediately
     setLessonData(prev => ({
       ...prev,
@@ -1299,8 +1307,8 @@ const ImprovedGenerator = () => {
       term: item.term || prev.term,
       weekNumber: item.week || prev.weekNumber,
       weekEnding: item.weekEnding || prev.weekEnding,
-      strand: item.strand || prev.strand,
-      subStrand: item.subStrand || prev.subStrand,
+      strand: cleanPrefix(item.strand) || prev.strand,
+      subStrand: cleanPrefix(item.subStrand) || prev.subStrand,
       contentStandard: item.contentStandard || prev.contentStandard,
       indicators: item.indicators || prev.indicators,
       exemplars: item.exemplars || prev.exemplars,
