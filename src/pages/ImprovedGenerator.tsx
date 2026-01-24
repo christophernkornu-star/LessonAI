@@ -21,6 +21,8 @@ import { useDraft } from "@/hooks/use-draft";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { TemplateSelector } from "@/components/TemplateSelector";
 import { ResourceSelector } from "@/components/ResourceSelector";
+import { PaymentWall } from "@/components/PaymentWall";
+import { checkPaymentRequired, deductPayment, estimateLessonCost } from "@/services/paymentService";
 import { lessonTemplates, type LessonTemplate } from "@/data/lessonTemplates";
 import { supabase } from "@/integrations/supabase/client";
 import { SUBJECTS, CLASS_LEVELS } from "@/data/curriculum";
@@ -63,9 +65,22 @@ const ImprovedGenerator = () => {
   const [selectedIndicators, setSelectedIndicators] = useState<string[]>([]);
   const [availableExemplars, setAvailableExemplars] = useState<string[]>([]);
   const [selectedExemplars, setSelectedExemplars] = useState<string[]>([]);
+  
+  // NEW: State for multi-select strands/sub-strands
+  const [selectedStrands, setSelectedStrands] = useState<string[]>([]);
+  const [selectedSubStrands, setSelectedSubStrands] = useState<string[]>([]);
+
+  // NEW: State for multi-select content standards
+  const [selectedContentStandards, setSelectedContentStandards] = useState<string[]>([]);
+  
+  // Track if lesson is being generated from Scheme of Learning context
+  const [isFromScheme, setIsFromScheme] = useState(false);
+
   const [schemeItems, setSchemeItems] = useState<any[]>([]);
   const [isSchemeDialogOpen, setIsSchemeDialogOpen] = useState(false);
   const [schemeSearch, setSchemeSearch] = useState("");
+  const [showPaymentWall, setShowPaymentWall] = useState(false);
+  const [pendingGeneration, setPendingGeneration] = useState(false);
 
   const { data: lessonData, setData: setLessonData, lastSaved, isSaving, clearDraft } = useDraft(
     {
@@ -545,57 +560,119 @@ const ImprovedGenerator = () => {
   // Load sub-strands when strand changes
   useEffect(() => {
     const loadSubStrands = async () => {
-      if (lessonData.subject && lessonData.level && lessonData.strand && currentUser) {
-        // The strand value is already the label from ComboboxWithInput
-        const strandLabel = lessonData.strand;
+      // Check if we have subject and level. Strand is now optional for initial load (or we handle multiple)
+      if (lessonData.subject && lessonData.level && currentUser) {
         
-        const subStrands = await CurriculumService.getSubStrandsByStrand(
-          lessonData.level,
-          lessonData.subject,
-          strandLabel,
-          currentUser.id
-        );
-        setAvailableSubStrands(subStrands);
+        // Handle Multiple Strands:
+        // Use selectedStrands state if available, otherwise fall back to splitting lessonData.strand
+        // (This supports both the UI selection and loading from drafts/schemes)
+        const currentStrands = selectedStrands.length > 0 
+            ? selectedStrands 
+            : (lessonData.strand ? lessonData.strand.split('\n').filter(s => s.trim()) : []);
 
-        // Auto-select if only one sub-strand
-        if (subStrands.length === 1) {
-           setLessonData(prev => ({ ...prev, subStrand: subStrands[0].label }));
-        } else if (subStrands.length === 0) {
-           toast({
-             title: "No Sub-strands Found",
-             description: `Found strand "${lessonData.strand}" but no sub-strands linked to it for ${lessonData.level}. Please check your uploaded curriculum.`,
-             variant: "destructive"
-           });
+        if (currentStrands.length > 0) {
+            let allSubStrands: Array<{ value: string; label: string }> = [];
+            
+            // Fetch sub-strands for EACH selected strand
+            for (const strandLabel of currentStrands) {
+                const subStrands = await CurriculumService.getSubStrandsByStrand(
+                  lessonData.level,
+                  lessonData.subject,
+                  strandLabel,
+                  currentUser.id
+                );
+                // Merge and deduplicate
+                allSubStrands = [...allSubStrands, ...subStrands];
+            }
+            
+            // Remove duplicates based on label/value
+            const uniqueSubStrands = Array.from(new Map(allSubStrands.map(item => [item.label, item])).values());
+            
+            setAvailableSubStrands(uniqueSubStrands);
+
+            if (uniqueSubStrands.length === 0) {
+                 // Only warn if we actually had strands selected but found nothing
+               /* 
+               toast({
+                 title: "No Sub-strands Found",
+                 description: `Found strands but no sub-strands linked to them.`,
+                 variant: "default" // Downgraded to default to be less annoying
+               });
+               */
+            }
+        } else {
+             // If no strands selected yet, empty the list
+             setAvailableSubStrands([]);
         }
       } else {
         setAvailableSubStrands([]);
       }
     };
     loadSubStrands();
-  }, [lessonData.subject, lessonData.level, lessonData.strand, currentUser]);
+  }, [lessonData.subject, lessonData.level, selectedStrands, lessonData.strand, currentUser]);
 
   // Load content standards when sub-strand changes
   useEffect(() => {
     const loadContentStandards = async () => {
-      if (lessonData.subject && lessonData.level && lessonData.strand && lessonData.subStrand && currentUser) {
-        // The values are already labels from ComboboxWithInput
-        const strandLabel = lessonData.strand;
-        const subStrandLabel = lessonData.subStrand;
+      if (lessonData.subject && lessonData.level && currentUser) {
         
-        const standards = await CurriculumService.getContentStandardsBySubStrand(
-          lessonData.level,
-          lessonData.subject,
-          strandLabel,
-          subStrandLabel,
-          currentUser.id
-        );
-        setAvailableContentStandards(standards);
+        const currentStrands = selectedStrands.length > 0 
+           ? selectedStrands 
+           : (lessonData.strand ? lessonData.strand.split('\n').filter(s => s.trim()) : []);
+           
+        const currentSubStrands = selectedSubStrands.length > 0
+           ? selectedSubStrands
+           : (lessonData.subStrand ? lessonData.subStrand.split('\n').filter(s => s.trim()) : []);
+
+        if (currentStrands.length > 0 && currentSubStrands.length > 0) {
+             let allStandards: any[] = [];
+             
+             // We need to fetch standards that match ANY the selected strand/substrand combos.
+             // Since the API takes single strand/substrand, we might need to iterate.
+             // Optimization: The API likely filters by SubStrand primarily. Strand is context.
+             
+             // Simple iteration: For each selected SubStrand, try to find its parent Strand (if we knew it)
+             // or just query for the SubStrand if possible?
+             // CurriculumService.getContentStandardsBySubStrand requires strand + substrand.
+             
+             // We'll approximate: Iterate through all selected strands and sub-strands and fetch combinations.
+             // This might be over-fetching but ensures we get everything.
+             
+             // OPTIMIZATION: Use Promise.all to fetch in parallel instead of sequential await
+             const fetchPromises = [];
+
+             for (const strand of currentStrands) {
+                 for (const subStrand of currentSubStrands) {
+                     fetchPromises.push(
+                        CurriculumService.getContentStandardsBySubStrand(
+                          lessonData.level,
+                          lessonData.subject,
+                          strand,
+                          subStrand,
+                          currentUser.id
+                        ).catch(err => {
+                            console.warn("Failed to fetch standards for", strand, subStrand, err);
+                            return []; // Return empty array on failure so one failure doesn't break all
+                        })
+                     );
+                 }
+             }
+             
+             const results = await Promise.all(fetchPromises);
+             allStandards = results.flat();
+
+             // Deduplicate standards by code
+             const uniqueStandards = Array.from(new Map(allStandards.map(item => [item.code, item])).values());
+             setAvailableContentStandards(uniqueStandards);
+        } else {
+             setAvailableContentStandards([]);
+        }
       } else {
         setAvailableContentStandards([]);
       }
     };
     loadContentStandards();
-  }, [lessonData.subject, lessonData.level, lessonData.strand, lessonData.subStrand, availableStrands, availableSubStrands, currentUser]);
+  }, [lessonData.subject, lessonData.level, selectedStrands, selectedSubStrands, lessonData.strand, lessonData.subStrand, currentUser]);
 
   // Show offline alert
   useEffect(() => {
@@ -643,7 +720,8 @@ const ImprovedGenerator = () => {
     setCurrentStep((prev) => Math.max(prev - 1, 0));
   };
 
-  const handleGenerate = async () => {
+  // Check if payment is required before generating
+  const initiateGeneration = async () => {
     if (!validateStep(currentStep)) return;
 
     if (!isOnline) {
@@ -655,6 +733,21 @@ const ImprovedGenerator = () => {
       return;
     }
 
+    // Check if payment is required
+    const { required } = await checkPaymentRequired();
+    
+    if (required) {
+      // Show payment wall
+      setShowPaymentWall(true);
+    } else {
+      // Proceed directly to generation (admin/exempt user)
+      handleGenerate();
+    }
+  };
+
+  // Called after payment is confirmed or if user is exempt
+  const handleGenerate = async () => {
+    setShowPaymentWall(false);
     setIsGenerating(true);
 
     try {
@@ -664,7 +757,9 @@ const ImprovedGenerator = () => {
       let classSizeFromTimetable: string | undefined;
 
       try {
-        if (currentUser && lessonData.level && lessonData.subject) {
+        // Only check for timetable matches if this is coming from a Scheme context
+        // Otherwise, trust the user's manual input (Generic Generation)
+        if (currentUser && lessonData.level && lessonData.subject && isFromScheme) {
           // Use the new ROBUST fuzzy finder instead of strict getTimetable
           const timetable = await TimetableService.findTimetable(
             currentUser.id, 
@@ -775,6 +870,7 @@ const ImprovedGenerator = () => {
                 } else { 
                     // Subject not found in config
                     /* Optional: Warn user if in debug mode
+
                     console.log(`No timetable config found for subject: ${lessonData.subject}`);
                     */
                 }
@@ -812,6 +908,22 @@ const ImprovedGenerator = () => {
 
       const generatedContent = await generateLessonNote(dataWithTemplate);
 
+      // Deduct payment after successful generation
+      // Estimate tokens used (based on content length - rough approximation)
+      const estimatedTokens = Math.max(4000, Math.ceil(generatedContent.length / 4) + 1500);
+      const paymentResult = await deductPayment(estimatedTokens, 'lesson_note', finalNumLessons);
+      
+      if (!paymentResult.success && paymentResult.error?.includes('Insufficient')) {
+        // This shouldn't happen if PaymentWall worked correctly, but handle it
+        toast({
+          title: "Payment Error",
+          description: paymentResult.error,
+          variant: "destructive",
+        });
+        setIsGenerating(false);
+        return;
+      }
+
       // Save lesson note to database
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -845,22 +957,39 @@ const ImprovedGenerator = () => {
     } catch (error) {
       console.error("Generation error:", error);
       
-      // Implement retry logic
-      if (retryCount < 2) {
+      // Check if it's an API key configuration error - don't retry those
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isConfigError = errorMessage.toLowerCase().includes('api key') || 
+                           errorMessage.toLowerCase().includes('not configured');
+      
+      if (isConfigError) {
+        // Configuration errors should not be retried
+        toast({
+          title: "Configuration Error",
+          description: "API key is not configured. Please contact the administrator.",
+          variant: "destructive",
+        });
+        setRetryCount(0);
+      } else if (retryCount < 2) {
+        // Only retry transient errors
         toast({
           title: "Generation Failed",
           description: `Retrying... (Attempt ${retryCount + 2} of 3)`,
           variant: "default",
         });
-        setRetryCount(retryCount + 1);
+        setRetryCount(prev => prev + 1);
+        // Retry handleGenerate directly, not initiateGeneration (which would check payment again)
         setTimeout(() => handleGenerate(), 2000);
       } else {
         toast({
           title: "Generation Failed",
-          description: error instanceof Error ? error.message : "An error occurred. Please try again.",
+          description: errorMessage || "An error occurred. Please try again.",
           variant: "destructive",
           action: (
-            <Button variant="outline" size="sm" onClick={handleGenerate}>
+            <Button variant="outline" size="sm" onClick={() => {
+              setRetryCount(0);
+              initiateGeneration();
+            }}>
               Retry
             </Button>
           ),
@@ -967,70 +1096,73 @@ const ImprovedGenerator = () => {
 
   // Update lessonData.indicators when selectedIndicators changes and filter exemplars
   useEffect(() => {
+    // 1. Sync state to lessonData
     if (selectedIndicators.length > 0) {
       setLessonData(prev => ({ ...prev, indicators: selectedIndicators.join("\n") }));
-      
-      // Filter exemplars based on selected indicators
-      if (lessonData.contentStandard && availableContentStandards.length > 0) {
-        // More precise matching to avoid partial code matches (e.g. "B1" matching "B10")
-        const selectedStandard = availableContentStandards.find(cs => 
-          lessonData.contentStandard === cs.code || 
-          lessonData.contentStandard.startsWith(`${cs.code}:`) ||
-          lessonData.contentStandard.startsWith(`${cs.code} `)
-        );
-        
-        console.log("Selected Standard for filtering:", selectedStandard);
+    }
 
-        if (selectedStandard) {
-           // If we have mappings, use them
-           if (selectedStandard.mappings && selectedStandard.mappings.length > 0) {
-             const relevantExemplars = new Set<string>();
-             
-             selectedStandard.mappings.forEach(mapping => {
-               // Robust matching: check if any of the mapping's indicators match selected indicators
-               // We normalize by trimming and ignoring case to be safe
-               const hasSelectedIndicator = mapping.indicators.some(ind => 
-                 selectedIndicators.some(sel => 
-                   sel.trim().toLowerCase() === ind.trim().toLowerCase() || 
-                   sel.includes(ind) || 
-                   ind.includes(sel)
-                 )
-               );
-               
-               if (hasSelectedIndicator) {
-                 mapping.exemplars.forEach(ex => relevantExemplars.add(ex));
-               }
-             });
-             
-             const newAvailable = Array.from(relevantExemplars);
-             console.log("Filtered exemplars:", newAvailable);
-             
-             if (newAvailable.length > 0) {
-               setAvailableExemplars(newAvailable);
-               // Filter selected exemplars to only those that are still available
-               setSelectedExemplars(prev => prev.filter(ex => newAvailable.includes(ex)));
-             } else {
-               // If filtering resulted in nothing, but we have indicators selected, 
-               // it might mean the mapping failed. Fallback to showing all exemplars 
-               // so the user isn't blocked.
-               console.warn("Filtering returned no exemplars, falling back to all.");
-               setAvailableExemplars(selectedStandard.exemplars || []);
-             }
+    // 2. Filter Exemplars
+    if (selectedIndicators.length > 0 && availableContentStandards.length > 0) {
+        
+        // Handle multiple content standards
+        const currentStandards = selectedContentStandards.length > 0 
+           ? selectedContentStandards 
+           : (lessonData.contentStandard ? lessonData.contentStandard.split('\n').filter(Boolean) : []);
+
+        const relevantExemplars = new Set<string>();
+        let hasMapping = false;
+
+        currentStandards.forEach(stdString => {
+            // Precise match against available standards
+            const selectedStandard = availableContentStandards.find(cs => 
+                 stdString === `${cs.code}: ${cs.description}` || 
+                 stdString.startsWith(`${cs.code}:`)
+            );
+
+            if (selectedStandard && selectedStandard.mappings && selectedStandard.mappings.length > 0) {
+                 hasMapping = true;
+                 selectedStandard.mappings.forEach(mapping => {
+                   // Robust matching: check if any of the mapping's indicators match selected indicators
+                   const indicatorsMatch = mapping.indicators.some(ind => {
+                      const indNorm = ind.toLowerCase().trim();
+                      return selectedIndicators.some(sel => sel.toLowerCase().trim().includes(indNorm) || indNorm.includes(sel.toLowerCase().trim()));
+                   });
+
+                   if (indicatorsMatch) {
+                      mapping.exemplars.forEach(ex => relevantExemplars.add(ex));
+                   }
+                 });
+            }
+        });
+
+        if (relevantExemplars.size > 0) {
+           const newExemplars = Array.from(relevantExemplars);
+           setAvailableExemplars(newExemplars);
+           // Also filter selected exemplars to only those that are valid
+           setSelectedExemplars(prev => prev.filter(ex => newExemplars.includes(ex)));
+        } else {
+           // Fallback logic
+           if (hasMapping) {
+             // Mappings exist but no exemplars matched.
            } else {
-             // No mappings available (legacy data or structure), show all exemplars
-             console.log("No mappings found, showing all exemplars.");
-             setAvailableExemplars(selectedStandard.exemplars || []);
+             // No mappings found at all, just show all exemplars from the standard(s)
+             const allExemplars = new Set<string>();
+             currentStandards.forEach(stdString => {
+                const selectedStandard = availableContentStandards.find(cs => stdString.startsWith(cs.code));
+                if (selectedStandard && selectedStandard.exemplars) {
+                   selectedStandard.exemplars.forEach(ex => allExemplars.add(ex));
+                }
+             });
+             setAvailableExemplars(Array.from(allExemplars));
            }
         }
-      }
     } else {
-      // If no indicators selected, clear selected exemplars.
-      // We do NOT clear availableExemplars here because they might have been 
-      // populated via the text-pairing lookup (Scheme load) and we want them visible.
-      // setAvailableExemplars([]);
-      setSelectedExemplars([]);
+       // If no indicators selected, we might want to clear selected exemplars
+       if (!selectedIndicators || selectedIndicators.length === 0) {
+          setSelectedExemplars([]);
+       }
     }
-  }, [selectedIndicators, lessonData.contentStandard, availableContentStandards]);
+  }, [selectedIndicators, availableContentStandards, selectedContentStandards, lessonData.contentStandard]);
 
   // Update lessonData.exemplars when selectedExemplars changes
   useEffect(() => {
@@ -1042,8 +1174,11 @@ const ImprovedGenerator = () => {
     }
   }, [selectedExemplars, availableExemplars]);
 
-  // Auto-populate available indicators/exemplars if content standard matches
+  // Auto-populate available indicators/exemplars if content standard matches (Legacy/Single Select)
   useEffect(() => {
+    // SKIP this effect if we are using the new multi-select mode
+    if (selectedContentStandards.length > 0) return;
+
     if (lessonData.contentStandard && availableContentStandards.length > 0) {
       const selected = availableContentStandards.find(cs => 
         lessonData.contentStandard === cs.code || 
@@ -1077,13 +1212,15 @@ const ImprovedGenerator = () => {
         setSelectedExemplars(parsed);
       }
     }
-  }, [lessonData.contentStandard, availableContentStandards, lessonData.exemplars]);
+  }, [lessonData.contentStandard, availableContentStandards, lessonData.exemplars, selectedContentStandards]);
 
   // Handle data from Scheme of Learning
   useEffect(() => {
     if (location.state?.fromScheme && location.state?.schemeData) {
       const { schemeData } = location.state;
       console.log("Loading scheme data:", schemeData);
+      
+      setIsFromScheme(true);
       
       // We need to ensure we don't overwrite if the user has already started editing
       // But since they just clicked "Generate" from the scheme page, we probably SHOULD overwrite.
@@ -1153,6 +1290,7 @@ const ImprovedGenerator = () => {
   }, []);
 
   const handleApplyScheme = async (item: any) => {
+    setIsFromScheme(true);
     // 1. Apply basic data immediately
     setLessonData(prev => ({
       ...prev,
@@ -1213,6 +1351,30 @@ const ImprovedGenerator = () => {
     );
   });
 
+  // Sync lessonData string fields to array state on load
+  useEffect(() => {
+     const strFromState = selectedStrands.join('\n');
+     if (lessonData.strand && lessonData.strand !== strFromState) {
+         // Only update if they really differ (avoid clearing if user just cleared state)
+         // But we assume lessonData is source of truth
+         setSelectedStrands(lessonData.strand.split('\n').filter(Boolean));
+     }
+  }, [lessonData.strand]);
+
+  useEffect(() => {
+     const strFromState = selectedSubStrands.join('\n');
+     if (lessonData.subStrand && lessonData.subStrand !== strFromState) {
+         setSelectedSubStrands(lessonData.subStrand.split('\n').filter(Boolean));
+     }
+  }, [lessonData.subStrand]);
+
+  useEffect(() => {
+     const strFromState = selectedContentStandards.join('\n');
+     if (lessonData.contentStandard && lessonData.contentStandard !== strFromState) {
+         setSelectedContentStandards(lessonData.contentStandard.split('\n').filter(Boolean));
+     }
+  }, [lessonData.contentStandard]);
+
   if (isLoading) {
     return <GeneratorSkeleton />;
   }
@@ -1221,6 +1383,16 @@ const ImprovedGenerator = () => {
     <TooltipProvider>
       <div className="min-h-screen bg-gradient-subtle">
         <Navbar />
+        
+        {/* Payment Wall */}
+        {showPaymentWall && (
+          <PaymentWall
+            numLessons={lessonData.numLessons || 1}
+            onPaymentComplete={handleGenerate}
+            onCancel={() => setShowPaymentWall(false)}
+          />
+        )}
+        
         {/* Status Bar */}
         {( !isOnline || lastSaved ) && (
           <div className="bg-muted/50 border-b border-border px-4 py-2 text-center text-xs text-muted-foreground flex flex-wrap justify-center gap-x-4 gap-y-1">
@@ -1495,66 +1667,67 @@ const ImprovedGenerator = () => {
                     
                     <div className="grid gap-4 sm:gap-6">
                       <div className="space-y-2">
-                        <Label htmlFor="strand">Strand *</Label>
+                        <Label htmlFor="strand">Strands *</Label>
                         {availableStrands.length === 0 && (
                            <div className="text-xs text-amber-600 dark:text-amber-400 mb-2 bg-amber-50 dark:bg-amber-950/30 p-2 rounded border border-amber-200 dark:border-amber-800">
-                              No strands found? Please select a valid subject/level combination or type manually.
+                              No strands found? Please select a valid subject/level combination.
                            </div>
                         )}
-                        <ComboboxWithInput
-                          options={availableStrands}
-                          value={lessonData.strand}
-                          onValueChange={(value) => {
+                        <MultiSelectCombobox
+                          options={availableStrands.map(s => s.label)}
+                          selected={selectedStrands}
+                          onChange={(newSelection) => {
+                            setSelectedStrands(newSelection);
+                            // Join with newlines for backend
+                            const newStrandString = newSelection.join('\n');
+                            
                             setLessonData({ 
                               ...lessonData, 
-                              strand: value, 
-                              subStrand: "", 
-                              contentStandard: "",
-                              indicators: "",
-                              exemplars: ""
+                              strand: newStrandString,
+                              // Don't necessarily clear sub-strands, but they might be invalid now. 
+                              // For safety, we keep them, assuming the user is building up a complex lesson.
                             });
-                            setSelectedIndicators([]);
-                            setSelectedExemplars([]);
-                            setAvailableIndicators([]);
-                            setAvailableExemplars([]);
+                            
+                            // Let the downstream effects handle loading sub-strands
                             setValidationErrors({ ...validationErrors, strand: "" });
                           }}
-                          placeholder="Type or select strand"
+                          placeholder="Select strands..."
                           searchPlaceholder="Search strands..."
-                          disabled={!lessonData.subject || !lessonData.level}
-                          emptyText={!lessonData.subject || !lessonData.level ? "Select subject and level first" : "No strands found. Type manually."}
-                          allowCustom={true}
+                          emptyText={!lessonData.subject || !lessonData.level ? "Select subject and level first" : "No strands found."}
                         />
+                         <p className="text-xs text-muted-foreground">
+                            You can select multiple strands.
+                        </p>
                         {validationErrors.strand && (
                           <p className="text-sm text-destructive">{validationErrors.strand}</p>
                         )}
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="subStrand">Sub-Strand *</Label>
-                        <ComboboxWithInput
-                          options={availableSubStrands}
-                          value={lessonData.subStrand}
-                          onValueChange={(value) => {
+                        <Label htmlFor="subStrand">Sub-Strands *</Label>
+                        <MultiSelectCombobox
+                          options={availableSubStrands.map(s => s.label)}
+                          selected={selectedSubStrands}
+                          onChange={(newSelection) => {
+                            setSelectedSubStrands(newSelection);
+                            // Join with newlines
+                            const newSubStrandString = newSelection.join('\n');
+                            
                             setLessonData({ 
                               ...lessonData, 
-                              subStrand: value, 
-                              contentStandard: "",
-                              indicators: "",
-                              exemplars: ""
+                              subStrand: newSubStrandString,
                             });
-                            setSelectedIndicators([]);
-                            setSelectedExemplars([]);
-                            setAvailableIndicators([]);
-                            setAvailableExemplars([]);
+                            
                             setValidationErrors({ ...validationErrors, subStrand: "" });
                           }}
-                          placeholder="Type or select sub-strand"
+                          placeholder="Select sub-strands..."
                           searchPlaceholder="Search sub-strands..."
-                          disabled={!lessonData.strand}
-                          emptyText={!lessonData.strand ? "Select a strand first" : "No sub-strands found. Type manually."}
-                          allowCustom={true}
+                          disabled={selectedStrands.length === 0}
+                          emptyText={selectedStrands.length === 0 ? "Select a strand first" : "No sub-strands found."}
                         />
+                         <p className="text-xs text-muted-foreground">
+                            You can select multiple sub-strands.
+                        </p>
                         {validationErrors.subStrand && (
                           <p className="text-sm text-destructive">{validationErrors.subStrand}</p>
                         )}
@@ -1563,27 +1736,84 @@ const ImprovedGenerator = () => {
 
                     <div className="space-y-3">
                       <Label htmlFor="contentStandard" className="text-sm font-medium">
-                        Content Standard *
+                        Content Standards *
                       </Label>
                       <div className="bg-muted/30 rounded-lg border border-border/50 p-3 sm:p-4">
-                        <ComboboxWithInput
-                          options={availableContentStandards.map(cs => ({ 
-                            value: `${cs.code}: ${cs.description}`, 
-                            label: `${cs.code}: ${cs.description}` 
-                          }))}
-                          value={lessonData.contentStandard}
-                          onValueChange={(value) => {
-                            const selected = availableContentStandards.find(cs => `${cs.code}: ${cs.description}` === value);
+                        <MultiSelectCombobox
+                          options={availableContentStandards.map(cs => `${cs.code}: ${cs.description}`)}
+                          selected={selectedContentStandards}
+                          onChange={(newSelection) => {
+                            setSelectedContentStandards(newSelection);
+                            
+                            // Join with newlines
+                            const newStandardString = newSelection.join('\n');
                             
                             setLessonData({ 
                               ...lessonData, 
-                              contentStandard: value,
+                              contentStandard: newStandardString,
                               exemplars: "", 
                               indicators: "" 
                             });
                             
-                            if (selected) {
-                              setAvailableIndicators(selected.indicators || []);
+                            // Load related indicators for ALL selected standards
+                            let combinedIndicators: string[] = [];
+                            newSelection.forEach(val => {
+                                const selected = availableContentStandards.find(cs => `${cs.code}: ${cs.description}` === val);
+                                if (selected && selected.indicators) {
+                                    // Parse and split indicators if they look like "Performance Indicators" list
+                                    const rawIndicators = selected.indicators;
+                                    const parsedIndicators: string[] = [];
+
+                                    rawIndicators.forEach(ind => {
+                                      // Check if it's the "By the end of the lesson..." generic header with numbered items
+                                      // Or just a numbered list inside strict string
+                                      // Regex: Look for digit-dot-space "1. " or "1.0 " occurring multiple times
+                                      const matches = ind.match(/\d+\.\s+/g);
+                                      if (matches && matches.length >= 1) {
+                                           // It's likely a list. Split it.
+                                           // We split by digit-dot-space, but keep the content.
+                                           // Since JS split consumes the separator, we can use a positive lookahead or just standard split and map.
+                                           
+                                           // Method: Replace "1. " with "|SPLIT|1. " then split by |SPLIT|
+                                           // This preserves the numbering which is often useful context
+                                           
+                                           // Remove common header if present
+                                           let cleanInd = ind.replace(/Indicator:?\s*By the end of the lesson.*?able to:?/i, "").trim();
+                                           
+                                           // Normalize newlines to spaces for easier splitting if it's just one line
+                                           // cleanInd = cleanInd.replace(/\n/g, " "); 
+                                           
+                                           // If the string starts with a number, or contains them
+                                           const parts = cleanInd.split(/(\d+\.\s+)/).filter(Boolean);
+                                           
+                                           // Re-assemble "1. " with "Identify..."
+                                           for (let i = 0; i < parts.length; i++) {
+                                               if (parts[i].match(/^\d+\.\s+$/) && parts[i+1]) {
+                                                   parsedIndicators.push(parts[i+1].trim());
+                                                   i++;
+                                               } else if (!parts[i].match(/^\d+\.\s+$/) && parts[i].length > 5) {
+                                                   // Just a loose string part, maybe the header was left over
+                                                   // parsedIndicators.push(parts[i].trim()); 
+                                               }
+                                           }
+
+                                           // Fallback: If parsing failed to extract meaningful parts (e.g. format wasn't exactly 1.), keep original
+                                           if (parsedIndicators.length === 0) parsedIndicators.push(ind);
+
+                                      } else {
+                                          parsedIndicators.push(ind);
+                                      }
+                                    });
+
+                                    combinedIndicators = [...combinedIndicators, ...parsedIndicators];
+                                }
+                            });
+                            
+                            // Deduplicate
+                            const uniqueIndicators = Array.from(new Set(combinedIndicators));
+
+                            if (uniqueIndicators.length > 0) {
+                              setAvailableIndicators(uniqueIndicators);
                               setSelectedIndicators([]);
                               setAvailableExemplars([]);
                               setSelectedExemplars([]);
@@ -1596,17 +1826,14 @@ const ImprovedGenerator = () => {
                             
                             setValidationErrors({ ...validationErrors, contentStandard: "" });
                           }}
-                          placeholder="Type or select content standard"
+                          placeholder="Select content standards..."
                           searchPlaceholder="Search standards..."
-                          disabled={!lessonData.subStrand}
-                          emptyText={!lessonData.subStrand ? "Select a sub-strand first" : "No standards found. Type manually."}
-                          allowCustom={true}
+                          disabled={selectedSubStrands.length === 0}
+                          emptyText={selectedSubStrands.length === 0 ? "Select a sub-strand first" : "No standards found."}
                         />
-                        {lessonData.contentStandard && (
-                          <p className="mt-2 text-xs text-muted-foreground line-clamp-2">
-                            Selected: {lessonData.contentStandard}
-                          </p>
-                        )}
+                         <p className="text-xs text-muted-foreground mt-2">
+                            Select multiple content standards if needed.
+                        </p>
                       </div>
                       {validationErrors.contentStandard && (
                         <p className="text-sm text-destructive">{validationErrors.contentStandard}</p>
@@ -1892,7 +2119,7 @@ const ImprovedGenerator = () => {
                       </Button>
                     ) : (
                       <Button
-                        onClick={handleGenerate}
+                        onClick={initiateGeneration}
                         disabled={isGenerating || !isOnline}
                         className="bg-gradient-hero hover:opacity-90 w-full sm:w-auto"
                       >

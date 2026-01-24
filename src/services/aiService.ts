@@ -207,11 +207,12 @@ async function callDeepSeekAPI(prompt: string, systemMessage?: string, numLesson
   const defaultSystemMessage = "You are an expert educational content creator specializing in creating comprehensive, professional lesson plans for Ghanaian teachers following the National Pre-tertiary Curriculum.";
   
   // Calculate max_tokens based on number of lessons (each lesson needs ~2500 tokens)
+  // DeepSeek has a max_tokens limit of 8192
   const baseTokens = 4000;
   const tokensPerLesson = 2500;
   const calculatedMaxTokens = numLessons && numLessons > 1 
-    ? Math.min(baseTokens + (numLessons * tokensPerLesson), 32000) // Cap at 32k for DeepSeek
-    : baseTokens;
+    ? Math.min(baseTokens + (numLessons * tokensPerLesson), 8192) // Cap at 8192 for DeepSeek
+    : Math.min(baseTokens, 8192);
   
   console.log(`Requesting ${calculatedMaxTokens} max_tokens for ${numLessons || 1} lesson(s)`);
   
@@ -289,11 +290,71 @@ export async function generateLessonNote(originalData: LessonData): Promise<stri
   try {
     // Clone data to avoid mutating the original
     const data = { ...originalData };
-    
-    // LOGIC: Handle Strands for Single vs Multiple Lessons
-    // If numLessons is 1, restrict to the first strand/sub-strand.
-    // If numLessons > 1, allow full content (will be spread by AI).
     const numLessons = data.numLessons || 1;
+
+    // ITERATIVE GENERATION STRATEGY:
+    // If multiple lessons are requested, we generate them individually and combine the results.
+    // This bypasses the single-response token limit (8192 tokens) which often causes 
+    // incomplete generation (e.g. stopping at 3 lessons instead of 5).
+    // It also ensures each lesson receives the full attention of the model.
+
+    if (numLessons > 1) {
+      console.log(`Generating ${numLessons} lessons iteratively to ensure full detail...`);
+      
+      // Helper to safely get the Nth item (splitting by newline)
+      const getItem = (text: string | undefined, index: number) => {
+          if (!text) return "";
+          const parts = text.split('\n').map(p => p.trim()).filter(p => p.length > 0);
+          if (parts.length === 0) return "";
+          // If we have enough parts, use the specific one. Otherwise, repeat the last one or reuse.
+          // Standard logic: If 1 part provided but 5 lessons asked, use that part for all.
+          // If 5 parts provided for 5 lessons, use 1-to-1.
+          if (parts.length === 1) return parts[0];
+          return parts[Math.min(index, parts.length - 1)];
+      };
+
+      const lessonPromises = Array.from({ length: numLessons }).map(async (_, index) => {
+           // Construct specific data for THIS lesson
+           const singleLessonData: LessonData = {
+               ...data,
+               numLessons: 1, // Force single generation mode for the recursive call
+               strand: getItem(data.strand, index),
+               subStrand: getItem(data.subStrand, index),
+               contentStandard: getItem(data.contentStandard, index),
+               indicators: getItem(data.indicators, index),
+               exemplars: getItem(data.exemplars, index),
+               // Assign specific day if available
+               scheduledDays: data.scheduledDays && data.scheduledDays[index] ? [data.scheduledDays[index]] : [],
+               // Pass term/week info directly
+               term: data.term,
+               weekNumber: data.weekNumber,
+               weekEnding: data.weekEnding,
+           };
+           
+           // Generating individual lesson...
+           return generateLessonNote(singleLessonData);
+      });
+
+      const results = await Promise.all(lessonPromises);
+
+      if (data.template) {
+          // If using a template (JSON Mode), the results are individual JSON strings (objects).
+          // We need to combine them into a JSON Array.
+          // Clean up results to ensure we only have the object part
+          const jsonObjects = results.map(r => {
+             const trimmed = r.trim();
+             // If for some reason it's wrapped in array brackets (shouldn't be), remove them
+             if (trimmed.startsWith('[') && trimmed.endsWith(']')) return trimmed.slice(1, -1);
+             return trimmed;
+          });
+          return `[${jsonObjects.join(',')}]`;
+      } else {
+          // If using standard mode (Text Mode), join with separator
+          return results.join('\n\n---\n\n');
+      }
+    }
+    
+    // === SINGLE LESSON GENERATION LOGIC (Original Flow) ===
     
     if (numLessons === 1) {
       const splitAndGetFirst = (text: string | undefined) => {
@@ -404,10 +465,12 @@ ${data.location ? `8. **LOCATION SPECIFIC CONTEXT:** The school is located in **
    - If the location is a coastal area, use ocean/fishing examples. If forest belt, use farming/forestry examples. If northern savannah, use relevant agricultural/climate examples.
    - Mention local markets, festivals, or sites familiar to students in ${data.location}.` : ''}
 
-**CRITICAL LANGUAGE INSTRUCTION:**
+**LANGUAGE AND SPELLING INSTRUCTIONS (CRITICAL):**
+- **USE BRITISH ENGLISH SPELLING ONLY.** (e.g., 'colour' not 'color', 'programme' not 'program', 'centre' not 'center', 'behaviour' not 'behavior', 'organise' not 'organize', 'analyse' not 'analyze').
+- This is mandatory for the Ghanaian curriculum context.
 - For "Ghanaian Language" subject: ALL content MUST be written in ENGLISH ONLY.
-- DO NOT use any Twi, Fante, Akan, Ewe, Ga, Dagbani, or any other Ghanaian local language words.
-- Lesson activities, instructions, examples, and all text must be in plain English.
+- DO NOT use any Twi, Fante, Akan, Ewe, Ga, Dagbani, or any other Ghanaian local language words unless explicitly teaching them as vocabulary terms.
+- Lesson activities, instructions, examples, and all text must be in plain British English.
 - This applies regardless of whether the lesson is about teaching a local language - the lesson note itself must be in English.
 
 **FORMATTING REQUIREMENTS:**
@@ -435,7 +498,8 @@ You MUST generate **EXACTLY ${data.numLessons} SEPARATE LESSON NOTES**.
 Spread the provided Learning Indicators/Exemplars across these ${data.numLessons} lessons logically.
 For example, if there are 4 exemplars and 2 lessons are requested, cover Exemplars 1-2 in Lesson 1, and Exemplars 3-4 in Lesson 2.
 If you have fewer indicators than lessons, create review/practice lessons for the remaining slots.
-At the top of EACH lesson note, clearly write "LESSON X OF ${data.numLessons}" where X is the lesson number.
+At the top of EACH lesson note, clearly write "LESSON X OF ${data.numLessons}" where X is the lesson number (e.g. "LESSON 1 OF 5", "LESSON 2 OF 5").
+You MUST also include the specific Lesson Number within the lesson title or sub-heading (e.g. "Lesson 1: Introduction to...", "Lesson 2: Advanced..."). 
 OUTPUT FORMAT: Return a JSON ARRAY with EXACTLY ${data.numLessons} lesson objects: [{lesson1}, {lesson2}, {lesson3}, ...]
 Your response MUST start with [ and end with ]` : ''}
 
@@ -508,7 +572,7 @@ ${data.template.structure}
 - For {STARTER_ACTIVITIES}: Describe the starter/warm-up activities.
 - For {REFLECTION_ACTIVITIES}: 
   1. Briefly summarize the lesson closure.
-  2. ALWAYS include a section titled "**Sample Class Exercises:**" with at least 3 concept application questions for students to solve. 
+  2. ALWAYS include a subheading "**Sample Class Exercises:**" (ensure the title is bolded) followed by at least 3 concept application questions for students to solve. 
   3. Ensure these questions test understanding of the lesson concepts in a practical way.
 - For {NEW_LEARNING_ACTIVITIES}: Number the activities (Activity 1:, Activity 2:) starting on new lines and USE bold formatting (e.g. **Activity 1:**).
   ${data.numLessons && data.numLessons > 1 ? `
@@ -521,11 +585,13 @@ ${data.template.structure}
     - **Lesson 2** ${data.scheduledDays?.[1] ? `(Day: ${data.scheduledDays[1]})` : ''} must focus ONLY on the *second* Strand/Sub-strand provided (if available).
     - **Lesson 3** ${data.scheduledDays?.[2] ? `(Day: ${data.scheduledDays[2]})` : ''} must focus ONLY on the *third* Strand/Sub-strand provided (if available).
     - **DO NOT** combine multiple strands into a single lesson/activity session. 
-    - If you run out of unique strands, you may extend the last strand or review, but NEVER squash distinct strands together.` : ''}
+    - If you run out of unique strands, you may extend the last strand or review, but NEVER squash distinct strands together.
+    - **NUMBERING:** Ensure each lesson is distinctly numbered 1 to ${data.numLessons}.` : ''}
     - Replace {DAY} with the specific day assigned to each lesson as listed above:
       * For Lesson 1, use: "${data.scheduledDays?.[0] || 'Monday'}"
       * For Lesson 2, use: "${data.scheduledDays?.[1] || 'Wednesday'}"
       * For Lesson 3, use: "${data.scheduledDays?.[2] || 'Friday'}"
+      *(Continue this pattern for all ${data.numLessons} lessons)*
     - **SCHEDULE REQUIREMENT:** You MUST use the exact days provided above. DO NOT invent days or use default patterns like "Monday, Tuesday" unless they are explicitly listed above.
 - For {STARTER_RESOURCES}, {NEW_LEARNING_RESOURCES}, {REFLECTION_RESOURCES}, list ONLY essential, simple, and readily available materials (avoid long lists)
 - For sections like {INTRODUCTION}, {MAIN_ACTIVITIES}, {ASSESSMENT}, etc., write detailed, practical content
@@ -640,11 +706,12 @@ Include descriptions of relevant diagrams, charts, illustrations, or visual aids
      - **Lesson 2** ${data.scheduledDays?.[1] ? `(Day: ${data.scheduledDays[1]})` : ''} must focus ONLY on the *second* Strand/Sub-strand provided (if available).
      - **Lesson 3** ${data.scheduledDays?.[2] ? `(Day: ${data.scheduledDays[2]})` : ''} must focus ONLY on the *third* Strand/Sub-strand provided (if available).
      - **DO NOT** combine multiple strands into a single lesson/activity session. 
-     - If you run out of unique strands, you may extend the last strand or review, but NEVER squash distinct strands together.` : ''}
+     - If you run out of unique strands, you may extend the last strand or review, but NEVER squash distinct strands together.
+     - **NUMBERING:** Ensure each lesson is distinctly numbered 1 to ${data.numLessons}.` : ''}
 6. Assessment Methods
 7. Differentiation Strategies
 8. Closure/Summary (5 minutes) - Include summary of key points.
-   - **Sample Class Exercises (Concept Application):** Include at least 3 questions for learners to practice.
+   - **Sample Class Exercises (Concept Application):** (Must be bolded) Include at least 3 questions for learners to practice.
 9. Homework/Extension Activities
 
 ${curriculumFilesInfo || resourceFilesInfo ? 'Reference and incorporate content from the provided curriculum documents and resource materials where appropriate.\n\n' : ''}Format the lesson note professionally with clear sections and practical, actionable content that a teacher can use directly in the classroom.
@@ -760,28 +827,41 @@ export async function parseSchemeOfLearning(text: string): Promise<Array<{
     I have a text extracted from a Scheme of Learning document (likely a table). 
     Please extract the weekly plan details into a structured JSON array.
 
-    The text is expected to follow this column order: 
+    The text typically follows column orders like: 
     Week, Week Ending, Term, Subject, Class, Strand, Sub-Strand, Content Standard, Indicators, Resources.
     
     CRITICAL INSTRUCTION:
-    1. First, look for the "Subject" (e.g., "Mathematics", "Science", "Computing") and "Class/Level" (e.g., "Basic 7", "B7", "JHS 1") and "Term" in the document header or top section if they are not in every row.
-    2. Apply this Subject, Class, and Term to EVERY row in the output array, unless a specific row overrides it.
-    3. Extract as many weeks as you can find.
-    4. Look for a "Week Ending" column or date. If found, extract it. If not found, leave it empty.
+    1. GLOBAL METADATA SEARCH: 
+       - "Subject" (e.g., "Mathematics", "Science", "Computing").
+       - "Class/Level" (e.g., "Basic 7", "B7", "JHS 1").
+       - "Term" (e.g., "Term 1", "First Term", "Term One", "2nd Term").
+       - Look for these in the document header/title if they are not in every row. 
+    
+    2. PROPAGATE METADATA: 
+       - Apply the found Subject, Class, and Term to EVERY row in the output array.
+       - If the Term is found in the header (e.g. "Scheme of Learning for Term 2"), make sure every object in the array has "term": "Term 2".
+
+    3. WEEK ENDING SPECIFICS:
+       - Look for a column or text indicating "Week Ending", "W/E", "Date", or "Period".
+       - Extract the date or date range associated with each week.
+       - If finding the date is difficult, look for patterns like "24th - 28th" or "Ending Friday".
+
+    4. STRUCTURE:
+       - Extract as many weeks as you can find.
     
     FORMATTING RULES:
-    - "term": Must be full format like "Term 1", "Term 2", "Term 3". If text says "1", convert to "Term 1".
-    - "week": Must be full format like "Week 1", "Week 2". If text says "1", convert to "Week 1".
-    - "strand" and "subStrand": MUST be separated. Do not combine them.
-    - "classLevel": Use standard format like "Basic 1", "Basic 2", "JHS 1", etc.
+    - "term": Normalize to "Term 1", "Term 2", or "Term 3". If text says "First Term", use "Term 1".
+    - "week": Normalize to "Week 1", "Week 2", etc.
+    - "strand" and "subStrand": Separte them if possible. 
+    - "classLevel": Normalize to "Basic X" or "JHS X".
     
     Text:
-    "${text.substring(0, 8000)}"
+    "${text.substring(0, 15000)}"
 
     Return a valid JSON array of objects with these exact keys: 
     "week", "weekEnding", "term", "subject", "classLevel", "strand", "subStrand", "contentStandard", "indicators", "exemplars", "resources".
     
-    Exclude keys with empty values to save space.
+    Use empty strings for missing fields rather than omitting keys.
     
     Output ONLY the JSON array. No markdown blocks.
   `;

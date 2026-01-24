@@ -717,11 +717,204 @@ export type Database = {
           },
         ]
       }
+      payment_settings: {
+        Row: {
+          id: string
+          token_price_per_1000: number
+          platform_fee_percent: number
+          minimum_charge: number
+          free_daily_tokens: number
+          currency: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          token_price_per_1000?: number
+          platform_fee_percent?: number
+          minimum_charge?: number
+          free_daily_tokens?: number
+          currency?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          token_price_per_1000?: number
+          platform_fee_percent?: number
+          minimum_charge?: number
+          free_daily_tokens?: number
+          currency?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_payment_profiles: {
+        Row: {
+          id: string
+          user_id: string
+          wallet_balance: number
+          total_spent: number
+          total_tokens_used: number
+          is_payment_exempt: boolean
+          exemption_reason: string | null
+          exempted_by: string | null
+          exempted_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          wallet_balance?: number
+          total_spent?: number
+          total_tokens_used?: number
+          is_payment_exempt?: boolean
+          exemption_reason?: string | null
+          exempted_by?: string | null
+          exempted_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          wallet_balance?: number
+          total_spent?: number
+          total_tokens_used?: number
+          is_payment_exempt?: boolean
+          exemption_reason?: string | null
+          exempted_by?: string | null
+          exempted_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_payment_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_transactions: {
+        Row: {
+          id: string
+          user_id: string
+          transaction_type: string
+          amount: number
+          tokens_amount: number | null
+          status: string
+          payment_method: string | null
+          payment_provider: string | null
+          paystack_reference: string | null
+          phone_number: string | null
+          description: string | null
+          metadata: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          transaction_type: string
+          amount: number
+          tokens_amount?: number | null
+          status?: string
+          payment_method?: string | null
+          payment_provider?: string | null
+          paystack_reference?: string | null
+          phone_number?: string | null
+          description?: string | null
+          metadata?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          transaction_type?: string
+          amount?: number
+          tokens_amount?: number | null
+          status?: string
+          payment_method?: string | null
+          payment_provider?: string | null
+          paystack_reference?: string | null
+          phone_number?: string | null
+          description?: string | null
+          metadata?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      token_usage_log: {
+        Row: {
+          id: string
+          user_id: string
+          tokens_used: number
+          cost_charged: number
+          generation_type: string
+          lesson_count: number | null
+          metadata: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          tokens_used: number
+          cost_charged: number
+          generation_type: string
+          lesson_count?: number | null
+          metadata?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          tokens_used?: number
+          cost_charged?: number
+          generation_type?: string
+          lesson_count?: number | null
+          metadata?: Json | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "token_usage_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      add_to_wallet: {
+        Args: {
+          p_user_id: string
+          p_amount: number
+        }
+        Returns: number
+      }
       admin_insert_resource_file: {
         Args: {
           p_description: string

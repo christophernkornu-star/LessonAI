@@ -19,11 +19,14 @@ serve(async (req: Request) => {
     }
 
     // Calculate max_tokens based on number of lessons if not explicitly provided
+    // DeepSeek has a max_tokens limit of 8192
     const baseTokens = 4000;
     const tokensPerLesson = 2500;
-    const calculatedMaxTokens = maxTokens || (numLessons && numLessons > 1 
-      ? Math.min(baseTokens + (numLessons * tokensPerLesson), 32000)
-      : baseTokens);
+    const calculatedMaxTokens = maxTokens 
+      ? Math.min(maxTokens, 8192)  // Cap explicit maxTokens at 8192
+      : (numLessons && numLessons > 1 
+        ? Math.min(baseTokens + (numLessons * tokensPerLesson), 8192)
+        : Math.min(baseTokens, 8192));
 
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',

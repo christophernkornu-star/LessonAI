@@ -78,8 +78,13 @@ function extractTextFromDocx(arrayBuffer: ArrayBuffer): string {
     // 5. Decode XML entities
     text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
     
-    // 6. Clean up excessive whitespace
-    text = text.replace(/\s+/g, ' ').replace(/ \|\n/g, '\n').replace(/\n \|/g, '\n');
+    // 6. Clean up excessive whitespace, BUT PRESERVE NEWLINES to keep table structure
+    // Replace non-newline whitespace with single space
+    text = text.replace(/[ \t\r\f\v]+/g, ' '); 
+    // Fix any formatted table rows
+    text = text.replace(/ \|\n/g, '\n').replace(/\n \|/g, '\n');
+    // Remove empty lines
+    text = text.replace(/\n\s*\n/g, '\n');
 
     return text.trim();
   } catch (e) {

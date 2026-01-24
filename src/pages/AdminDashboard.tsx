@@ -14,6 +14,7 @@ import {
 } from '@/services/adminService';
 import * as AnalyticsService from '@/services/analyticsService';
 import { CurriculumService } from '@/services/curriculumService';
+import { AdminPaymentManagement } from '@/components/AdminPaymentManagement';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,6 +43,7 @@ import {
   TrendingUp,
   DollarSign,
   AlertTriangle,
+  CreditCard,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SimpleBarChart } from '@/components/charts/SimpleBarChart';
@@ -293,10 +295,14 @@ const AdminDashboard = () => {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4 mb-8">
+          <TabsList className="grid w-full grid-cols-5 mb-8">
             <TabsTrigger value="analytics" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <BarChart3 className="w-4 h-4" />
               <span className="hidden sm:inline">Analytics</span>
+            </TabsTrigger>
+            <TabsTrigger value="payments" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <CreditCard className="w-4 h-4" />
+              <span className="hidden sm:inline">Payments</span>
             </TabsTrigger>
             <TabsTrigger value="curriculum" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <BookOpen className="w-4 h-4" />
@@ -311,6 +317,11 @@ const AdminDashboard = () => {
               <span className="hidden sm:inline">Resources</span>
             </TabsTrigger>
           </TabsList>
+
+          {/* Payments Tab */}
+          <TabsContent value="payments">
+            <AdminPaymentManagement />
+          </TabsContent>
 
           {/* Analytics Tab */}
           <TabsContent value="analytics">
