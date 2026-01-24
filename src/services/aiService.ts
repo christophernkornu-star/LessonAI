@@ -730,7 +730,8 @@ ${data.numLessons && data.numLessons > 1 ? `
 
     // Pass numLessons to callAIAPI so it can allocate enough tokens
     const text = await callAIAPI(prompt, undefined, data.numLessons);
-    return text;
+    // Apply formatting patches for requested bolding
+    return formatGeneratedContent(text);
   } catch (error) {
     console.error("Error generating lesson note:", error);
     throw new Error("Failed to generate lesson note. Please check your API key and try again.");
@@ -918,4 +919,26 @@ export async function parseSchemeOfLearning(text: string): Promise<Array<{
     console.error("Error parsing scheme of learning:", error);
     throw new Error("Failed to parse scheme of learning data.");
   }
+}
+
+function formatGeneratedContent(text: string): string {
+  if (!text) return text;
+  let formatted = text;
+
+  // 1. Recap Activity: ... (Bold the header line)
+  formatted = formatted.replace(/(^|\n)(Recap Activity:.*?)(\n|$)/g, '$1**$2**$3');
+
+  // 2. Quick oral quiz: (Bold the phrase)
+  formatted = formatted.replace(/(^|\n)(Quick oral quiz:)/g, '$1**$2**');
+
+  // 3. Teacher summarises the key steps for ...: (Bold the phrase)
+  formatted = formatted.replace(/(^|\n)(Teacher summarises the key steps for .*?:)/g, '$1**$2**');
+
+  // 4. Sample Class Exercises: (Ensure bold)
+  formatted = formatted.replace(/(Sample Class Exercises:)/g, '**$1**');
+  
+  // Clean up potential double bolding from the replacements or AI output
+  formatted = formatted.replace(/\*\*\*\*|(\*\*){2,}/g, '**');
+
+  return formatted;
 }
