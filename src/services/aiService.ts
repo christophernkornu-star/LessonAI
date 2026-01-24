@@ -934,9 +934,11 @@ function formatGeneratedContent(text: string): string {
   // 3. Teacher summarises the key steps for ...: (Bold the phrase)
   formatted = formatted.replace(/(^|\n)(Teacher summarises the key steps for .*?:)/g, '$1**$2**');
 
-  // 4. Sample Class Exercises: (Ensure bold)
-  formatted = formatted.replace(/(Sample Class Exercises:)/g, '**$1**');
-  
+  // 4. Sample Class Exercises: (Ensure bold and double newline)
+  // Matches "Sample Class Exercises:" potentially preceded by newlines or existing bolding
+  // Replaces with explicit double newline and clean bolded header
+  formatted = formatted.replace(/(?:^|\n|\r)+(\*\*|)(Sample Class Exercises:)(\*\*|)/g, '\n\n**Sample Class Exercises:**');
+
   // Clean up potential double bolding from the replacements or AI output
   formatted = formatted.replace(/\*\*\*\*|(\*\*){2,}/g, '**');
 
