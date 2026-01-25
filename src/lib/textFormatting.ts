@@ -138,11 +138,12 @@ export function cleanAndSplitText(text: string): string[] {
   // Step 2.5: Ensure content follows on same line!
   // e.g. "Activity 1:\nIdentifying X" -> "Activity 1: Identifying X"
   // This must happen BEFORE the bold wrapping loop so the entire text gets wrapped together.
-  processed = processed.replace(/(Activity\s+\d+:)\s*\n\s*/gi, '$1 ');
-  processed = processed.replace(/(Step\s+\d+:)\s*\n\s*/gi, '$1 ');
-  processed = processed.replace(/(Part\s+\d+:)\s*\n\s*/gi, '$1 ');
-  processed = processed.replace(/(Phase\s+\d+:)\s*\n\s*/gi, '$1 ');
-  processed = processed.replace(/(Group\s+\d+[^:\n]*:)\s*\n\s*/gi, '$1 ');
+  // UPDATE: Made regex more flexible to catch "Activity 1 :", and allow for bold markers if they leaked through
+  processed = processed.replace(/(\**Activity\s+\d+\s*:?)\s*\n\s*/gi, '$1 ');
+  processed = processed.replace(/(\**Step\s+\d+\s*:?)\s*\n\s*/gi, '$1 ');
+  processed = processed.replace(/(\**Part\s+\d+\s*:?)\s*\n\s*/gi, '$1 ');
+  processed = processed.replace(/(\**Phase\s+\d+\s*:?)\s*\n\s*/gi, '$1 ');
+  processed = processed.replace(/(\**Group\s+\d+[^:\n]*:)\s*\n\s*/gi, '$1 ');
   
   // Step 3: Wrap entire header lines in bold
   // Process line by line to properly wrap
@@ -187,6 +188,8 @@ export function cleanAndSplitText(text: string): string[] {
   processed = processed.replace(/\n{3,}/g, '\n\n');
 
   // Fix Broken Numbering (MOVED to end to ensure it persists)
+  // Re-run this check one more time with a slightly more permissive regex for cases where the split logic above might have shifted things
+  processed = processed.replace(/(\n|^)(\s*(?:\*\*)?\(?\d+[.)](?:\*\*)?)\s*\n\s*/g, '$1$2 ');
 
   // Feature: Force split for headers ending in colons that are inline
   // e.g. "The teacher asks: Students do X" -> "The teacher asks:\nStudents do X"
