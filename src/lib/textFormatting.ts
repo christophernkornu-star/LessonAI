@@ -154,6 +154,10 @@ export function cleanAndSplitText(text: string): string[] {
   processed = processed.replace(/([^\n])\s*(Phase\s+\d+:)/gi, '$1\n\n$2');
   processed = processed.replace(/([^\n])\s*(Group\s+\d+)/gi, '$1\n\n$2');
   
+  // Final Numbering Check (e.g. Activity 1: 1. Item... -- ensuring numbering integrity if messy)
+  // Join lines where a line ends with a number and period (or paren) and the next line starts with text
+  processed = processed.replace(/(\n|^)(\s*(?:\*\*)?\(?\d+[.)](?:\*\*)?)\s*\n\s*/g, '$1$2 ');
+  
   // Step 3: Wrap entire header lines in bold
   // Process line by line to properly wrap
   const lines = processed.split('\n');
@@ -199,6 +203,12 @@ export function cleanAndSplitText(text: string): string[] {
   // Fix Broken Numbering (MOVED to end to ensure it persists)
   // Re-run this check one more time with a slightly more permissive regex for cases where the split logic above might have shifted things
   processed = processed.replace(/(\n|^)(\s*(?:\*\*)?\(?\d+[.)](?:\*\*)?)\s*\n\s*/g, '$1$2 ');
+  
+  // Explicitly check for lone "3." or similar that might be on its own line after all processing
+  processed = processed.replace(/\n(\s*\d+\.\s*)\n/g, '\n$1'); // Ensure it doesn't get double spaced if empty line
+  
+  // CRITICAL FIX: If we have "3.\nText" at the end, join it.
+  // The global regex above handles it, but let's be sure about the final split.
 
   // Feature: Force split for headers ending in colons that are inline
   // e.g. "The teacher asks: Students do X" -> "The teacher asks:\nStudents do X"
