@@ -356,8 +356,9 @@ export async function generateLessonNote(originalData: LessonData): Promise<stri
               // Apply text formatting (bolding, etc.)
               let formattedRes = formatGeneratedContent(res);
               
-              // Remove any existing "Lesson: X of Y" headers (since each was generated as "1 of 1")
-              formattedRes = formattedRes.replace(/\*?\*?Lesson:\s*\d+\s*of\s*\d+\*?\*?\s*\n*/gi, '');
+              // Remove ANY existing "Lesson X of Y" or "Lesson X" headers to avoid duplicates or wrong counts
+              // This handles: "Lesson: 1 of 1", "Lesson 1", "Lesson 1 of 5", "**Lesson 1 of 1**", etc.
+              formattedRes = formattedRes.replace(/^(\*\*|)?Lesson:?\s*\d+(\s*of\s*\d+)?(\*\*|)?\s*\n*/gim, '');
               
               // Create the correct header for this lesson in the sequence
               const header = `**Lesson: ${index + 1} of ${numLessons}**`;
@@ -946,21 +947,16 @@ function formatGeneratedContent(text: string): string {
   formatted = formatted.replace(/(^|\n)(?!\*\*)(Teacher summari[sz]es[^:]*:)/gi, '$1**$2**');
 
   // 4. Sample Class Exercises: (Ensure bold and double newline)
-  // Handle multiple variations: with/without bold markers, with/without colon, different spacing
-  // First strip any existing bold markers around it
-  formatted = formatted.replace(/\*\*(Sample Class Exercises):?\*\*/gi, 'Sample Class Exercises:');
-  // Now find it (possibly with varying whitespace before) and replace with proper format
-  formatted = formatted.replace(/([^\n])\n?(Sample Class Exercises:?)/gi, '$1\n\n**Sample Class Exercises:**');
-  // Handle case where it's at the start or after multiple newlines
-  formatted = formatted.replace(/(^|\n\n+)(Sample Class Exercises:?)/gi, '$1**Sample Class Exercises:**');
+  // Fix: Be very aggressive. Find any line that *looks* like "Sample Class Exercises"
+  // (ignoring case, whitespace, existing bolding, or colons) and replace it entirely.
+  formatted = formatted.replace(/(\n|^)[ \t]*(\*\*|)[ \t]*Sample Class Exercises[ \t]*:?[ \t]*(\*\*|)[ \t]*(\n|$)/gi, '\n\n**Sample Class Exercises:**\n');
 
   // 5. Clean up triple+ newlines to double newlines
   formatted = formatted.replace(/\n{3,}/g, '\n\n');
 
   // 6. Clean up potential double bolding from the replacements or AI output
-  formatted = formatted.replace(/\*\*\*\*+/g, '**');
-  // Fix case where colon appears after closing bold: **Sample Class Exercises**:
-  formatted = formatted.replace(/\*\*Sample Class Exercises\*\*:?/gi, '**Sample Class Exercises:**');
+  // Fix: Handle cases like **text**text** more gracefully by replacing **** with **
+  formatted = formatted.replace(/\*{4,}/g, '**');
 
   return formatted;
 }

@@ -43,21 +43,6 @@ export function cleanAndSplitText(text: string): string[] {
   // FIRST: Remove ALL orphan trailing ** throughout
   processed = removeOrphanAsterisks(processed);
 
-  // === APPLY REQUIRED BOLDING FOR SPECIFIC PHRASES ===
-  // 1. Sample Class Exercises: - ensure double newline before and bold
-  processed = processed.replace(/\*\*(Sample Class Exercises):?\*\*/gi, 'Sample Class Exercises:');
-  processed = processed.replace(/([^\n])\n?(Sample Class Exercises:?)/gi, '$1\n\n**Sample Class Exercises:**');
-  processed = processed.replace(/(^|\n\n+)(Sample Class Exercises:?)/gi, '$1**Sample Class Exercises:**');
-  
-  // 2. Recap Activity: ... - bold the phrase
-  processed = processed.replace(/(^|\n)(?!\*\*)(Recap Activity:[^\n]*)/gi, '$1**$2**');
-  
-  // 3. Quick oral quiz: - bold the phrase
-  processed = processed.replace(/(^|\n)(?!\*\*)(Quick oral quiz:)/gi, '$1**$2**');
-  
-  // 4. Teacher summarises/summarizes - bold the phrase
-  processed = processed.replace(/(^|\n)(?!\*\*)(Teacher summari[sz]es[^:]*:)/gi, '$1**$2**');
-
   // Fix jumbled numbered lists with period (e.g. "1. Item 2. Item")
   processed = processed.replace(/([^\n\d])(\s+)(\d+\.\s)/g, '$1\n$3');
 
