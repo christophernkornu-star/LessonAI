@@ -72,6 +72,7 @@ const ImprovedGenerator = () => {
 
   // NEW: State for multi-select content standards
   const [selectedContentStandards, setSelectedContentStandards] = useState<string[]>([]);
+  const [isManualCurriculum, setIsManualCurriculum] = useState(false);
   
   // Track if lesson is being generated from Scheme of Learning context
   const [isFromScheme, setIsFromScheme] = useState(false);
@@ -1672,40 +1673,66 @@ const ImprovedGenerator = () => {
                         </DialogContent>
                       </Dialog>
                     </div>
+
+                    <div className="flex items-center space-x-2 bg-muted/30 p-3 rounded-lg border border-border/50">
+                      <Checkbox 
+                        id="manual-mode" 
+                        checked={isManualCurriculum}
+                        onCheckedChange={(checked) => setIsManualCurriculum(checked as boolean)}
+                      />
+                      <Label htmlFor="manual-mode" className="text-sm font-medium cursor-pointer">
+                        Manually enter curriculum standards (Strand, Sub-strand, etc.)
+                      </Label>
+                    </div>
                     
                     <div className="grid gap-4 sm:gap-6">
                       <div className="space-y-2">
                         <Label htmlFor="strand">Strands *</Label>
-                        {availableStrands.length === 0 && (
+                        {!isManualCurriculum && availableStrands.length === 0 && (
                            <div className="text-xs text-amber-600 dark:text-amber-400 mb-2 bg-amber-50 dark:bg-amber-950/30 p-2 rounded border border-amber-200 dark:border-amber-800">
                               No strands found? Please select a valid subject/level combination.
                            </div>
                         )}
-                        <MultiSelectCombobox
-                          options={availableStrands.map(s => s.label)}
-                          selected={selectedStrands}
-                          onChange={(newSelection) => {
-                            setSelectedStrands(newSelection);
-                            // Join with newlines for backend
-                            const newStrandString = newSelection.join('\n');
-                            
-                            setLessonData({ 
-                              ...lessonData, 
-                              strand: newStrandString,
-                              // Don't necessarily clear sub-strands, but they might be invalid now. 
-                              // For safety, we keep them, assuming the user is building up a complex lesson.
-                            });
-                            
-                            // Let the downstream effects handle loading sub-strands
-                            setValidationErrors({ ...validationErrors, strand: "" });
-                          }}
-                          placeholder="Select strands..."
-                          searchPlaceholder="Search strands..."
-                          emptyText={!lessonData.subject || !lessonData.level ? "Select subject and level first" : "No strands found."}
-                        />
-                         <p className="text-xs text-muted-foreground">
-                            You can select multiple strands.
-                        </p>
+                        {isManualCurriculum ? (
+                          <Textarea
+                            id="strand"
+                            placeholder="Enter strands (one per line)..."
+                            value={lessonData.strand}
+                            onChange={(e) => {
+                              setLessonData({ ...lessonData, strand: e.target.value });
+                              setValidationErrors({ ...validationErrors, strand: "" });
+                            }}
+                            rows={3}
+                          />
+                        ) : (
+                          <>
+                            <MultiSelectCombobox
+                              options={availableStrands.map(s => s.label)}
+                              selected={selectedStrands}
+                              onChange={(newSelection) => {
+                                setSelectedStrands(newSelection);
+                                // Join with newlines for backend
+                                const newStrandString = newSelection.join('\n');
+                                
+                                setLessonData({ 
+                                  ...lessonData, 
+                                  strand: newStrandString,
+                                  // Don't necessarily clear sub-strands, but they might be invalid now. 
+                                  // For safety, we keep them, assuming the user is building up a complex lesson.
+                                });
+                                
+                                // Let the downstream effects handle loading sub-strands
+                                setValidationErrors({ ...validationErrors, strand: "" });
+                              }}
+                              placeholder="Select strands..."
+                              searchPlaceholder="Search strands..."
+                              emptyText={!lessonData.subject || !lessonData.level ? "Select subject and level first" : "No strands found."}
+                            />
+                             <p className="text-xs text-muted-foreground">
+                                You can select multiple strands.
+                            </p>
+                          </>
+                        )}
                         {validationErrors.strand && (
                           <p className="text-sm text-destructive">{validationErrors.strand}</p>
                         )}
@@ -1713,29 +1740,44 @@ const ImprovedGenerator = () => {
 
                       <div className="space-y-2">
                         <Label htmlFor="subStrand">Sub-Strands *</Label>
-                        <MultiSelectCombobox
-                          options={availableSubStrands.map(s => s.label)}
-                          selected={selectedSubStrands}
-                          onChange={(newSelection) => {
-                            setSelectedSubStrands(newSelection);
-                            // Join with newlines
-                            const newSubStrandString = newSelection.join('\n');
-                            
-                            setLessonData({ 
-                              ...lessonData, 
-                              subStrand: newSubStrandString,
-                            });
-                            
-                            setValidationErrors({ ...validationErrors, subStrand: "" });
-                          }}
-                          placeholder="Select sub-strands..."
-                          searchPlaceholder="Search sub-strands..."
-                          disabled={selectedStrands.length === 0}
-                          emptyText={selectedStrands.length === 0 ? "Select a strand first" : "No sub-strands found."}
-                        />
-                         <p className="text-xs text-muted-foreground">
-                            You can select multiple sub-strands.
-                        </p>
+                        {isManualCurriculum ? (
+                          <Textarea
+                            id="subStrand"
+                            placeholder="Enter sub-strands (one per line)..."
+                            value={lessonData.subStrand}
+                            onChange={(e) => {
+                              setLessonData({ ...lessonData, subStrand: e.target.value });
+                              setValidationErrors({ ...validationErrors, subStrand: "" });
+                            }}
+                            rows={3}
+                          />
+                        ) : (
+                          <>
+                            <MultiSelectCombobox
+                              options={availableSubStrands.map(s => s.label)}
+                              selected={selectedSubStrands}
+                              onChange={(newSelection) => {
+                                setSelectedSubStrands(newSelection);
+                                // Join with newlines
+                                const newSubStrandString = newSelection.join('\n');
+                                
+                                setLessonData({ 
+                                  ...lessonData, 
+                                  subStrand: newSubStrandString,
+                                });
+                                
+                                setValidationErrors({ ...validationErrors, subStrand: "" });
+                              }}
+                              placeholder="Select sub-strands..."
+                              searchPlaceholder="Search sub-strands..."
+                              disabled={selectedStrands.length === 0}
+                              emptyText={selectedStrands.length === 0 ? "Select a strand first" : "No sub-strands found."}
+                            />
+                             <p className="text-xs text-muted-foreground">
+                                You can select multiple sub-strands.
+                            </p>
+                          </>
+                        )}
                         {validationErrors.subStrand && (
                           <p className="text-sm text-destructive">{validationErrors.subStrand}</p>
                         )}
@@ -1747,6 +1789,19 @@ const ImprovedGenerator = () => {
                         Content Standards *
                       </Label>
                       <div className="bg-muted/30 rounded-lg border border-border/50 p-3 sm:p-4">
+                        {isManualCurriculum ? (
+                          <Textarea
+                            id="contentStandard"
+                            placeholder="Enter content standards (one per line)..."
+                            value={lessonData.contentStandard}
+                            onChange={(e) => {
+                              setLessonData({ ...lessonData, contentStandard: e.target.value });
+                              setValidationErrors({ ...validationErrors, contentStandard: "" });
+                            }}
+                            rows={3}
+                          />
+                        ) : (
+                          <>
                         <MultiSelectCombobox
                           options={availableContentStandards.map(cs => `${cs.code}: ${cs.description}`)}
                           selected={selectedContentStandards}
@@ -1833,7 +1888,7 @@ const ImprovedGenerator = () => {
                             }
                             
                             setValidationErrors({ ...validationErrors, contentStandard: "" });
-                          }}
+                                                   }}
                           placeholder="Select content standards..."
                           searchPlaceholder="Search standards..."
                           disabled={selectedSubStrands.length === 0}
@@ -1842,6 +1897,8 @@ const ImprovedGenerator = () => {
                          <p className="text-xs text-muted-foreground mt-2">
                             Select multiple content standards if needed.
                         </p>
+                          </>
+                        )}
                       </div>
                       {validationErrors.contentStandard && (
                         <p className="text-sm text-destructive">{validationErrors.contentStandard}</p>
@@ -1858,7 +1915,7 @@ const ImprovedGenerator = () => {
                         )}
                       </Label>
                       <div className="bg-muted/30 rounded-lg border border-border/50 p-3 sm:p-4">
-                        {availableIndicators.length > 0 ? (
+                        {availableIndicators.length > 0 && !isManualCurriculum ? (
                           <MultiSelectCombobox
                             options={availableIndicators}
                             selected={selectedIndicators}
@@ -1879,7 +1936,7 @@ const ImprovedGenerator = () => {
                           />
                         )}
                         <p className="mt-2 text-xs text-muted-foreground">
-                          {availableIndicators.length > 0 
+                          {availableIndicators.length > 0 && !isManualCurriculum
                             ? "Click to select multiple indicators from your curriculum"
                             : "No indicators found in curriculum. Enter manually above."}
                         </p>
@@ -1896,7 +1953,7 @@ const ImprovedGenerator = () => {
                         )}
                       </Label>
                       <div className="bg-muted/30 rounded-lg border border-border/50 p-3 sm:p-4 space-y-3">
-                        {availableExemplars.length > 0 && (
+                        {availableExemplars.length > 0 && !isManualCurriculum && (
                           <div>
                             <p className="text-xs font-medium text-muted-foreground mb-2">Select from curriculum:</p>
                             <MultiSelectCombobox
@@ -1913,7 +1970,7 @@ const ImprovedGenerator = () => {
                         
                         <div>
                           <p className="text-xs font-medium text-muted-foreground mb-2">
-                            {availableExemplars.length > 0 ? "Or add/edit manually:" : "Enter exemplars:"}
+                            {availableExemplars.length > 0 && !isManualCurriculum ? "Or add/edit manually:" : "Enter exemplars:"}
                           </p>
                           <Textarea
                             id="exemplars"
@@ -1925,7 +1982,7 @@ const ImprovedGenerator = () => {
                           />
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {availableExemplars.length > 0 
+                          {availableExemplars.length > 0 && !isManualCurriculum
                             ? "Combine selected items with manual edits for comprehensive coverage."
                             : "Describe what learners will be able to do by the end of the lesson."}
                         </p>
