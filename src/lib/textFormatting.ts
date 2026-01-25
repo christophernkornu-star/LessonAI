@@ -135,6 +135,15 @@ export function cleanAndSplitText(text: string): string[] {
   processed = processed.replace(/([^\n])\s*(Phase\s+\d+:)/gi, '$1\n$2');
   processed = processed.replace(/([^\n])\s*(Group\s+\d+)/gi, '$1\n$2');
   
+  // Step 2.5: Ensure content follows on same line!
+  // e.g. "Activity 1:\nIdentifying X" -> "Activity 1: Identifying X"
+  // This must happen BEFORE the bold wrapping loop so the entire text gets wrapped together.
+  processed = processed.replace(/(Activity\s+\d+:)\s*\n\s*/gi, '$1 ');
+  processed = processed.replace(/(Step\s+\d+:)\s*\n\s*/gi, '$1 ');
+  processed = processed.replace(/(Part\s+\d+:)\s*\n\s*/gi, '$1 ');
+  processed = processed.replace(/(Phase\s+\d+:)\s*\n\s*/gi, '$1 ');
+  processed = processed.replace(/(Group\s+\d+[^:\n]*:)\s*\n\s*/gi, '$1 ');
+  
   // Step 3: Wrap entire header lines in bold
   // Process line by line to properly wrap
   const lines = processed.split('\n');
@@ -182,9 +191,8 @@ export function cleanAndSplitText(text: string): string[] {
   // Feature: Force split for headers ending in colons that are inline
   // e.g. "The teacher asks: Students do X" -> "The teacher asks:\nStudents do X"
   // Look for: start of line, 3-60 chars of text, colon, whitespace, then capital letter or number
-  // Exclude strict time formats if possible, but usually headers are distinct.
-  // We use a positive lookahead for the next char to be significant
-  processed = processed.replace(/(\n|^)([^:\n]{3,60}:)[ \t]+([A-Z0-9(])/g, '$1$2\n$3');
+  // EXCLUDE: Activity/Step/Part/Phase/Group headers (using negative lookahead)
+  processed = processed.replace(/(\n|^)(?!(?:Activity|Step|Part|Phase|Group)\s+\d+)([^:\n]{3,60}:)[ \t]+([A-Z0-9(])/g, '$1$2\n$3');
   
   return processed.split('\n');
 }
