@@ -137,12 +137,14 @@ export function cleanAndSplitText(text: string): string[] {
   processed = processed.replace(/([^\n])\s*(Group\s+\d+)/gi, '$1\n$2');
   
   // Step 2.5: Ensure content follows on same line!
-  // Normalized to "Activity X:" by Step 1, so we can use simple regex
-  processed = processed.replace(/(Activity\s+\d+:?)\s*\n\s*/gi, '$1 ');
-  processed = processed.replace(/(Step\s+\d+:?)\s*\n\s*/gi, '$1 ');
-  processed = processed.replace(/(Part\s+\d+:?)\s*\n\s*/gi, '$1 ');
-  processed = processed.replace(/(Phase\s+\d+:?)\s*\n\s*/gi, '$1 ');
-  processed = processed.replace(/(Group\s+\d+[^:\n]*:)\s*\n\s*/gi, '$1 ');
+  // Robust Regex: 
+  // 1. Matches optional leading **
+  // 2. Matches Activity/Step/etc + Number
+  // 3. Matches optional colon and trailing **
+  // 4. Matches ANY amount of whitespace (including newlines) following it
+  // Replaces with single space.
+  const mergePattern = /(\**(?:Activity|Step|Part|Phase|Group)\s+\d+(?::|.*?:)?\**)\s*[\r\n]+\s*/gi;
+  processed = processed.replace(mergePattern, '$1 ');
   
   // Step 3: Wrap entire header lines in bold
   // Process line by line to properly wrap
