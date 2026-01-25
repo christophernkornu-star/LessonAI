@@ -732,7 +732,12 @@ ${data.numLessons && data.numLessons > 1 ? `
 
     // Pass numLessons to callAIAPI so it can allocate enough tokens
     const text = await callAIAPI(prompt, undefined, data.numLessons);
-    // Apply formatting patches for requested bolding
+    // Apply formatting patches for requested bolding ONLY for non-JSON (text) output
+    // JSON templates should not have text formatting applied as it corrupts the JSON
+    if (data.template) {
+      // JSON mode - return as-is without text formatting
+      return text;
+    }
     return formatGeneratedContent(text);
   } catch (error) {
     console.error("Error generating lesson note:", error);
