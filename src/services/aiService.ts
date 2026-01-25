@@ -952,6 +952,11 @@ function formatGeneratedContent(text: string): string {
   // Match "Sample Class Exercises" followed by anything up to a colon or end of line
   formatted = formatted.replace(/(\n|^)[ \t]*(\*\*|)[ \t]*Sample Class Exercises.*?:?[ \t]*(\*\*|)[ \t]*(\n|$)/gi, '\n\n**Sample Class Exercises:**\n');
 
+  // 4.5 Ensure "newline text ending with colon" is treated as a header (double newline before, newline after, bolded)
+  // But limit length to avoid bolding long paragraphs ending in colon. (Max 100 chars?)
+  // We use lookahead to ensure we don't match things that look like times or ratios inside a sentence (handled by ^|\n anchor)
+  formatted = formatted.replace(/(\n|^)(?!Sample Class Exercises)(?!\*\*Sample Class Exercises)(.{3,100}:)[ \t]*(\n|$)/g, '$1**$2**$3');
+
   // 5. Clean up triple+ newlines to double newlines
   formatted = formatted.replace(/\n{3,}/g, '\n\n');
 
