@@ -178,15 +178,13 @@ export function cleanAndSplitText(text: string): string[] {
   processed = processed.replace(/\n{3,}/g, '\n\n');
 
   // Fix Broken Numbering (MOVED to end to ensure it persists)
-  // Fix Broken Numbering (e.g. "4.\nThis is" -> "4. This is", or "(4.\nThis is)" -> "(4. This is)")
-  // Join lines where a line ends with a number and period (or paren) and the next line starts with text
-  // Upgraded Regex: Handle (4), 4., **4.**, etc and account for preceeding newlines or start of string
-  // Matches: 
-  // 1. (\n|^) -> Start of line
-  // 2. (\s*(?:\*\*)?\(?\d+[.)](?:\*\*)?) -> The number part (optional bold, optional paren)
-  // 3. \s*\n\s* -> The split to remove
-  processed = processed.replace(/(\n|^)(\s*(?:\*\*)?\(?\d+[.)](?:\*\*)?)\s*\n\s*/g, '$1$2 ');
 
+  // Feature: Force split for headers ending in colons that are inline
+  // e.g. "The teacher asks: Students do X" -> "The teacher asks:\nStudents do X"
+  // Look for: start of line, 3-60 chars of text, colon, whitespace, then capital letter or number
+  // Exclude strict time formats if possible, but usually headers are distinct.
+  // We use a positive lookahead for the next char to be significant
+  processed = processed.replace(/(\n|^)([^:\n]{3,60}:)[ \t]+([A-Z0-9(])/g, '$1$2\n$3');
   
   return processed.split('\n');
 }

@@ -997,10 +997,6 @@ function processJsonLessonContent(jsonStr: string, index: number, totalLessons: 
         // Same aggressive regex as the text-mode formatter
         formatted = formatted.replace(/(\n|^)[ \t]*(\*\*|)[ \t]*Sample Class Exercises.*?:?[ \t]*(\*\*|)[ \t]*(\n|$)/gi, '\n\n**Sample Class Exercises:**\n');
         
-        // 2.5 Ensure "newline text ending with colon" is treated as a header
-        // Matches line starting with newline, 3-100 chars, ending in colon
-        formatted = formatted.replace(/(\n|^)(?!Sample Class Exercises)(?!\*\*Sample Class Exercises)(.{3,100}:)[ \t]*(\n|$)/g, '$1**$2**$3');
-
         // 3. Clean up triple newlines
         formatted = formatted.replace(/\n{3,}/g, '\n\n');
 
