@@ -341,11 +341,10 @@ export async function generateLessonNote(originalData: LessonData): Promise<stri
           // If using a template (JSON Mode), the results are individual JSON strings (objects).
           // We need to combine them into a JSON Array.
           // Clean up results to ensure we only have the object part
-          const jsonObjects = results.map(r => {
-             const trimmed = r.trim();
-             // If for some reason it's wrapped in array brackets (shouldn't be), remove them
-             if (trimmed.startsWith('[') && trimmed.endsWith(']')) return trimmed.slice(1, -1);
-             return trimmed;
+          // AND apply content formatting (numbering, exercises) to each JSON object
+          const jsonObjects = results.map((r, index) => {
+             // Process and format the JSON content
+             return processJsonLessonContent(r, index, numLessons);
           });
           return `[${jsonObjects.join(',')}]`;
       } else {
@@ -876,7 +875,7 @@ export async function parseSchemeOfLearning(text: string): Promise<Array<{
     FORMATTING RULES:
     - "term": Normalize to "Term 1", "Term 2", or "Term 3". If text says "First Term", use "Term 1".
     - "week": Normalize to "Week 1", "Week 2", etc.
-    - "strand" and "subStrand": Separte them if possible. 
+    - "strand" and "subStrand": Seperate them if possible. 
     - "classLevel": Normalize to "Basic X" or "JHS X".
     
     Text:
@@ -960,4 +959,80 @@ function formatGeneratedContent(text: string): string {
   formatted = formatted.replace(/\*{4,}/g, '**');
 
   return formatted;
+}
+
+function processJsonLessonContent(jsonStr: string, index: number, totalLessons: number): string {
+  try {
+    // Basic cleanup to ensure we have a valid JSON object string
+    let cleanStr = jsonStr.trim();
+    if (cleanStr.startsWith('```')) {
+       cleanStr = cleanStr.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+    // Handle array wrapping if present
+    if (cleanStr.startsWith('[') && cleanStr.endsWith(']')) {
+        cleanStr = cleanStr.slice(1, -1).trim();
+    }
+    // Handle comma at end if present (from split logic maybe?)
+    if (cleanStr.endsWith(',')) {
+        cleanStr = cleanStr.slice(0, -1).trim();
+    }
+
+    const obj = JSON.parse(cleanStr);
+
+    // Helper to process formatting in string values
+    const formatValue = (val: any): any => {
+      if (typeof val === 'string') {
+        let formatted = val;
+
+        // 1. Fix Numbering: "Lesson 1 of 1" -> "Lesson {i} of {n}"
+        // Only replace if we find the specific "1 of 1" pattern to avoid breaking other numbers
+        formatted = formatted.replace(/Lesson\s*:?\s*1\s*of\s*1/gi, `Lesson ${index + 1} of ${totalLessons}`);
+        
+        // 2. Format Sample Class Exercises
+        // Same aggressive regex as the text-mode formatter
+        formatted = formatted.replace(/(\n|^)[ \t]*(\*\*|)[ \t]*Sample Class Exercises.*?:?[ \t]*(\*\*|)[ \t]*(\n|$)/gi, '\n\n**Sample Class Exercises:**\n');
+        
+        // 3. Clean up triple newlines
+        formatted = formatted.replace(/\n{3,}/g, '\n\n');
+
+        return formatted;
+      }
+      if (Array.isArray(val)) {
+        return val.map(formatValue);
+      }
+      if (typeof val === 'object' && val !== null) {
+        // Recursively process object values
+        const newObj: any = {};
+        for (const k in val) {
+            newObj[k] = formatValue(val[k]);
+        }
+        return newObj;
+      }
+      return val;
+    };
+
+    // Apply formatting to the whole object
+    const processedObj = formatValue(obj);
+
+    // Explicitly update any top-level "lessonTitle" or similar fields if they exist
+    // This catches fields that might be just "Lesson 1" where regex above missed
+    const titleKeys = ['title', 'lessonTitle', 'topic', 'lesson_title'];
+    for (const k of titleKeys) {
+        if (processedObj[k] && typeof processedObj[k] === 'string') {
+             // If title contains "Lesson 1", force update it
+             if (/Lesson\s*:?\s*1\b/i.test(processedObj[k])) {
+                 processedObj[k] = processedObj[k].replace(/Lesson\s*:?\s*1\b/i, `Lesson ${index + 1}`);
+                 // Append " of N" if missing
+                 if (!processedObj[k].includes(`of ${totalLessons}`)) {
+                     processedObj[k] += ` of ${totalLessons}`;
+                 }
+             }
+        }
+    }
+
+    return JSON.stringify(processedObj);
+  } catch (e) {
+    console.warn("Failed to process JSON lesson content, returning original:", e);
+    return jsonStr; // Fallback to original
+  }
 }
