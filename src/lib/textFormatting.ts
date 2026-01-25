@@ -112,21 +112,22 @@ export function cleanAndSplitText(text: string): string[] {
   // ACTIVITY/STEP/PART/PHASE/GROUP FORMATTING
   // These headers should be on their own line and fully bolded
   
-  const headerTypes = [
-    { pattern: /Activity\s+\d+:/gi, name: 'Activity' },
-    { pattern: /Step\s+\d+:/gi, name: 'Step' },
-    { pattern: /Part\s+\d+:/gi, name: 'Part' },
-    { pattern: /Phase\s+\d+:/gi, name: 'Phase' },
-    { pattern: /Group\s+\d+[^:\n]*:/gi, name: 'Group' }
-  ];
+  // Step 1: Remove any existing ** around these headers to normalize processing
+  const headerPattern = 'Activity|Step|Part|Phase|Group';
   
-  for (const header of headerTypes) {
-    // Step 1: Remove any existing ** around these headers
-    // Remove leading **
-    processed = processed.replace(new RegExp(`\\*\\*(${header.name}\\s+\\d+:?)`, 'gi'), '$1');
-    // Remove trailing ** after the content
-    processed = processed.replace(new RegExp(`(${header.name}\\s+\\d+:[^\\n]*)\\*\\*`, 'gi'), '$1');
-  }
+  // Case 1: **Activity X:** or **Activity X** (Strip surrounding keys)
+  // We use replace function to handle case insensitivity and referencing groups carefully
+  processed = processed.replace(new RegExp(`\\*\\*(${headerPattern})\\s+(\\d+:?)\\*\\*`, 'gi'), '$1 $2');
+  
+  // Case 2: **Activity X... (Leading only)
+  processed = processed.replace(new RegExp(`\\*\\*(${headerPattern})\\s+(\\d+:?)`, 'gi'), '$1 $2');
+  
+  // Case 3: ...Activity X:** (Trailing only)
+  processed = processed.replace(new RegExp(`(${headerPattern})\\s+(\\d+:?)\\*\\*`, 'gi'), '$1 $2');
+  
+  // Case 4: **Activity X** followed by colon (Caught by general logic often, but specific fix)
+  processed = processed.replace(new RegExp(`\\*\\*(${headerPattern})\\s+(\\d+)\\*\\*(:)`, 'gi'), '$1 $2$3');
+  
   
   // Step 2: Ensure headers start on new line
   processed = processed.replace(/([^\n])\s*(Activity\s+\d+:)/gi, '$1\n$2');
@@ -136,15 +137,11 @@ export function cleanAndSplitText(text: string): string[] {
   processed = processed.replace(/([^\n])\s*(Group\s+\d+)/gi, '$1\n$2');
   
   // Step 2.5: Ensure content follows on same line!
-  // e.g. "Activity 1:\nIdentifying X" -> "Activity 1: Identifying X"
-  // This must happen BEFORE the bold wrapping loop so the entire text gets wrapped together.
-  // UPDATE: REVERTED to strict handling, moved logic to aiService for data root fix.
-  // keeping this as safety net but relying on upstream fix.
-  // Using explicit no-newline matching just in case
-  processed = processed.replace(/(Activity\s+\d+:)\s*\n\s*/gi, '$1 ');
-  processed = processed.replace(/(Step\s+\d+:)\s*\n\s*/gi, '$1 ');
-  processed = processed.replace(/(Part\s+\d+:)\s*\n\s*/gi, '$1 ');
-  processed = processed.replace(/(Phase\s+\d+:)\s*\n\s*/gi, '$1 ');
+  // Normalized to "Activity X:" by Step 1, so we can use simple regex
+  processed = processed.replace(/(Activity\s+\d+:?)\s*\n\s*/gi, '$1 ');
+  processed = processed.replace(/(Step\s+\d+:?)\s*\n\s*/gi, '$1 ');
+  processed = processed.replace(/(Part\s+\d+:?)\s*\n\s*/gi, '$1 ');
+  processed = processed.replace(/(Phase\s+\d+:?)\s*\n\s*/gi, '$1 ');
   processed = processed.replace(/(Group\s+\d+[^:\n]*:)\s*\n\s*/gi, '$1 ');
   
   // Step 3: Wrap entire header lines in bold
