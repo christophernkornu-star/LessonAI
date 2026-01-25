@@ -957,6 +957,14 @@ function formatGeneratedContent(text: string): string {
   // We use lookahead to ensure we don't match things that look like times or ratios inside a sentence (handled by ^|\n anchor)
   formatted = formatted.replace(/(\n|^)(?!Sample Class Exercises)(?!\*\*Sample Class Exercises)(.{3,100}:)[ \t]*(\n|$)/g, '$1**$2**$3');
 
+  // 4.6 Fix Activity Headers Splitting
+  // Ensure "Activity X:" is NOT followed by a newline, but by a space.
+  formatted = formatted.replace(/(Activity\s+\d+:)\s*\n\s*/gi, '$1 ');
+  formatted = formatted.replace(/(Step\s+\d+:)\s*\n\s*/gi, '$1 ');
+  formatted = formatted.replace(/(Part\s+\d+:)\s*\n\s*/gi, '$1 ');
+  formatted = formatted.replace(/(Phase\s+\d+:)\s*\n\s*/gi, '$1 ');
+  formatted = formatted.replace(/(Group\s+\d+[^:\n]*:)\s*\n\s*/gi, '$1 ');
+
   // 5. Clean up triple+ newlines to double newlines
   formatted = formatted.replace(/\n{3,}/g, '\n\n');
 

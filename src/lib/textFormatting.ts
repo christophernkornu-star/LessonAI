@@ -138,14 +138,14 @@ export function cleanAndSplitText(text: string): string[] {
   // Step 2.5: Ensure content follows on same line!
   // e.g. "Activity 1:\nIdentifying X" -> "Activity 1: Identifying X"
   // This must happen BEFORE the bold wrapping loop so the entire text gets wrapped together.
-  // UPDATE: Made regex more flexible to catch "Activity 1 :", and allow for bold markers if they leaked through
-  // Also fix: handle trailing bold markers explicitly so we don't leave them dangling if the join happens
-  // e.g. "**Activity 3:**\nTitle" -> "**Activity 3:** Title" (and later we clean ** **)
-  processed = processed.replace(/(\**Activity\s+\d+\s*:?(\**))\s*\n\s*/gi, '$1 ');
-  processed = processed.replace(/(\**Step\s+\d+\s*:?(\**))\s*\n\s*/gi, '$1 ');
-  processed = processed.replace(/(\**Part\s+\d+\s*:?(\**))\s*\n\s*/gi, '$1 ');
-  processed = processed.replace(/(\**Phase\s+\d+\s*:?(\**))\s*\n\s*/gi, '$1 ');
-  processed = processed.replace(/(\**Group\s+\d+[^:\n]*:(\**))\s*\n\s*/gi, '$1 ');
+  // UPDATE: REVERTED to strict handling, moved logic to aiService for data root fix.
+  // keeping this as safety net but relying on upstream fix.
+  // Using explicit no-newline matching just in case
+  processed = processed.replace(/(Activity\s+\d+:)\s*\n\s*/gi, '$1 ');
+  processed = processed.replace(/(Step\s+\d+:)\s*\n\s*/gi, '$1 ');
+  processed = processed.replace(/(Part\s+\d+:)\s*\n\s*/gi, '$1 ');
+  processed = processed.replace(/(Phase\s+\d+:)\s*\n\s*/gi, '$1 ');
+  processed = processed.replace(/(Group\s+\d+[^:\n]*:)\s*\n\s*/gi, '$1 ');
   
   // Step 3: Wrap entire header lines in bold
   // Process line by line to properly wrap
