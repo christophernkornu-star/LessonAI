@@ -130,11 +130,11 @@ export function cleanAndSplitText(text: string): string[] {
   
   
   // Step 2: Ensure headers start on new line
-  processed = processed.replace(/([^\n])\s*(Activity\s+\d+:)/gi, '$1\n$2');
-  processed = processed.replace(/([^\n])\s*(Step\s+\d+:)/gi, '$1\n$2');
-  processed = processed.replace(/([^\n])\s*(Part\s+\d+:)/gi, '$1\n$2');
-  processed = processed.replace(/([^\n])\s*(Phase\s+\d+:)/gi, '$1\n$2');
-  processed = processed.replace(/([^\n])\s*(Group\s+\d+)/gi, '$1\n$2');
+  // MOVED DOWN AFTER MERGE to ensure we don't accidentally split what we just merged 
+  // if the merge logic creates a pattern that this regex matches.
+  // Actually, wait, this ensures BEFORE logic. 
+  // Let's keep it here but refine it to NOT split if it's start of string.
+  // The regex ([^\n]) handles that.
   
   // Step 2.5: Ensure content follows on same line!
   // Robust Regex: 
@@ -145,6 +145,14 @@ export function cleanAndSplitText(text: string): string[] {
   // Replaces with single space.
   const mergePattern = /(\**(?:Activity|Step|Part|Phase|Group)\s+\d+(?::|.*?:)?\**)\s*[\r\n]+\s*/gi;
   processed = processed.replace(mergePattern, '$1 ');
+
+  // Step 2 (Re-applied/Moved): Ensure headers start on new line (but keep joined content)
+  // Ensure "Activity X" is preceded by newline if there's text before it
+  processed = processed.replace(/([^\n])\s*(Activity\s+\d+:)/gi, '$1\n\n$2');
+  processed = processed.replace(/([^\n])\s*(Step\s+\d+:)/gi, '$1\n\n$2');
+  processed = processed.replace(/([^\n])\s*(Part\s+\d+:)/gi, '$1\n\n$2');
+  processed = processed.replace(/([^\n])\s*(Phase\s+\d+:)/gi, '$1\n\n$2');
+  processed = processed.replace(/([^\n])\s*(Group\s+\d+)/gi, '$1\n\n$2');
   
   // Step 3: Wrap entire header lines in bold
   // Process line by line to properly wrap
