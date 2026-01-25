@@ -500,7 +500,7 @@ export async function generateGhanaLessonDocx(
         dataArray = [jsonData];
     }
 
-    const docSections = dataArray.map((lessonData) => {
+    const docSections = dataArray.map((lessonData, index) => {
         // Table 1: Header Info (Rows 1-3)
         // Uses original 6-column grid - Scaled to ~10500 total width for 0.5" margins
         const table1 = new Table({
@@ -538,6 +538,12 @@ export async function generateGhanaLessonDocx(
         // Table 2: Standards (Row 4)
         // Independent grid: 3 columns [2100, 6300, 2100]
         let lessonText = lessonData.lesson || '1 of 1';
+        
+        // If multiple lessons are being generated, enforce sequential numbering "X of Y"
+        if (dataArray.length > 1) {
+             lessonText = `${index + 1} of ${dataArray.length}`;
+        }
+
         // If lessonText is just a number "1", format to "Lesson 1" (or "1 of 1")
         if (/^\d+$/.test(lessonText)) {
             // Check if we have context to know total? We don't in this scope easily unless passed.
