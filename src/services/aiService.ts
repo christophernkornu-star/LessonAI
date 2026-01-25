@@ -357,7 +357,9 @@ export async function generateLessonNote(originalData: LessonData): Promise<stri
               let formattedRes = formatGeneratedContent(res);
               
               // Remove ANY existing "Lesson X of Y" or "Lesson X" headers to avoid duplicates or wrong counts
-              // This handles: "Lesson: 1 of 1", "Lesson 1", "Lesson 1 of 5", "**Lesson 1 of 1**", etc.
+              // We explicitly target "Lesson: 1 of 1" which is the common culprit
+              formattedRes = formattedRes.replace(/(\*\*|)?Lesson:?\s*1\s*of\s*1(\*\*|)?/gi, '');
+              // Also broader catch for other variations at the start
               formattedRes = formattedRes.replace(/^(\*\*|)?Lesson:?\s*\d+(\s*of\s*\d+)?(\*\*|)?\s*\n*/gim, '');
               
               // Create the correct header for this lesson in the sequence
@@ -947,15 +949,14 @@ function formatGeneratedContent(text: string): string {
   formatted = formatted.replace(/(^|\n)(?!\*\*)(Teacher summari[sz]es[^:]*:)/gi, '$1**$2**');
 
   // 4. Sample Class Exercises: (Ensure bold and double newline)
-  // Fix: Be very aggressive. Find any line that *looks* like "Sample Class Exercises"
-  // (ignoring case, whitespace, existing bolding, or colons) and replace it entirely.
-  formatted = formatted.replace(/(\n|^)[ \t]*(\*\*|)[ \t]*Sample Class Exercises[ \t]*:?[ \t]*(\*\*|)[ \t]*(\n|$)/gi, '\n\n**Sample Class Exercises:**\n');
+  // Be EXTREMELY aggressive to catch variations like "Sample Class Exercises (Concept Application):"
+  // Match "Sample Class Exercises" followed by anything up to a colon or end of line
+  formatted = formatted.replace(/(\n|^)[ \t]*(\*\*|)[ \t]*Sample Class Exercises.*?:?[ \t]*(\*\*|)[ \t]*(\n|$)/gi, '\n\n**Sample Class Exercises:**\n');
 
   // 5. Clean up triple+ newlines to double newlines
   formatted = formatted.replace(/\n{3,}/g, '\n\n');
 
   // 6. Clean up potential double bolding from the replacements or AI output
-  // Fix: Handle cases like **text**text** more gracefully by replacing **** with **
   formatted = formatted.replace(/\*{4,}/g, '**');
 
   return formatted;
