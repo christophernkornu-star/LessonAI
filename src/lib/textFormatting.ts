@@ -55,14 +55,7 @@ export function cleanAndSplitText(text: string): string[] {
   // Fix jumbled Tiers (e.g. " Tier 1 ... Tier 2 ...")
   processed = processed.replace(/([^\n])(\s+)(Tier\s\d)/gi, '$1\n$3');
 
-  // Fix Broken Numbering (e.g. "4.\nThis is" -> "4. This is", or "(4.\nThis is)" -> "(4. This is)")
-  // Join lines where a line ends with a number and period (or paren) and the next line starts with text
-  // Upgraded Regex: Handle (4), 4., **4.**, etc and account for preceeding newlines or start of string
-  // Matches: 
-  // 1. (\n|^) -> Start of line
-  // 2. (\s*(?:\*\*)?\(?\d+[.)](?:\*\*)?) -> The number part (optional bold, optional paren)
-  // 3. \s*\n\s* -> The split to remove
-  processed = processed.replace(/(\n|^)(\s*(?:\*\*)?\(?\d+[.)](?:\*\*)?)\s*\n\s*/g, '$1$2 ');
+  // [MOVED] Fix Broken Numbering block moved to END of function to prevent other rules from splitting it again
 
   
   // Split on sentence-ending keywords that indicate new thoughts/sections
@@ -183,6 +176,17 @@ export function cleanAndSplitText(text: string): string[] {
   
   // Clean up multiple consecutive newlines
   processed = processed.replace(/\n{3,}/g, '\n\n');
+
+  // Fix Broken Numbering (MOVED to end to ensure it persists)
+  // Fix Broken Numbering (e.g. "4.\nThis is" -> "4. This is", or "(4.\nThis is)" -> "(4. This is)")
+  // Join lines where a line ends with a number and period (or paren) and the next line starts with text
+  // Upgraded Regex: Handle (4), 4., **4.**, etc and account for preceeding newlines or start of string
+  // Matches: 
+  // 1. (\n|^) -> Start of line
+  // 2. (\s*(?:\*\*)?\(?\d+[.)](?:\*\*)?) -> The number part (optional bold, optional paren)
+  // 3. \s*\n\s* -> The split to remove
+  processed = processed.replace(/(\n|^)(\s*(?:\*\*)?\(?\d+[.)](?:\*\*)?)\s*\n\s*/g, '$1$2 ');
+
   
   return processed.split('\n');
 }
