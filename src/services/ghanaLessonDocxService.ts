@@ -158,6 +158,12 @@ function createCell(
         // We check a "clean" version just for detection logic
         const contentForCheck = trimmedLine.replace(/\*\*/g, '');
         let forceBold = false;
+        
+        // Handle list items ending in colon (bold them)
+        // Check for colon at end, ignoring trailing bold markers or minimal whitespace
+        if (trimmedLine.replace(/[\*_]+$/, '').trim().endsWith(':')) {
+             forceBold = true;
+        }
 
         // Check if this is an Activity/Step/Part/Phase line - make it bold
         if (/^(Activity|Step|Part|Phase|Group)\s+\d+/i.test(contentForCheck)) {
@@ -174,27 +180,8 @@ function createCell(
         if (trimmedLine.match(/^[-*]\s/)) {
             trimmedLine = trimmedLine.replace(/^[-*]\s/, '• ');
         }
-
-        // Handle list items ending in colon (bold them)
-        // OR any line that ends in a colon (and isn't too long?) 
-        // User request: "any other text aside 'Activity...' that is at the beginning of a newline and ends wth a colon should be bolded"
-        if (trimmedLine.endsWith(':')) {
-             forceBold = true;
-        }
         
-        // Also keep checking explicit list items just in case regex above misses some edge case (though endsWith covers it)
-        if ((trimmedLine.startsWith('• ') || trimmedLine.match(/^\d+[.)]\s/)) && trimmedLine.trim().endsWith(':')) {
-            forceBold = true;
-        }
-
-        // Also check if the line ITSELF is fully wrapped in ** to treat it as a bold header
-        // Regex: starts with **, ends with ** (ignoring whitespace), and has content
-        if (/^\*\*(.*)\*\*$/.test(trimmedLine)) {
-            // It's already marked as bold, parseMarkdownLine will handle it, 
-            // but we can set forceBold to ensure size/font consistency if needed.
-            // Actually, parseMarkdownLine handles mixed content better. 
-            // But if it's the ENTIRE line, we treat it as a header paragraph.
-        }
+        // Removed the specific colon check here because we moved it up to be more general
         
         const children: TextRun[] = [];
         
