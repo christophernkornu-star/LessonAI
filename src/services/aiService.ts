@@ -1005,6 +1005,10 @@ function processJsonLessonContent(jsonStr: string, index: number, totalLessons: 
         // 3. Clean up triple newlines
         formatted = formatted.replace(/\n{3,}/g, '\n\n');
 
+        // 4. Activity Headers Joining
+        const mergePattern = /(\**(?:Activity|Step|Part|Phase|Group)\s+\d+(?::|.*?:)?\**)\s*[\r\n]+\s*/gi;
+        formatted = formatted.replace(mergePattern, '$1 ');
+
         return formatted;
       }
       if (Array.isArray(val)) {
