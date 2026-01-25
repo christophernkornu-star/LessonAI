@@ -151,21 +151,23 @@ function createCell(
     const lines = cleanAndSplitText(text);
     
     for (const line of lines) {
-        // DIRECT FIX: Remove ALL ** markers from line for clean detection
-        let trimmedLine = line.trim().replace(/^\*\*/, '').replace(/\*\*\s*$/, '').replace(/\*\*/g, '');
+        let trimmedLine = line.trim();
         if (!trimmedLine) continue;
         
-        let isLineBold = false;
+        // Check for specific headers to force-bold ONLY if they aren't already markdown bolded
+        // We check a "clean" version just for detection logic
+        const contentForCheck = trimmedLine.replace(/\*\*/g, '');
+        let forceBold = false;
 
         // Check if this is an Activity/Step/Part/Phase line - make it bold
-        if (/^(Activity|Step|Part|Phase|Group)\s+\d+/i.test(trimmedLine)) {
-            isLineBold = true;
+        if (/^(Activity|Step|Part|Phase|Group)\s+\d+/i.test(contentForCheck)) {
+            forceBold = true;
         }
 
         // Handle Markdown Headers (e.g. # Title, ## Subtitle)
         if (trimmedLine.match(/^#+\s/)) {
             trimmedLine = trimmedLine.replace(/^#+\s/, '');
-            isLineBold = true;
+            forceBold = true;
         }
 
         // Handle Bullet Points (e.g. - Item, * Item)
@@ -175,24 +177,33 @@ function createCell(
 
         // Handle list items ending in colon (bold them)
         if ((trimmedLine.startsWith('• ') || trimmedLine.match(/^\d+[.)]\s/)) && trimmedLine.trim().endsWith(':')) {
-            isLineBold = true;
+            forceBold = true;
+        }
+
+        // Also check if the line ITSELF is fully wrapped in ** to treat it as a bold header
+        // Regex: starts with **, ends with ** (ignoring whitespace), and has content
+        if (/^\*\*(.*)\*\*$/.test(trimmedLine)) {
+            // It's already marked as bold, parseMarkdownLine will handle it, 
+            // but we can set forceBold to ensure size/font consistency if needed.
+            // Actually, parseMarkdownLine handles mixed content better. 
+            // But if it's the ENTIRE line, we treat it as a header paragraph.
         }
         
         const children: TextRun[] = [];
-        // Remove ALL ** from the line before creating text runs
-        const cleanedLine = trimmedLine.replace(/\*\*/g, '');
         
-        // If line should be bold, just add it directly
-        if (isLineBold) {
-            children.push(new TextRun({ 
-                text: cleanedLine, 
+        if (forceBold) {
+             // If we're forcing bold, we use the clean text to avoid printing the stars
+             const textToPrint = trimmedLine.replace(/\*\*/g, '');
+             children.push(new TextRun({ 
+                text: textToPrint, 
                 bold: true,
                 size: 20, 
                 font: "Segoe UI" 
             }));
         } else {
-            // Parse for any remaining markdown formatting
-            const tokens = parseMarkdownLine(cleanedLine);
+            // Parse for any markdown formatting (bold, italic)
+            // parseMarkdownLine in textFormatting.ts handles **bold**
+            const tokens = parseMarkdownLine(trimmedLine);
         
             for (const token of tokens) {
                 children.push(new TextRun({ 
@@ -205,9 +216,9 @@ function createCell(
             }
             
             // Fallback if no tokens
-            if (children.length === 0 && cleanedLine) {
+            if (children.length === 0 && trimmedLine) {
                 children.push(new TextRun({ 
-                    text: cleanedLine, 
+                    text: trimmedLine, 
                     bold: bold,
                     size: 20, 
                     font: "Segoe UI" 
@@ -215,10 +226,16 @@ function createCell(
             }
         }
         
+        let spacingBefore = 80;
+        // Add extra spacing for specific headers to create a visual break (simulating double newline)
+        if (/Sample Class Exercises/i.test(trimmedLine)) {
+            spacingBefore = 400; // ~20pt spacing (approx 2 lines)
+        }
+
         paragraphs.push(new Paragraph({
             children: children,
             alignment: isHeader ? AlignmentType.CENTER : AlignmentType.LEFT,
-            spacing: { before: 80, after: 80 }
+            spacing: { before: spacingBefore, after: 80 }
         }));
     }
     
@@ -520,6 +537,28 @@ export async function generateGhanaLessonDocx(
 
         // Table 2: Standards (Row 4)
         // Independent grid: 3 columns [2100, 6300, 2100]
+        let lessonText = lessonData.lesson || '1 of 1';
+        // If lessonText is just a number "1", format to "Lesson 1" (or "1 of 1")
+        if (/^\d+$/.test(lessonText)) {
+            // Check if we have context to know total? We don't in this scope easily unless passed.
+            // defaulting to "1 of 1" is safe if unknown
+             lessonText = `${lessonText} of 1`;
+        }
+        
+        // Ensure "Lesson: " prefix is handled correctly
+        let finalLessonCellText = "";
+        if (lessonText.toLowerCase().startsWith("lesson: ")) {
+             finalLessonCellText = lessonText;
+        } else if (lessonText.toLowerCase().startsWith("lesson ")) {
+             // e.g. "Lesson 1 of 3" -> "Lesson: 1 of 3" (optional preference, or just use as is)
+             // User prompt implies "Lesson: 1 of 1" is the bad output.
+             // If AI gives "Lesson 1 of 3", we might want "Lesson: 1 of 3"
+             finalLessonCellText = lessonText.replace(/^Lesson\s+/i, "Lesson: ");
+        } else {
+             // e.g. "1 of 3" -> "Lesson: 1 of 3"
+             finalLessonCellText = `Lesson: ${lessonText}`;
+        }
+
         const table2 = new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           columnWidths: [2100, 6300, 2100],
@@ -528,7 +567,7 @@ export async function generateGhanaLessonDocx(
               children: [
                 createCell(`Content Standard: ${cleanContentStandard(lessonData.contentStandard || '')}`, false, 1, false, true),
                 createCell(`Indicator: ${lessonData.indicator || ''}`, false, 1, false, true),
-                createCell(`Lesson: ${lessonData.lesson || '1 of 1'}`, false, 1, false, true),
+                createCell(finalLessonCellText, false, 1, false, true),
               ],
             }),
           ],
