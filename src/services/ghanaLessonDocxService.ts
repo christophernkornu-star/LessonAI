@@ -176,6 +176,13 @@ function createCell(
         }
 
         // Handle list items ending in colon (bold them)
+        // OR any line that ends in a colon (and isn't too long?) 
+        // User request: "any other text aside 'Activity...' that is at the beginning of a newline and ends wth a colon should be bolded"
+        if (trimmedLine.endsWith(':')) {
+             forceBold = true;
+        }
+        
+        // Also keep checking explicit list items just in case regex above misses some edge case (though endsWith covers it)
         if ((trimmedLine.startsWith('• ') || trimmedLine.match(/^\d+[.)]\s/)) && trimmedLine.trim().endsWith(':')) {
             forceBold = true;
         }

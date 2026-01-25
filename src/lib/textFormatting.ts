@@ -54,6 +54,11 @@ export function cleanAndSplitText(text: string): string[] {
 
   // Fix jumbled Tiers (e.g. " Tier 1 ... Tier 2 ...")
   processed = processed.replace(/([^\n])(\s+)(Tier\s\d)/gi, '$1\n$3');
+
+  // Fix Broken Numbering (e.g. "4.\nThis is" -> "4. This is", or "(4.\nThis is)" -> "(4. This is)")
+  // Join lines where a line ends with a number and period (or paren) and the next line starts with text
+  processed = processed.replace(/(\n|^)(\s*\(?\d+[.)])\s*\n\s*/g, '$1$2 ');
+
   
   // Split on sentence-ending keywords that indicate new thoughts/sections
   const newThoughtKeywords = [
