@@ -173,10 +173,13 @@ export function cleanAndSplitText(text: string): string[] {
       trimmed = trimmed.replace(/\*\*\s*$/, '');
       // Remove any leading ** 
       trimmed = trimmed.replace(/^\*\*/, '');
-      // Now wrap in bold if not already wrapped
-      if (!trimmed.startsWith('**')) {
-        return `**${trimmed}**`;
-      }
+      
+      // CRITICAL FIX: Remove inner ** to avoid nested bold issues (e.g. "**Activity 3: **Title**")
+      // We want the WHOLE line to be one bold block.
+      trimmed = trimmed.replace(/\*\*/g, '');
+      
+      // Now wrap in bold
+      return `**${trimmed}**`;
     }
     
     // Check if line starts with "Lesson:" header - ensure it's bolded
