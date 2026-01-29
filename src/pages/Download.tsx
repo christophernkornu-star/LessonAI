@@ -3,10 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Download, CheckCircle, FileText, FileType, Printer, RotateCw, PlusCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { generateLessonNoteDocx, generateFileName } from "@/services/docxService";
-import { generateGhanaLessonDocx, generateGhanaLessonFileName, parseAIJsonResponse } from "@/services/ghanaLessonDocxService";
-import { generateLessonFromJson } from "@/services/templateDocxService";
-import { exportToPDF, exportGhanaLessonToPDF } from "@/services/pdfService";
+// Dynamic imports moved to usage sites
 import { toast } from "sonner";
 import { cleanAndSplitText, parseMarkdownLine } from "@/lib/textFormatting";
 import { Navbar } from "@/components/Navbar";
@@ -111,6 +108,8 @@ const DownloadPage = () => {
       if (isJsonFormat) {
         // Handle Ghana template JSON format
         try {
+          const { parseAIJsonResponse, generateGhanaLessonFileName, generateGhanaLessonDocx } = await import("@/services/ghanaLessonDocxService");
+          
           const parsedResult = parseAIJsonResponse(cleanContent);
           
           // Normalize to array for processing metadata
@@ -149,6 +148,7 @@ const DownloadPage = () => {
                 // Use the updated programmatic generator which handles arrays
                 await generateGhanaLessonDocx(parsedArray, filename);
             } else {
+                const { generateLessonFromJson } = await import("@/services/templateDocxService");
                 await generateLessonFromJson(parsedArray[0], templateUrl);
             }
             toast.success("Ghana lesson plan downloaded successfully!");
@@ -177,6 +177,8 @@ const DownloadPage = () => {
           level: "Basic 1",
         };
 
+        const { generateFileName, generateLessonNoteDocx } = await import("@/services/docxService");
+
         const filename = lessonData 
           ? generateFileName(metadata)
           : "lesson-note.docx";
@@ -191,11 +193,14 @@ const DownloadPage = () => {
     }
   };
 
-  const handlePDFExport = () => {
+  const handlePDFExport = async () => {
     try {
       // Check if using Ghana template
       if (lessonData?.templateName?.includes("Ghana") || generatedContent.trim().startsWith('{')) {
         try {
+          const { parseAIJsonResponse, generateGhanaLessonFileName } = await import("@/services/ghanaLessonDocxService");
+          const { exportGhanaLessonToPDF } = await import("@/services/pdfService");
+          
           const parsedData = parseAIJsonResponse(generatedContent);
           const filename = generateGhanaLessonFileName(parsedData).replace('.docx', '.pdf');
           exportGhanaLessonToPDF(parsedData, filename);
@@ -220,6 +225,7 @@ const DownloadPage = () => {
 
       const filename = `${metadata.subject}_${metadata.level}_${metadata.strand}_lesson.pdf`.replace(/\s+/g, '_');
       
+      const { exportToPDF } = await import("@/services/pdfService");
       exportToPDF(content, filename);
       toast.success("PDF export initiated - check your print dialog");
     } catch (error) {

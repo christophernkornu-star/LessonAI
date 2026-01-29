@@ -30,11 +30,24 @@ import { CurriculumService } from "@/services/curriculumService";
 import { GeneratorSkeleton } from "@/components/LoadingSkeletons";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useQuery } from '@tanstack/react-query';
 
 import { Navbar } from "@/components/Navbar";
 import { BasicInfoStep } from "@/components/generator/BasicInfoStep";
+import { FixedSizeList as List } from 'react-window';
 
 const STEPS = ["Basic Info", "Details", "Review"];
+
+// Fetches user profile
+const fetchUserProfile = async (userId: string) => {
+    const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+    if (error) throw error;
+    return data;
+};
 
 const ImprovedGenerator = () => {
   const navigate = useNavigate();
@@ -43,15 +56,15 @@ const ImprovedGenerator = () => {
   const isOnline = useOnlineStatus();
   const [currentStep, setCurrentStep] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  // Set default template to Ghana Standard
   const [selectedTemplate, setSelectedTemplate] = useState<LessonTemplate | null>(
     lessonTemplates.find(t => t.id === "ghana-standard") || null
   );
   const [selectedCurriculumFiles, setSelectedCurriculumFiles] = useState<string[]>([]);
   const [selectedResourceFiles, setSelectedResourceFiles] = useState<string[]>([]);
-  const [userProfile, setUserProfile] = useState<any>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [lessonData, setLessonData] = useState<LessonData>(
+    savedDraft?.data || defaultLessonData
+  );
+  const [currentUser, setCurrentUser] = useState<any>(null); // Kept for auth check
   const [retryCount, setRetryCount] = useState(0);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [availableStrands, setAvailableStrands] = useState<Array<{ value: string; label: string }>>([]);
@@ -84,77 +97,42 @@ const ImprovedGenerator = () => {
   const [showPaymentWall, setShowPaymentWall] = useState(false);
   const [pendingGeneration, setPendingGeneration] = useState(false);
 
-  const { data: lessonData, setData: setLessonData, lastSaved, isSaving, clearDraft } = useDraft(
-    {
-      subject: "",
-      level: "",
-      strand: "",
-      subStrand: "",
-      contentStandard: "",
-      indicators: "",
-      exemplars: "",
-      classSize: "",
-      philosophy: "balanced",
-      detailLevel: "moderate",
-      includeDiagrams: false,
-      location: "Biriwa, Central Region",
-      term: "First Term",
-      weekNumber: "Week 1",
-      weekEnding: "",
-      numLessons: 1,
-    },
-    { key: "lesson-generator", autosaveDelay: 3000 }
-  );
-
-  // Check authentication and load user profile
+  // Check authentication
   useEffect(() => {
-    let isMounted = true;
-
-    const init = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session && isMounted) {
-          toast({
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({
             title: "Authentication Required",
             description: "Please sign in to generate lesson notes.",
             variant: "destructive",
-          });
-          navigate("/login");
-          return;
-        }
-
-        // Load user profile
-        if (session?.user) {
-          setCurrentUser(session.user);
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", session.user.id)
-            .single();
-
-          if (profile && isMounted) {
-            setUserProfile(profile);
-            // Pre-fill class size from profile
-            if (profile.default_class_size && !lessonData.classSize) {
-              setLessonData({ ...lessonData, classSize: profile.default_class_size.toString() });
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Initialization error:", error);
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        });
+        navigate("/login");
+        return;
       }
+      setCurrentUser(session.user);
     };
+    checkAuth();
+  }, [navigate]);
 
-    init();
+  // Use React Query for profile
+  const { data: userProfile, isLoading: isProfileLoading } = useQuery({
+    queryKey: ['profile', currentUser?.id],
+    queryFn: () => fetchUserProfile(currentUser.id),
+    enabled: !!currentUser?.id,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
 
-    return () => {
-      isMounted = false;
-    };
-  }, []); // Only runs once on mount
+  // Effect to sync profile data to form defaults
+  useEffect(() => {
+    if (userProfile) {
+        if (userProfile.default_class_size && !lessonData.classSize) {
+            setLessonData(prev => ({ ...prev, classSize: userProfile.default_class_size.toString() }));
+        }
+    }
+  }, [userProfile]);
+
+  const isLoading = !currentUser || (!!currentUser && isProfileLoading);
 
   // Update class size and lesson details from Timetable when grade level or subject changes
   useEffect(() => {
@@ -2062,39 +2040,50 @@ const ImprovedGenerator = () => {
               </div>
 
               {/* Scheme Items List */}
-              <div className="max-h-[400px] overflow-y-auto">
+              <div className="h-[400px]">
                 {filteredSchemeItems.length > 0 ? (
-                  filteredSchemeItems.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="p-4 rounded-lg bg-muted cursor-pointer hover:bg-muted/80 transition"
-                      onClick={() => handleApplyScheme(item)}
-                    >
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="text-sm font-medium">{item.subject}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {item.classLevel} - {item.week}
-                          </p>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleApplyScheme(item);
-                          }}
-                        >
-                          <Save className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="mt-2">
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {item.indicators}
-                        </p>
-                      </div>
-                    </div>
-                  ))
+                  <List
+                    height={400}
+                    itemCount={filteredSchemeItems.length}
+                    itemSize={120} // Adjusted size for content
+                    width="100%"
+                  >
+                    {({ index, style }) => {
+                        const item = filteredSchemeItems[index];
+                        return (
+                            <div style={style} className="px-1 py-1">
+                                <div
+                                    className="p-4 rounded-lg bg-muted cursor-pointer hover:bg-muted/80 transition h-full overflow-hidden"
+                                    onClick={() => handleApplyScheme(item)}
+                                >
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <p className="text-sm font-medium">{item.subject}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {item.classLevel} - {item.week}
+                                            </p>
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleApplyScheme(item);
+                                            }}
+                                        >
+                                            <Save className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                    <div className="mt-2">
+                                        <p className="text-xs text-muted-foreground line-clamp-2">
+                                            {item.indicators}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    }}
+                  </List>
                 ) : (
                   <p className="text-sm text-center text-muted-foreground py-4">
                     No schemes found. You can paste new data below.

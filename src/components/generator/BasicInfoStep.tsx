@@ -18,7 +18,7 @@ export interface BasicInfoStepProps {
   handleDetectLocation: () => void;
 }
 
-export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
+export const BasicInfoStep: React.FC<BasicInfoStepProps> = React.memo(({
   lessonData,
   setLessonData,
   availableLevels,
@@ -212,4 +212,4 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
       </div>
     </div>
   );
-};
+});
