@@ -213,8 +213,8 @@ export function cleanAndSplitText(text: string): string[] {
   // Feature: Force split for headers ending in colons that are inline
   // e.g. "The teacher asks: Students do X" -> "The teacher asks:\nStudents do X"
   // Look for: start of line, 3-60 chars of text, colon, whitespace, then capital letter or number
-  // EXCLUDE: Activity/Step/Part/Phase/Group headers (using negative lookahead)
-  processed = processed.replace(/(\n|^)(?!(?:Activity|Step|Part|Phase|Group)\s+\d+)([^:\n]{3,60}:)[ \t]+([A-Z0-9(])/g, '$1$2\n$3');
+  // EXCLUDE: Activity/Step/Part/Phase/Group headers (using negative lookahead) - now robust for ** wrapper
+  processed = processed.replace(/(\n|^)(?!(?:\*\*)?(?:Activity|Step|Part|Phase|Group)\s+\d+)([^:\n]{3,60}:)[ \t]+([A-Z0-9(])/g, '$1$2\n$3');
   
   return processed.split('\n');
 }
