@@ -57,13 +57,69 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DashboardSkeleton } from "@/components/LoadingSkeletons";
 
 const AdminDashboard = () => {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Initial loading true
   const [files, setFiles] = useState<ResourceFile[]>([]);
   const [activeTab, setActiveTab] = useState('curriculum');
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const loadStats = async () => {
+    try {
+      if (activeTab === 'analytics') {
+          const [users, content, ai, subjects, templates, trends, activity] = await Promise.all([
+          getUserStats(),
+          getContentStats(),
+          getAIUsageStats(30),
+          AnalyticsService.getLessonsBySubject(),
+          AnalyticsService.getLessonsByTemplate(),
+          AnalyticsService.getMonthlyTrends(undefined, 12),
+          AnalyticsService.getUserActivityData(10),
+          ]);
+          setUserStats(users);
+          setContentStats(content);
+          setAIStats(ai);
+          setLessonsBySubject(subjects.map((d: any) => ({ name: d.subject, value: d.count })));
+          setLessonsByTemplate(templates.map((d: any) => ({ name: d.template_name, value: d.count })));
+          setMonthlyTrends(trends.map((d: any) => ({ month: d.month, count: d.count })));
+          setUserActivity(activity);
+      }
+    } catch (error) {
+      console.error("Error loading stats:", error);
+    }
+  };
+
+  const loadGlobalCurriculumStats = async () => {
+      try {
+        const stats = await CurriculumService.getGlobalStats();
+        setGlobalStats(stats);
+      } catch (e) {
+        console.error("Error loading global stats", e);
+      }
+  };
+
+  const verifyAdmin = async () => {
+    setLoading(true);
+    const isAdmin = await checkIsAdmin();
+    if (!isAdmin) {
+      navigate('/');
+      return;
+    }
+    loadFiles();
+    loadStats();
+    loadGlobalCurriculumStats();
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    verifyAdmin();
+  }, [activeTab]);
+
+  if (loading) {
+      return <DashboardSkeleton />;
+  }
 
   // Upload form state
   const [uploadFile, setUploadFile] = useState<File | null>(null);

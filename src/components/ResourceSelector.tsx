@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { FileText, BookOpen, Check } from "lucide-react";
 import { getFilteredCurriculumFiles, getFilteredResourceFiles, type ResourceFile } from "@/services/resourceFileService";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ResourceSelectorProps {
   type: 'curriculum' | 'resource';
@@ -49,33 +50,36 @@ export function ResourceSelector({ type, subject, gradeLevel, selectedFiles, onS
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline" className="w-full justify-start h-auto py-3">
+        <Button variant="outline" className="w-full justify-start text-left font-normal select-none">
           {icon}
-          <div className="flex flex-col items-start ml-2">
-            <span className="font-medium">
-              {selectedFiles.length > 0 
-                ? `${selectedFiles.length} ${type === 'curriculum' ? 'Curriculum' : 'Resource'} Files Selected`
-                : `Browse ${type === 'curriculum' ? 'Curriculum' : 'Resource'} Files`
-              }
-            </span>
-            {selectedFiles.length > 0 && (
-              <span className="text-xs text-muted-foreground">
-                Click to modify selection
-              </span>
-            )}
-          </div>
+          <span className="ml-2 flex-1 truncate">
+            {selectedFiles.length === 0 ? title : `${selectedFiles.length} files selected`}
+          </span>
+          {selectedFiles.length > 0 && <Check className="ml-auto h-4 w-4" />}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh]">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <ScrollArea className="h-[600px] pr-4">
+        
+        <ScrollArea className="h-[300px] mt-4 pr-4">
           {loading ? (
-            <div className="flex items-center justify-center h-40">
-              <p className="text-muted-foreground">Loading files...</p>
-            </div>
+             <div className="space-y-4">
+               {[1, 2, 3].map(i => (
+                 <div key={i} className="flex flex-col space-y-2 border p-3 rounded-md">
+                    <div className="flex items-center space-x-2">
+                        <Skeleton className="h-4 w-4 rounded" />
+                        <Skeleton className="h-4 w-3/4" />
+                    </div>
+                    <div className="flex gap-2 ml-6">
+                        <Skeleton className="h-4 w-16" />
+                        <Skeleton className="h-4 w-16" />
+                    </div>
+                 </div>
+               ))}
+             </div>
           ) : files.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-center">
               <p className="text-muted-foreground">No {type} files found</p>

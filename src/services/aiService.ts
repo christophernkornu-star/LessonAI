@@ -46,10 +46,12 @@ export interface LessonData {
   subStrand: string;
   contentStandard: string;
   indicators?: string;
+  indicator?: string; // specific single indicator
   exemplars: string;
   curriculum?: string;
   classSize?: string;
   philosophy?: string;
+  teachingPhilosophy?: string; // alias for philosophy
   term?: string;
   weekNumber?: string;
   weekEnding?: string;
@@ -64,6 +66,33 @@ export interface LessonData {
   // New field matching the user requirement
   numLessons?: number; // Defaults to 1 if undefined
   scheduledDays?: string[]; // Specific days for the lessons (e.g. ["Monday", "Wednesday"])
+  
+  // Additional fields for generator state
+  topic?: string;
+  subTopic?: string;
+  date?: string;
+  duration?: string;
+  coreCompetencies?: string;
+  previousKnowledge?: string;
+  references?: string;
+  keywords?: string;
+  learningObjectives?: string;
+  teachingLearningResources?: string;
+  teacherActivities?: string;
+  learnerActivities?: string;
+  evaluation?: string;
+  assignment?: string;
+  remarks?: string;
+  differentiation?: string;
+  assessment?: string;
+  reflection?: string;
+  gradeLevel?: string;
+  unit?: string;
+  content?: string;
+  methodology?: string;
+  materials?: string;
+  objectives?: string;
+  lesson?: number;
 }
 
 // Helper to log usage

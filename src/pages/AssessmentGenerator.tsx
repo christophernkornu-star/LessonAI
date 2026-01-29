@@ -30,6 +30,7 @@ import {
 } from "@/services/assessmentService";
 
 import { Navbar } from "@/components/Navbar";
+import { GeneratorSkeleton } from "@/components/LoadingSkeletons";
 
 export default function AssessmentGenerator() {
   const navigate = useNavigate();
@@ -142,14 +143,7 @@ export default function AssessmentGenerator() {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
+    return <GeneratorSkeleton />;
   }
 
   if (generatedAssessment) {
@@ -297,7 +291,7 @@ export default function AssessmentGenerator() {
             <div className="space-y-6">
               <div className="space-y-2">
                 <Label>Assessment Type *</Label>
-                <Select value={type} onValueChange={(val) => setType(val as AssessmentType)}>
+                <Select value={assessmentType} onValueChange={(val) => setAssessmentType(val as AssessmentType)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>

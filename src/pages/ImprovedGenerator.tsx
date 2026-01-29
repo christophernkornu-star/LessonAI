@@ -34,9 +34,56 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Navbar } from "@/components/Navbar";
 import { BasicInfoStep } from "@/components/generator/BasicInfoStep";
-import { FixedSizeList as List } from 'react-window';
+// @ts-ignore
+import { FixedSizeList } from 'react-window';
+
+const List = FixedSizeList;
 
 const STEPS = ["Basic Info", "Details", "Review"];
+
+const defaultLessonData: LessonData = {
+  subject: "",
+  level: "",
+  topic: "",
+  subTopic: "",
+  date: new Date().toISOString().split("T")[0],
+  duration: "60 mins",
+  strand: "",
+  subStrand: "",
+  contentStandard: "",
+  indicator: "",
+  exemplars: "", // Added required field
+  coreCompetencies: "",
+  previousKnowledge: "",
+  references: "",
+  keywords: "",
+  learningObjectives: "",
+  teachingLearningResources: "",
+  teacherActivities: "",
+  learnerActivities: "",
+  evaluation: "",
+  assignment: "",
+  remarks: "",
+  teachingPhilosophy: "",
+  differentiation: "",
+  assessment: "",
+  reflection: "",
+  gradeLevel: "",
+  unit: "",
+  content: "",
+  methodology: "",
+  materials: "",
+  objectives: "",
+  classSize: "",
+  lesson: 1,
+  weekEnding: "",
+  weekNumber: "",
+  term: "",
+  location: "",
+  numLessons: 1,
+  detailLevel: "moderate",
+  includeDiagrams: false,
+};
 
 // Fetches user profile
 const fetchUserProfile = async (userId: string) => {
@@ -46,7 +93,7 @@ const fetchUserProfile = async (userId: string) => {
         .eq("id", userId)
         .single();
     if (error) throw error;
-    return data;
+    return data as any;
 };
 
 const ImprovedGenerator = () => {
@@ -54,6 +101,19 @@ const ImprovedGenerator = () => {
   const location = useLocation();
   const { toast } = useToast();
   const isOnline = useOnlineStatus();
+  
+  const { 
+    data: lessonData, 
+    setData: setLessonData, 
+    clearDraft, 
+    lastSaved, 
+    isSaving, 
+    saveDraft: forceSaveDraft 
+  } = useDraft<LessonData>(
+    defaultLessonData,
+    { key: "lesson-generator", autosaveDelay: 3000 }
+  );
+  
   const [currentStep, setCurrentStep] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<LessonTemplate | null>(
@@ -61,9 +121,9 @@ const ImprovedGenerator = () => {
   );
   const [selectedCurriculumFiles, setSelectedCurriculumFiles] = useState<string[]>([]);
   const [selectedResourceFiles, setSelectedResourceFiles] = useState<string[]>([]);
-  const [lessonData, setLessonData] = useState<LessonData>(
-    savedDraft?.data || defaultLessonData
-  );
+  
+  // lessonData managed by useDraft above
+
   const [currentUser, setCurrentUser] = useState<any>(null); // Kept for auth check
   const [retryCount, setRetryCount] = useState(0);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});

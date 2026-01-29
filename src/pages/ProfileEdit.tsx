@@ -13,6 +13,8 @@ import { Combobox } from "@/components/ui/combobox";
 import { SUBJECTS, CLASS_LEVELS } from "@/data/curriculum";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Navbar } from "@/components/Navbar";
+import { ProfileSkeleton } from "@/components/LoadingSkeletons";
 
 interface ProfileData {
   id: string;
@@ -33,8 +35,6 @@ const TEACHING_LEVELS = [
   { id: 'upper', label: 'Upper Primary (Basic 4 - Basic 6)', classes: ['Basic 4', 'Basic 5', 'Basic 6'] },
   { id: 'jhs', label: 'Junior High School (JHS 1 - JHS 3)', classes: ['JHS 1', 'JHS 2', 'JHS 3'] },
 ];
-
-import { Navbar } from "@/components/Navbar";
 
 export default function ProfileEdit() {
   const navigate = useNavigate();
@@ -80,8 +80,9 @@ export default function ProfileEdit() {
 
         if (error) throw error;
 
+// ...existing code...
         if (isMounted && profileData) {
-          setProfile(profileData);
+          setProfile(profileData as any);
           setSchoolName(profileData.school_name || "");
           setFirstName(profileData.first_name || "");
           setMiddleName(profileData.middle_name || "");
@@ -89,20 +90,22 @@ export default function ProfileEdit() {
           setDefaultClassSize(profileData.default_class_size?.toString() || "");
           
           // Load specific class sizes if available
-           const loadedClassSizes = profileData.class_sizes 
-            ? (typeof profileData.class_sizes === 'object' ? profileData.class_sizes : {}) as Record<string, number> 
+           const rawClassSizes = (profileData as any).class_sizes;
+           const loadedClassSizes = rawClassSizes 
+            ? (typeof rawClassSizes === 'object' ? rawClassSizes : {}) as Record<string, number> 
             : {};
           setClassSizes(loadedClassSizes);
           
-          const loadedSubjects = Array.isArray(profileData.subjects_taught) ? profileData.subjects_taught : [];
+          const loadedSubjects = (Array.isArray(profileData.subjects_taught) ? profileData.subjects_taught : []) as string[];
           setSubjectsTaught(loadedSubjects);
           
-          const loadedClasses = Array.isArray(profileData.classes_taught) ? profileData.classes_taught : [];
+          const loadedClasses = (Array.isArray(profileData.classes_taught) ? profileData.classes_taught : []) as string[];
           setClassesTaught(loadedClasses);
           setAvatarPreview(profileData.avatar_url || "");
           
           // Infer teaching level from loaded classes
           if (loadedClasses.length > 0) {
+// ...existing code...
             const isLower = loadedClasses.some(c => TEACHING_LEVELS[0].classes.includes(c));
             const isUpper = loadedClasses.some(c => TEACHING_LEVELS[1].classes.includes(c));
             const isJHS = loadedClasses.some(c => TEACHING_LEVELS[2].classes.includes(c));
@@ -267,14 +270,12 @@ export default function ProfileEdit() {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading profile...</p>
+      return (
+        <div className="min-h-screen bg-gradient-subtle">
+            <Navbar />
+            <ProfileSkeleton />
         </div>
-      </div>
-    );
+      );
   }
 
   return (

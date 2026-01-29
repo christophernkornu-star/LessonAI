@@ -34,6 +34,7 @@ import * as AnalyticsService from "@/services/analyticsService";
 import { generateLessonNoteDocx, generateFileName } from "@/services/docxService";
 import { generateGhanaLessonDocx, generateGhanaLessonFileName, parseAIJsonResponse } from "@/services/ghanaLessonDocxService";
 import { Navbar } from "@/components/Navbar";
+import { DashboardSkeleton } from "@/components/LoadingSkeletons";
 
 interface Profile {
   full_name: string;
@@ -59,9 +60,10 @@ interface LessonNote {
   is_favorite: boolean;
 }
 
-export default function Dashboard() {
+const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [lessonNotes, setLessonNotes] = useState<LessonNote[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -179,6 +181,7 @@ export default function Dashboard() {
       });
     } finally {
       setIsLoading(false);
+      setLoading(false);
     }
   };
 
@@ -298,13 +301,33 @@ export default function Dashboard() {
     document.body.removeChild(element);
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
-        <p className="text-muted-foreground">Loading dashboard...</p>
-      </div>
-    );
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate("/login");
+      } else {
+        await loadDashboardData();
+      }
+    };
+
+    checkUser();
+  }, []);
+
+  if (loading) {
+    return <DashboardSkeleton />;
   }
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      return "Good morning";
+    } else if (hour < 18) {
+      return "Good afternoon";
+    } else {
+      return "Good evening";
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
@@ -316,7 +339,7 @@ export default function Dashboard() {
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
             <div>
               <h2 className="text-xl sm:text-2xl font-bold mb-2">
-                Welcome back, {profile?.full_name || "Teacher"}!
+                {getGreeting()}, {profile?.full_name || "Teacher"}!
               </h2>
               <p className="opacity-90 text-sm sm:text-base">Ready to create amazing lesson notes?</p>
             </div>
@@ -750,3 +773,5 @@ export default function Dashboard() {
 </div>
     );
   }
+  
+  export default Dashboard;

@@ -97,3 +97,62 @@ export function DashboardSkeleton() {
     </div>
   )
 }
+
+export function TableSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-10 w-[250px]" />
+        <Skeleton className="h-10 w-[100px]" />
+      </div>
+      <div className="border rounded-md">
+        <div className="p-4 border-b bg-muted/50">
+          <div className="flex gap-4">
+            <Skeleton className="h-4 w-1/4" />
+            <Skeleton className="h-4 w-1/4" />
+            <Skeleton className="h-4 w-1/4" />
+            <Skeleton className="h-4 w-1/4" />
+          </div>
+        </div>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="p-4 border-b last:border-0">
+            <div className="flex gap-4">
+              <Skeleton className="h-4 w-1/4" />
+              <Skeleton className="h-4 w-1/4" />
+              <Skeleton className="h-4 w-1/4" />
+              <Skeleton className="h-4 w-1/4" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function ProfileSkeleton() {
+  return (
+    <div className="min-h-screen bg-gradient-subtle">
+      <Skeleton className="h-16 w-full" />
+      <div className="container mx-auto px-4 py-8">
+        <Card className="max-w-2xl mx-auto p-6 space-y-8">
+          <div className="flex items-center gap-4 border-b pb-6">
+            <Skeleton className="h-24 w-24 rounded-full" />
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-4 w-32" />
+            </div>
+          </div>
+          <div className="space-y-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ))}
+          </div>
+          <Skeleton className="h-10 w-full" />
+        </Card>
+      </div>
+    </div>
+  )
+}

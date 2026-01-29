@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, Save, ArrowLeft, Loader2, BookOpen, Clock, Plus, Trash2 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { TableSkeleton } from "@/components/LoadingSkeletons";
 import { TimetableService, TimetableData, SubjectConfig } from "@/services/timetableService";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -45,6 +46,11 @@ export default function TimetableManagement() {
     };
     getUser();
   }, [navigate]);
+
+  if (loading && !selectedClass && configuredClasses.length === 0) {
+      // Still verifying initial user load
+      return <div className="min-h-screen bg-gradient-subtle"><Navbar /><TableSkeleton /></div>;
+  }
 
   // Load timetable when class changes
   useEffect(() => {

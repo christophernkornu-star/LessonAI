@@ -15,6 +15,7 @@ import { Navbar } from "@/components/Navbar";
 import { CurriculumService } from "@/services/curriculumService";
 import { SUBJECTS, CLASS_LEVELS } from "@/data/curriculum";
 import { supabase } from "@/integrations/supabase/client";
+import { TableSkeleton } from "@/components/LoadingSkeletons";
 
 interface SchemeItem {
   id: string;
@@ -37,7 +38,7 @@ export default function SchemeOfLearning() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [schemeData, setSchemeData] = useState<SchemeItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Start as true for initial fetch
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importLevel, setImportLevel] = useState("");
   const [importSubject, setImportSubject] = useState("");
@@ -45,46 +46,51 @@ export default function SchemeOfLearning() {
 
   useEffect(() => {
     const init = async () => {
-      // 1. Get User
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id || null);
+      try {
+          // 1. Get User
+          const { data: { user } } = await supabase.auth.getUser();
+          setUserId(user?.id || null);
 
-      if (!user) return;
-
-      // 2. Load from Supabase (Source of Truth)
-      const { data, error } = await supabase
-        .from('schemes')
-        .select('*')
-        .eq('user_id', user.id);
-
-      if (data && data.length > 0) {
-        // Transform DB schema to App interface
-        const loadedSchemes: SchemeItem[] = data.map(item => ({
-          id: item.id,
-          week: item.week || "",
-          weekEnding: item.week_ending || "",
-          term: item.term || "",
-          subject: item.subject || "",
-          classLevel: item.class_level || "",
-          strand: item.strand || "",
-          subStrand: item.sub_strand || "",
-          contentStandard: item.content_standard || "",
-          indicators: item.indicators || "",
-          exemplars: item.exemplars || "",
-          resources: item.resources || "",
-        }));
-        setSchemeData(loadedSchemes);
-      } else {
-        // Fallback to localStorage if DB is empty (migration scenario)
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          try {
-             // Optional: You could auto-migrate here, but let's just load for now
-             setSchemeData(JSON.parse(saved));
-          } catch (e) {
-            console.error("Failed to load saved scheme", e);
+          if (!user) {
+              setIsLoading(false);
+              return;
           }
-        }
+
+          // 2. Load from Supabase (Source of Truth)
+          const { data, error } = await supabase
+            .from('schemes')
+            .select('*')
+            .eq('user_id', user.id);
+
+          if (data && data.length > 0) {
+            // Transform DB schema to App interface
+            const loadedSchemes: SchemeItem[] = data.map(item => ({
+              id: item.id,
+              week: item.week || "",
+              weekEnding: item.week_ending || "",
+              term: item.term || "",
+              subject: item.subject || "",
+              classLevel: item.class_level || "",
+              strand: item.strand || "",
+              subStrand: item.sub_strand || "",
+              contentStandard: item.content_standard || "",
+              indicators: item.indicators || "",
+              exemplars: item.exemplars || "",
+              resources: item.resources || "",
+            }));
+            setSchemeData(loadedSchemes);
+          } else {
+            // Fallback to localStorage if DB is empty (migration scenario)
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                // Optional: You could auto-migrate here, but let's just load for now
+                setSchemeData(JSON.parse(saved));
+            }
+          }
+      } catch (e) {
+         console.error(e);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -591,14 +597,13 @@ export default function SchemeOfLearning() {
   return (
     <div className="min-h-screen bg-gradient-subtle">
       <Navbar />
-
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Scheme of Learning</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">Upload your termly scheme to automate lesson generation.</p>
+            <h1 className="text-3xl font-bold mb-2">Scheme of Learning</h1>
+            <p className="text-muted-foreground">Manage and view your weekly schemes.</p>
           </div>
-          <div className="flex gap-2 w-full sm:w-auto">
+          <div className="flex gap-2">
             <Button variant="outline" onClick={() => navigate("/dashboard")} className="flex-1 sm:flex-none">
               Back to Dashboard
             </Button>
@@ -619,143 +624,13 @@ export default function SchemeOfLearning() {
           </div>
         </div>
 
-        <Card className="p-4 sm:p-6">
-          <div className="space-y-4">
-            <div className="flex flex-col gap-2">
-              <Label>Upload Scheme (CSV, PDF, DOCX)</Label>
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center">
-                <Input 
-                  type="file" 
-                  accept=".csv,.pdf,.docx,.doc" 
-                  onChange={handleFileUpload}
-                  disabled={isLoading}
-                  className="w-full sm:max-w-md"
-                />
-                <Button variant="outline" onClick={() => window.open('/scheme-template.csv', '_blank')} className="w-full sm:w-auto">
-                  <FileText className="mr-2 h-4 w-4" />
-                  <span className="sm:hidden">Template</span>
-                  <span className="hidden sm:inline">Download Template</span>
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Format: Week, Week Ending, Term, Subject, Class, Strand, Sub-Strand, Content Standard, Indicators, Resources
-              </p>
-            </div>
-            
-            <div className="flex gap-4 items-center pl-0 sm:pl-4 border-l-0 sm:border-l">
-                <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button variant="secondary" className="w-full sm:w-auto">
-                            <Globe className="mr-2 h-4 w-4" />
-                            Import from System
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Import System Curriculum</DialogTitle>
-                            <DialogDescription>
-                                Select a class and subject to load standard curriculum data into your scheme.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="class" className="text-right">Class</Label>
-                                <Select onValueChange={setImportLevel} value={importLevel}>
-                                    <SelectTrigger className="col-span-3">
-                                        <SelectValue placeholder="Select Class Level" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {CLASS_LEVELS.map((level) => (
-                                            <SelectItem key={level.value} value={level.label}>{level.label}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="subject" className="text-right">Subject</Label>
-                                <Select onValueChange={setImportSubject} value={importSubject}>
-                                    <SelectTrigger className="col-span-3">
-                                        <SelectValue placeholder="Select Subject" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {SUBJECTS.map((subject) => (
-                                            <SelectItem key={subject.value} value={subject.label}>{subject.label}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button onClick={handleSystemImport} disabled={isLoading}>
-                                {isLoading ? "Loading..." : "Import Data"}
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-            </div>
-          </div>
-        </Card>
-
-        {schemeData.length > 0 && (
-          <div className="space-y-8">
-            {Object.entries(
-              schemeData.reduce((acc, item) => {
-                const cls = item.classLevel || "Unspecified Class";
-                if (!acc[cls]) acc[cls] = [];
-                acc[cls].push(item);
-                return acc;
-              }, {} as Record<string, SchemeItem[]>)
-            ).sort((a, b) => {
-              // Try to sort naturally (e.g. Basic 2 before Basic 10)
-              return a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' });
-            }).map(([className, classItems]) => {
-              
-              // Group by Subject within this class
-              const subjectGroups = classItems.reduce((acc, item) => {
-                 const subj = item.subject || "Unspecified Subject";
-                 if (!acc[subj]) acc[subj] = [];
-                 acc[subj].push(item);
-                 return acc;
-              }, {} as Record<string, SchemeItem[]>);
-
-              return (
-                <Card key={className} className="overflow-hidden border-t-4 border-t-primary">
-                  <div className="p-4 bg-muted/30 border-b flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-xl font-bold text-foreground">{className}</h2>
-                      <span className="text-sm text-muted-foreground bg-background px-2 py-1 rounded border">
-                        {classItems.length} entries
-                      </span>
-                    </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => handleDeleteClass(className)}
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete Class
-                    </Button>
-                  </div>
-                  
-                  <div className="divide-y">
-                    {Object.entries(subjectGroups).map(([subjectName, subjectItems]) => (
-                      <div key={subjectName} className="p-0">
-                        <div className="bg-muted/10 px-4 py-2 flex justify-between items-center">
-                           <h3 className="font-semibold text-primary">{subjectName}</h3>
-                           <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => handleDeleteSubject(className, subjectName)}
-                              className="h-8 text-xs text-muted-foreground hover:text-destructive"
-                            >
-                              <Trash2 className="mr-1 h-3 w-3" />
-                              Remove Subject
-                            </Button>
-                        </div>
-                        <div className="overflow-x-auto">
-                          <Table>
-                            <TableHeader>
+        {isLoading ? (
+            <TableSkeleton />
+        ) : (
+            <Card className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-secondary/20">
+                 <div className="rounded-md border">
+                    <Table>
+                    <TableHeader>
                               <TableRow>
                                 <TableHead className="w-[80px]">Week</TableHead>
                                 <TableHead className="w-[100px]">Ending</TableHead>
@@ -765,7 +640,7 @@ export default function SchemeOfLearning() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {subjectItems.map((item) => (
+                              {schemeData.map((item) => (
                                 <TableRow key={item.id}>
                                   <TableCell className="font-medium bg-muted/5">{item.week}</TableCell>
                                   <TableCell>{item.weekEnding}</TableCell>
@@ -785,17 +660,11 @@ export default function SchemeOfLearning() {
                                 </TableRow>
                               ))}
                             </TableBody>
-                          </Table>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
+                    </Table>
+                 </div>
+            </Card>
         )}
-      </main>
+      </div>
     </div>
   );
 }
