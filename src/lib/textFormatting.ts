@@ -136,16 +136,6 @@ export function cleanAndSplitText(text: string): string[] {
   // Let's keep it here but refine it to NOT split if it's start of string.
   // The regex ([^\n]) handles that.
   
-  // Step 2.5: Ensure content follows on same line!
-  // Robust Regex: 
-  // 1. Matches optional leading **
-  // 2. Matches Activity/Step/etc + Number
-  // 3. Matches optional colon and trailing **
-  // 4. Matches ANY amount of whitespace (including newlines) following it
-  // Replaces with single space.
-  const mergePattern = /(\**(?:Activity|Step|Part|Phase|Group)\s+\d+(?::|.*?:)?\**)\s*[\r\n]+\s*/gi;
-  processed = processed.replace(mergePattern, '$1 ');
-
   // Step 2 (Re-applied/Moved): Ensure headers start on new line (but keep joined content)
   // Ensure "Activity X" is preceded by newline if there's text before it
   processed = processed.replace(/([^\n])\s*(Activity\s+\d+:)/gi, '$1\n\n$2');
@@ -153,6 +143,32 @@ export function cleanAndSplitText(text: string): string[] {
   processed = processed.replace(/([^\n])\s*(Part\s+\d+:)/gi, '$1\n\n$2');
   processed = processed.replace(/([^\n])\s*(Phase\s+\d+:)/gi, '$1\n\n$2');
   processed = processed.replace(/([^\n])\s*(Group\s+\d+)/gi, '$1\n\n$2');
+  
+  // Step 2.5: Ensure content follows on same line!
+  // Robust Regex: 
+  // 1. Matches optional leading **
+  // 2. Matches Activity/Step/etc + Number (Allowing for interspersed **)
+  // 3. Matches optional colon and trailing **
+  // 4. Matches ANY amount of whitespace (including newlines) following it
+  // Replaces with single space.
+  
+  // Regex Explanation:
+  // (\*+)? matches optional leading asterisks
+  // (Activity|Step|...) matches keyword
+  // (\*+)? matches optional asterisks after keyword
+  // \s+ matches space
+  // \d+ matches number
+  // ((?:\*+)?:|:)? matches optional colon with potential asterisks
+  // (\*+)? matches optional split trailing asterisks
+  
+  // Simplified Helper: First normalize "Activity X" lines by removing internal/surrounding ** so we can match cleanly
+  // This is safe because we re-bold completely in Step 3
+  
+  // Replace: "**Activity** 3:" or "**Activity 3**:" or "Activity 3:" followed by newline -> "Activity 3: "
+  const mergePattern = /(?:^|\n)(?:\*+)?(Activity|Step|Part|Phase|Group)(?:\*+)?\s+(\d+)(?:(?:\*+)?(:|.*?:))?(?:\*+)?\s*[\r\n]+\s*/gi;
+  processed = processed.replace(mergePattern, '\n$1 $2$3 ');
+
+  // Final Numbering Check (e.g. Activity 1: 1. Item... -- ensuring numbering integrity if messy)
   
   // Final Numbering Check (e.g. Activity 1: 1. Item... -- ensuring numbering integrity if messy)
   // Join lines where a line ends with a number and period (or paren) and the next line starts with text
