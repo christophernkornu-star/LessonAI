@@ -15,8 +15,18 @@ export interface CurriculumData {
 }
 
 export class CurriculumService {
+  private static cache = new Map<string, { data: CurriculumData[]; timestamp: number }>();
+  private static CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
   // Get all curriculum (public + user's own)
   static async getAllCurriculum(userId?: string): Promise<CurriculumData[]> {
+    const cacheKey = `all_${userId || 'public'}`;
+    const cached = this.cache.get(cacheKey);
+    
+    if (cached && (Date.now() - cached.timestamp < this.CACHE_TTL)) {
+      return cached.data;
+    }
+
     try {
       let query = supabase.from("curriculum").select("*");
 
@@ -30,7 +40,9 @@ export class CurriculumService {
 
       if (error) throw error;
 
-      return (data as any[]) || [];
+      const result = (data as any[]) || [];
+      this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
+      return result;
     } catch (error) {
       console.error("Error fetching curriculum:", error);
       return [];
@@ -43,6 +55,13 @@ export class CurriculumService {
     subject: string,
     userId?: string
   ): Promise<CurriculumData[]> {
+    const cacheKey = `grade_${gradeLevel}_subject_${subject}_${userId || 'public'}`;
+    const cached = this.cache.get(cacheKey);
+
+    if (cached && (Date.now() - cached.timestamp < this.CACHE_TTL)) {
+        return cached.data;
+    }
+    
     try {
       // Normalize grade level to match database format (e.g., "basic4" -> "Basic 4")
       // The database stores "Basic 4" format from CSV uploads
@@ -100,7 +119,9 @@ export class CurriculumService {
       console.log('Query result:', { data: data?.length || 0, error });
       
       if (!error && data && data.length > 0) {
-        return data as any[];
+        const result = data as any[];
+        this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
+        return result;
       }
 
       // Fallback: Fetch all for user/public and filter in memory

@@ -32,6 +32,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { Navbar } from "@/components/Navbar";
+import { BasicInfoStep } from "@/components/generator/BasicInfoStep";
 
 const STEPS = ["Basic Info", "Details", "Review"];
 
@@ -436,10 +437,6 @@ const ImprovedGenerator = () => {
           }
         }
         
-        // 2. REMOVED: Static curriculum fallback
-        // User requested subjects to load ONLY from uploaded curriculum CSV
-        // Static subjects are no longer added automatically
-
         // 3. Load from Scheme of Learning (Secondary Source - still useful for scheme-specific subjects)
         try {
           const savedScheme = localStorage.getItem("scheme_of_learning_data");
@@ -463,23 +460,6 @@ const ImprovedGenerator = () => {
         // MODIFIED: User requested to strictly load from dynamic sources (CSV/DB) and NOT static data.
         // Therefore, we do not fall back to SUBJECTS if no content is found.
         
-        /* 
-        const hasUserContent = addedSubjects.size > 0;
-        
-        if (!hasUserContent) {
-          SUBJECTS.forEach(s => {
-               const isLevelValid = !s.levels || 
-                                    s.levels.includes(selectedLevelValue) || 
-                                    s.levels.includes(selectedLevelLabel);
-               
-               if (isLevelValid) {
-                   addSubject(s.value, s.label);
-               }
-          });
-        } else {
-             console.log(`User has custom content for ${selectedLevelLabel}, skipping static subjects.`);
-        }
-        */
        
         // Sort subjects alphabetically
         subjects.sort((a, b) => a.label.localeCompare(b.label));
@@ -593,13 +573,6 @@ const ImprovedGenerator = () => {
 
             if (uniqueSubStrands.length === 0) {
                  // Only warn if we actually had strands selected but found nothing
-               /* 
-               toast({
-                 title: "No Sub-strands Found",
-                 description: `Found strands but no sub-strands linked to them.`,
-                 variant: "default" // Downgraded to default to be less annoying
-               });
-               */
             }
         } else {
              // If no strands selected yet, empty the list
@@ -1436,205 +1409,16 @@ const ImprovedGenerator = () => {
               <div className="space-y-4 sm:space-y-6">
                 {/* Step 0: Basic Info */}
                 {currentStep === 0 && (
-                  <div className="space-y-4 sm:space-y-6 animate-in fade-in-50 duration-500">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-lg sm:text-xl font-semibold">Basic Information</h3>
-                      {schemeItems.length > 0 && (
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => setIsSchemeDialogOpen(true)}
-                          className="gap-2 text-primary border-primary hover:bg-primary/10"
-                        >
-                          <FileText className="h-4 w-4" />
-                          Load from Scheme
-                        </Button>
-                      )}
-                    </div>
-                    
-                    <div className="grid gap-4 sm:gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="level">
-                          Class Level *
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Info className="h-4 w-4 inline ml-1 text-muted-foreground cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Select the class level first</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </Label>
-                        <Combobox
-                          options={availableLevels}
-                          value={lessonData.level}
-                          onValueChange={(value) => {
-                            // Find the label for this value if possible, to store consistent data
-                            // Actually, let's keep storing value, but ensure our lookups handle it.
-                            console.log("Selected level:", value);
-                            setLessonData({ ...lessonData, level: value, subject: "", strand: "", subStrand: "" });
-                            setValidationErrors({ ...validationErrors, level: "" });
-                          }}
-                          placeholder={availableLevels.length > 0 ? "Select class level" : "Loading levels..."}
-                          searchPlaceholder="Search levels..."
-                          emptyText="No levels found."
-                        />
-                        {validationErrors.level && (
-                          <p className="text-sm text-destructive">{validationErrors.level}</p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="subject">
-                          Subject *
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Info className="h-4 w-4 inline ml-1 text-muted-foreground cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Select the subject for your lesson</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </Label>
-                        <Combobox
-                          options={availableSubjects}
-                          value={lessonData.subject}
-                          onValueChange={(value) => {
-                            setLessonData({ ...lessonData, subject: value, strand: "", subStrand: "" });
-                            setValidationErrors({ ...validationErrors, subject: "" });
-                          }}
-                          placeholder="Select subject"
-                          searchPlaceholder="Search subjects..."
-                          emptyText={!lessonData.level ? "Select a class level first" : "No subjects found. Upload curriculum for this level."}
-                          disabled={!lessonData.level}
-                        />
-                        {validationErrors.subject && (
-                          <p className="text-sm text-destructive">{validationErrors.subject}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="classSize">
-                        Class Size
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Info className="h-4 w-4 inline ml-1 text-muted-foreground cursor-help" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Number of students in your class</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </Label>
-                      <Input
-                        id="classSize"
-                        type="number"
-                        placeholder={userProfile?.default_class_size ? `Default: ${userProfile.default_class_size}` : "Enter class size"}
-                        value={lessonData.classSize}
-                        onChange={(e) => setLessonData({ ...lessonData, classSize: e.target.value })}
-                        min="1"
-                        max="100"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="location">
-                        School Location (Optional)
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Info className="h-4 w-4 inline ml-1 text-muted-foreground cursor-help" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Enter your city/town to get location-specific examples (e.g., nearby landmarks, local context)</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </Label>
-                      <div className="flex gap-2">
-                        <Input
-                          id="location"
-                          placeholder="e.g. Kumasi, Ashanti Region"
-                          value={lessonData.location || ""}
-                          onChange={(e) => setLessonData({ ...lessonData, location: e.target.value })}
-                        />
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          size="icon"
-                          onClick={handleDetectLocation}
-                          title="Detect my location"
-                        >
-                          <MapPin className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Helps generate examples relevant to your students' immediate environment.
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="term">Term</Label>
-                        <Select
-                          value={lessonData.term || ""}
-                          onValueChange={(val) => setLessonData({ ...lessonData, term: val })}
-                        >
-                          <SelectTrigger id="term">
-                             <SelectValue placeholder="Select Term" />
-                          </SelectTrigger>
-                          <SelectContent>
-                             <SelectItem value="First Term">First Term</SelectItem>
-                             <SelectItem value="Second Term">Second Term</SelectItem>
-                             <SelectItem value="Third Term">Third Term</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="weekNumber">Week Number</Label>
-                        <Input
-                          id="weekNumber"
-                          value={lessonData.weekNumber || ""}
-                          onChange={(e) => setLessonData({ ...lessonData, weekNumber: e.target.value })}
-                          placeholder="e.g. Week 1"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="weekEnding">Week Ending</Label>
-                        <Input
-                          id="weekEnding"
-                          value={lessonData.weekEnding || ""}
-                          onChange={(e) => setLessonData({ ...lessonData, weekEnding: e.target.value })}
-                          placeholder="e.g. Friday, Jan 24"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                         <Label htmlFor="numLessons">Number of Lessons</Label>
-                         <div className="flex items-center gap-2">
-                           <Input
-                             id="numLessons"
-                             type="number"
-                             min={1}
-                             max={5}
-                             className="w-20"
-                             value={lessonData.numLessons || 1}
-                             onChange={(e) => {
-                               const val = parseInt(e.target.value);
-                               if (val > 0) setLessonData({ ...lessonData, numLessons: val });
-                             }}
-                           />
-                           <TooltipProvider>
-                             <Tooltip>
-                               <TooltipTrigger asChild>
-                                 <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                               </TooltipTrigger>
-                               <TooltipContent className="max-w-[300px]">
-                                 <p>If you have many exemplars, you can split them across multiple lessons. The AI will generate a lesson plan for each part.</p>
-                               </TooltipContent>
-                             </Tooltip>
-                           </TooltipProvider>
-                         </div>
-                      </div>
-                    </div>
-                  </div>
+                  <BasicInfoStep
+                    lessonData={lessonData}
+                    setLessonData={(data) => setLessonData({ ...lessonData, ...data })}
+                    availableLevels={availableLevels}
+                    availableSubjects={availableSubjects}
+                    userProfile={userProfile}
+                    validationErrors={validationErrors}
+                    setValidationErrors={setValidationErrors}
+                    handleDetectLocation={handleDetectLocation}
+                  />
                 )}
 
                 {/* Step 1: Curriculum Files */}

@@ -1,28 +1,38 @@
-import { useEffect } from "react";
+import { useEffect, Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import Index from "./pages/Index";
-import ImprovedGenerator from "./pages/ImprovedGenerator";
-import Checkout from "./pages/Checkout";
-import Download from "./pages/Download";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import Dashboard from "./pages/Dashboard";
-import ProfileEdit from "./pages/ProfileEdit";
-import TemplateManagement from "./pages/TemplateManagement";
-import AssessmentGenerator from "./pages/AssessmentGenerator";
-import CurriculumUpload from "./pages/CurriculumUpload";
-import AdminLogin from "./pages/AdminLogin";
-import AdminDashboard from "./pages/AdminDashboard";
-import NotFound from "./pages/NotFound";
-import SchemeOfLearning from "./pages/SchemeOfLearning";
-import TimetableManagement from "./pages/TimetableManagement";
+import { Loader2 } from "lucide-react";
+
+// Lazy load pages
+const Index = lazy(() => import("./pages/Index"));
+const ImprovedGenerator = lazy(() => import("./pages/ImprovedGenerator"));
+const Checkout = lazy(() => import("./pages/Checkout"));
+const Download = lazy(() => import("./pages/Download"));
+const Login = lazy(() => import("./pages/Login"));
+const Signup = lazy(() => import("./pages/Signup"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const ProfileEdit = lazy(() => import("./pages/ProfileEdit"));
+const TemplateManagement = lazy(() => import("./pages/TemplateManagement"));
+const AssessmentGenerator = lazy(() => import("./pages/AssessmentGenerator"));
+const CurriculumUpload = lazy(() => import("./pages/CurriculumUpload"));
+const AdminLogin = lazy(() => import("./pages/AdminLogin"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const SchemeOfLearning = lazy(() => import("./pages/SchemeOfLearning"));
+const TimetableManagement = lazy(() => import("./pages/TimetableManagement"));
 
 const queryClient = new QueryClient();
+
+// Loading component
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+  </div>
+);
 
 const App = () => {
   useEffect(() => {
@@ -55,28 +65,30 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/profile/edit" element={<ProfileEdit />} />
-            <Route path="/templates" element={<TemplateManagement />} />
-            <Route path="/assessments" element={<AssessmentGenerator />} />
-            <Route path="/curriculum" element={<CurriculumUpload />} />
-            <Route path="/curriculum-upload" element={<CurriculumUpload />} />
-            <Route path="/scheme" element={<SchemeOfLearning />} />
-            <Route path="/schemes" element={<SchemeOfLearning />} />
-            <Route path="/generator" element={<ImprovedGenerator />} />
-            <Route path="/checkout" element={<Checkout />} />
-            <Route path="/download" element={<Download />} />
-            <Route path="/admin" element={<AdminLogin />} />
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
-            <Route path="/admin-dashboard" element={<AdminDashboard />} />
-            <Route path="/timetable" element={<TimetableManagement />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/profile/edit" element={<ProfileEdit />} />
+              <Route path="/templates" element={<TemplateManagement />} />
+              <Route path="/assessments" element={<AssessmentGenerator />} />
+              <Route path="/curriculum" element={<CurriculumUpload />} />
+              <Route path="/curriculum-upload" element={<CurriculumUpload />} />
+              <Route path="/scheme" element={<SchemeOfLearning />} />
+              <Route path="/schemes" element={<SchemeOfLearning />} />
+              <Route path="/generator" element={<ImprovedGenerator />} />
+              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/download" element={<Download />} />
+              <Route path="/admin" element={<AdminLogin />} />
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin-dashboard" element={<AdminDashboard />} />
+              <Route path="/timetable" element={<TimetableManagement />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

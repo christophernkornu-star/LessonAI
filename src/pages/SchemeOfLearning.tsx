@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, Play, Trash2, Save, Download, Globe } from "lucide-react";
+import { Upload, Trash2, FileText, Loader2, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, BookOpen, Calendar, Download, Globe, Play } from "lucide-react";
 import { extractTextFromBrowserFile } from "@/services/fileParsingService";
 import { parseSchemeOfLearning } from "@/services/aiService";
 import { Navbar } from "@/components/Navbar";
@@ -116,7 +116,7 @@ export default function SchemeOfLearning() {
      // For now, let's just insert the NEW items only?
      
      // Actually, let's iterate and insert one by one or batch insert the *new* ones.
-     // The upload handler filters duplicates already.
+     // The upload handler filters duplicates already;
   };
 
   const handleSystemImport = async () => {
@@ -383,7 +383,7 @@ export default function SchemeOfLearning() {
           resources: row[headerMap['resources']] || "",
         });
       } else {
-        // Fallback to standard order: Week, Week Ending, Term, Subject, Class, Strand, SubStrand, Content Standard, Indicators, Exemplars, Resources
+        // Fallback to standard order: Week, Week Ending, Term, Subject, Class, Strand, Sub-Strand, Content Standard, Indicators, Exemplars, Resources
         // The attached file format: Week 1, Date, Term, Subject, Class, Strand, Sub-Strand, Content Standard, Indicators, Exemplars(Maybe Empty), Resources
         
         const hasExemplars = row.length > 10;
@@ -541,6 +541,53 @@ export default function SchemeOfLearning() {
     }
   };
 
+  const handleDownloadCSV = () => {
+    if (schemeData.length === 0) {
+      toast({ title: "No Data", description: "No scheme data to export.", variant: "destructive" });
+      return;
+    }
+
+    // CSV Headers
+    const headers = [
+      "Week", 
+      "Week Ending", 
+      "Term", 
+      "Subject", 
+      "Class", 
+      "Strand", 
+      "Sub-Strand", 
+      "Content Standard", 
+      "Indicators", 
+      "Exemplars", 
+      "Resources"
+    ];
+
+    // CSV Rows
+    const rows = schemeData.map(item => [
+      item.week,
+      item.weekEnding,
+      item.term,
+      item.subject,
+      item.classLevel,
+      `"${(item.strand || '').replace(/"/g, '""')}"`,
+      `"${(item.subStrand || '').replace(/"/g, '""')}"`,
+      `"${(item.contentStandard || '').replace(/"/g, '""')}"`,
+      `"${(item.indicators || '').replace(/"/g, '""')}"`,
+      `"${(item.exemplars || '').replace(/"/g, '""')}"`,
+      `"${(item.resources || '').replace(/"/g, '""')}"`
+    ].join(","));
+
+    const csvContent = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `scheme_of_learning_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-subtle">
       <Navbar />
@@ -556,11 +603,18 @@ export default function SchemeOfLearning() {
               Back to Dashboard
             </Button>
             {schemeData.length > 0 && (
-              <Button variant="destructive" onClick={handleClear} className="flex-1 sm:flex-none">
-                <Trash2 className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Clear Scheme</span>
-                <span className="sm:hidden">Clear</span>
-              </Button>
+              <>
+                <Button variant="outline" onClick={handleDownloadCSV} className="flex-1 sm:flex-none">
+                  <Download className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Export CSV</span>
+                  <span className="sm:hidden">Export</span>
+                </Button>
+                <Button variant="destructive" onClick={handleClear} className="flex-1 sm:flex-none">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Clear Scheme</span>
+                  <span className="sm:hidden">Clear</span>
+                </Button>
+              </>
             )}
           </div>
         </div>
