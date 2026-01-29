@@ -34,8 +34,11 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Navbar } from "@/components/Navbar";
 import { BasicInfoStep } from "@/components/generator/BasicInfoStep";
+import * as ReactWindow from 'react-window';
+
+// Handle CJS/ESM interop issues with react-window
 // @ts-ignore
-import { FixedSizeList } from 'react-window';
+const FixedSizeList = (ReactWindow.FixedSizeList || ReactWindow.default?.FixedSizeList || ReactWindow) as any;
 
 const List = FixedSizeList;
 
