@@ -559,7 +559,88 @@ export interface UserLessonCount {
   fullName: string;
   role: string;
   lessonCount: number;
+  isSuspended: boolean;
+  isPaymentExempt: boolean;
 }
+
+/**
+ * Toggle user suspension status
+ */
+export const toggleUserSuspension = async (userId: string, isSuspended: boolean): Promise<void> => {
+  const isAdmin = await checkIsAdmin();
+  if (!isAdmin) {
+    throw new Error('Unauthorized: Admin access required');
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ is_suspended: isSuspended } as any)
+    .eq('id', userId);
+
+  if (error) {
+    throw new Error(`Failed to update user suspension: ${error.message}`);
+  }
+};
+
+/**
+ * Toggle user payment exemption status
+ */
+export const togglePaymentExemption = async (userId: string, isExempt: boolean): Promise<void> => {
+  const isAdmin = await checkIsAdmin();
+  if (!isAdmin) {
+    throw new Error('Unauthorized: Admin access required');
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ is_payment_exempt: isExempt } as any)
+    .eq('id', userId);
+
+  if (error) {
+    throw new Error(`Failed to update payment exemption: ${error.message}`);
+  }
+};
+
+/**
+ * Get system setting
+ */
+export const getSystemSetting = async (key: string): Promise<any> => {
+  const { data, error } = await supabase
+    .from('system_settings')
+    .select('value')
+    .eq('key', key)
+    .single();
+
+  if (error) {
+    // Return default values if not found or error
+    if (key === 'allow_signups') return true;
+    return null;
+  }
+
+  return data.value;
+};
+
+/**
+ * Update system setting (admin only)
+ */
+export const updateSystemSetting = async (key: string, value: any): Promise<void> => {
+  const isAdmin = await checkIsAdmin();
+  if (!isAdmin) {
+    throw new Error('Unauthorized: Admin access required');
+  }
+
+  const { error } = await supabase
+    .from('system_settings')
+    .upsert({ 
+      key, 
+      value,
+      updated_by: (await supabase.auth.getUser()).data.user?.id 
+    } as any);
+
+  if (error) {
+    throw new Error(`Failed to update setting: ${error.message}`);
+  }
+};
 
 /**
  * Get all users with their lesson generation counts
@@ -594,8 +675,11 @@ export const getAllUserLessonCounts = async (): Promise<UserLessonCount[]> => {
       email: p.email || 'N/A', // Note: profiles might not have email depending on setup
       fullName: p.full_name || 'Unknown',
       role: p.role || 'user',
-      lessonCount: lessonCounts[p.id] || 0
+      lessonCount: lessonCounts[p.id] || 0,
+      isSuspended: p.is_suspended || false,
+      isPaymentExempt: p.is_payment_exempt || false,
     })).sort((a, b) => b.lessonCount - a.lessonCount);
+
   } catch (error) {
     console.error("Error fetching user lesson counts:", error);
     return [];

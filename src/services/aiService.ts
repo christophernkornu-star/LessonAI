@@ -118,7 +118,23 @@ async function logAIUsage(
   }
 }
 
+async function verifyUserEligibility() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return; // Allow anonymous generation if app logic permits, or enforce login here. Assuming logged in.
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_suspended' as any)
+    .eq('id', user.id)
+    .single();
+
+  if ((profile as any)?.is_suspended) {
+    throw new Error("Your account has been suspended. Please contact the administrator.");
+  }
+}
+
 export async function callAIAPI(prompt: string, systemMessage?: string, numLessons?: number): Promise<string> {
+  await verifyUserEligibility();
   // Strictly use DeepSeek API
   return callDeepSeekAPI(prompt, systemMessage, numLessons);
 }

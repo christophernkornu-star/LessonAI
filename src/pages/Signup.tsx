@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -7,17 +7,37 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, GraduationCap } from "lucide-react";
+import { getSystemSetting } from "@/services/adminService";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 export default function Signup() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [isSignupsEnabled, setIsSignupsEnabled] = useState(true);
+  const [checkingInfo, setCheckingInfo] = useState(true);
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
     password: "",
     confirmPassword: "",
   });
+
+  useEffect(() => {
+    checkSignupStatus();
+  }, []);
+
+  const checkSignupStatus = async () => {
+    try {
+        const enabled = await getSystemSetting('allow_signups');
+        setIsSignupsEnabled(enabled);
+    } catch (error) {
+        console.error("Failed to check signup status", error);
+    } finally {
+        setCheckingInfo(false);
+    }
+  };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,6 +92,10 @@ export default function Signup() {
     }
   };
 
+  if (checkingInfo) {
+    return null; // or a loading spinner
+  }
+
   return (
     <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-3 sm:p-4">
       <Card className="w-full max-w-md p-6 sm:p-8 shadow-medium">
@@ -83,6 +107,15 @@ export default function Signup() {
           <p className="text-sm sm:text-base text-muted-foreground">Join thousands of teachers using LessonAI</p>
         </div>
 
+        {!isSignupsEnabled ? (
+            <Alert variant="destructive" className="mb-6">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Registration Closed</AlertTitle>
+                <AlertDescription>
+                    New account registration is currently disabled by the administrator. Please try again later.
+                </AlertDescription>
+            </Alert>
+        ) : (
         <form onSubmit={handleSignup} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="fullName">Full Name</Label>
@@ -93,7 +126,7 @@ export default function Signup() {
               value={formData.fullName}
               onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
               required
-              disabled={isLoading}
+              disabled={isLoading || !isSignupsEnabled}
             />
           </div>
 
@@ -106,7 +139,7 @@ export default function Signup() {
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
-              disabled={isLoading}
+              disabled={isLoading || !isSignupsEnabled}
             />
           </div>
 
@@ -119,7 +152,7 @@ export default function Signup() {
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               required
-              disabled={isLoading}
+              disabled={isLoading || !isSignupsEnabled}
             />
           </div>
 
@@ -132,33 +165,22 @@ export default function Signup() {
               value={formData.confirmPassword}
               onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
               required
-              disabled={isLoading}
+              disabled={isLoading || !isSignupsEnabled}
             />
           </div>
 
-          <Button
-            type="submit"
-            className="w-full bg-gradient-hero hover:opacity-90"
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating account...
-              </>
-            ) : (
-              "Create Account"
-            )}
+          <Button className="w-full bg-gradient-hero hover:opacity-90 transition-opacity" type="submit" disabled={isLoading}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Create Account
           </Button>
         </form>
+        )}
 
-        <div className="mt-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            Already have an account?{" "}
-            <Link to="/login" className="text-primary hover:underline font-medium">
-              Sign in
-            </Link>
-          </p>
+        <div className="mt-4 text-center text-sm">
+          <span className="text-muted-foreground">Already have an account? </span>
+          <Link to="/login" className="text-primary hover:underline font-medium">
+            Sign in
+          </Link>
         </div>
 
         <div className="mt-4 text-center">

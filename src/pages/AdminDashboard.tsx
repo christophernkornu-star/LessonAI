@@ -12,6 +12,10 @@ import {
   getContentStats,
   getAIUsageStats,
   getAllUserLessonCounts,
+  toggleUserSuspension,
+  togglePaymentExemption,
+  getSystemSetting,
+  updateSystemSetting,
   UserLessonCount,
 } from '@/services/adminService';
 import * as AnalyticsService from '@/services/analyticsService';
@@ -94,12 +98,17 @@ const AdminDashboard = () => {
   // Users Tab Data
   const [userLessonsData, setUserLessonsData] = useState<UserLessonCount[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [allowSignups, setAllowSignups] = useState(true);
 
   const loadUserLessons = async () => {
     setLoadingUsers(true);
     try {
-      const data = await getAllUserLessonCounts();
+      const [data, signupsEnabled] = await Promise.all([
+        getAllUserLessonCounts(),
+        getSystemSetting('allow_signups')
+      ]);
       setUserLessonsData(data);
+      setAllowSignups(signupsEnabled);
     } catch (error) {
        console.error("Error loading user lessons", error);
        toast({
@@ -198,6 +207,71 @@ const AdminDashboard = () => {
       console.error("Error loading analytics:", error);
     } finally {
       setLoadingAnalytics(false);
+    }
+  };
+
+  const handleToggleSignups = async (checked: boolean) => {
+      try {
+          await updateSystemSetting('allow_signups', checked);
+          setAllowSignups(checked);
+          toast({
+              title: "Success",
+              description: `Sign-ups ${checked ? 'enabled' : 'disabled'}`
+          });
+      } catch (error) {
+          toast({
+              title: "Error",
+              description: "Failed to update signup setting",
+              variant: "destructive"
+          });
+      }
+  };
+
+  const handleToggleExemption = async (userId: string, currentStatus: boolean, name: string) => {
+    if (!confirm(`Are you sure you want to ${currentStatus ? 'remove payment exemption for' : 'exempt from payment'} ${name}?`)) return;
+    
+    try {
+        await togglePaymentExemption(userId, !currentStatus);
+        
+        // Update local state
+        setUserLessonsData(prev => prev.map(u => 
+            u.userId === userId ? { ...u, isPaymentExempt: !currentStatus } : u
+        ));
+
+        toast({
+            title: "Success",
+            description: `Payment exemption ${currentStatus ? 'removed' : 'added'}`
+        });
+    } catch (error) {
+        toast({
+            title: "Error",
+            description: "Failed to update exemption status",
+            variant: "destructive"
+        });
+    }
+  };
+
+  const handleToggleSuspension = async (userId: string, currentStatus: boolean, name: string) => {
+    if (!confirm(`Are you sure you want to ${currentStatus ? 'activate' : 'suspend'} ${name}?`)) return;
+    
+    try {
+        await toggleUserSuspension(userId, !currentStatus);
+        
+        // Update local state
+        setUserLessonsData(prev => prev.map(u => 
+            u.userId === userId ? { ...u, isSuspended: !currentStatus } : u
+        ));
+
+        toast({
+            title: "Success",
+            description: `User ${currentStatus ? 'activated' : 'suspended'} successfully`
+        });
+    } catch (error) {
+        toast({
+            title: "Error",
+            description: "Failed to update user status",
+            variant: "destructive"
+        });
     }
   };
 
@@ -699,6 +773,24 @@ const AdminDashboard = () => {
               </div>
             ) : (
               <div className="space-y-8">
+                {/* System Settings Card */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Switch 
+                                checked={allowSignups} 
+                                onCheckedChange={handleToggleSignups} 
+                            />
+                            <span className={allowSignups ? "text-green-600" : "text-gray-500"}>
+                                {allowSignups ? "New Sign-ups Enabled" : "New Sign-ups Disabled"}
+                            </span>
+                        </CardTitle>
+                        <CardDescription>
+                            Control whether new users can create accounts on the platform.
+                        </CardDescription>
+                    </CardHeader>
+                </Card>
+
                 {/* Visual Representation */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                    <div className="h-[400px]">
@@ -746,7 +838,10 @@ const AdminDashboard = () => {
                           <TableHead>User Name</TableHead>
                           <TableHead>Email</TableHead>
                           <TableHead>Role</TableHead>
-                          <TableHead className="text-right">Lesson Notes Generated</TableHead>
+                          <TableHead className="text-right">Lesson Notes</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Payment</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -758,6 +853,35 @@ const AdminDashboard = () => {
                                <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>{user.role}</Badge>
                              </TableCell>
                              <TableCell className="text-right">{user.lessonCount}</TableCell>
+                             <TableCell>
+                                <Badge variant={user.isSuspended ? "destructive" : "outline"}>
+                                    {user.isSuspended ? "Suspended" : "Active"}
+                                </Badge>
+                             </TableCell>
+                             <TableCell>
+                                {user.isPaymentExempt && (
+                                    <Badge className="bg-green-100 text-green-800 border-green-200">Exempt</Badge>
+                                )}
+                             </TableCell>
+                             <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                    <Button 
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleToggleExemption(user.userId, user.isPaymentExempt, user.fullName)}
+                                        title={user.isPaymentExempt ? "Remove Exemption" : "Exempt Payment"}
+                                    >
+                                        <DollarSign className={`h-4 w-4 ${user.isPaymentExempt ? 'text-green-600' : 'text-gray-400'}`} />
+                                    </Button>
+                                    <Button 
+                                        variant={user.isSuspended ? "default" : "destructive"} 
+                                        size="sm"
+                                        onClick={() => handleToggleSuspension(user.userId, user.isSuspended, user.fullName)}
+                                    >
+                                        {user.isSuspended ? "Activate" : "Suspend"}
+                                    </Button>
+                                </div>
+                             </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
