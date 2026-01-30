@@ -605,8 +605,8 @@ export const togglePaymentExemption = async (userId: string, isExempt: boolean):
  * Get system setting
  */
 export const getSystemSetting = async (key: string): Promise<any> => {
-  const { data, error } = await supabase
-    .from('system_settings')
+  const { data, error } = await (supabase
+    .from('system_settings' as any) as any)
     .select('value')
     .eq('key', key)
     .single();
@@ -617,7 +617,7 @@ export const getSystemSetting = async (key: string): Promise<any> => {
     return null;
   }
 
-  return data.value;
+  return (data as any).value;
 };
 
 /**
@@ -629,8 +629,8 @@ export const updateSystemSetting = async (key: string, value: any): Promise<void
     throw new Error('Unauthorized: Admin access required');
   }
 
-  const { error } = await supabase
-    .from('system_settings')
+  const { error } = await (supabase
+    .from('system_settings' as any) as any)
     .upsert({ 
       key, 
       value,

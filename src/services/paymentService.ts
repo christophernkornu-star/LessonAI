@@ -200,6 +200,15 @@ export async function getUserPaymentProfile(): Promise<UserPaymentProfile | null
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // Fetch from profiles to check admin-controlled exemption status
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_payment_exempt')
+    .eq('id', user.id)
+    .single();
+    
+  const isProfileExempt = (profile as any)?.is_payment_exempt === true;
+
   const { data, error } = await supabase
     .from('user_payment_profiles')
     .select('*')
@@ -219,7 +228,7 @@ export async function getUserPaymentProfile(): Promise<UserPaymentProfile | null
         return {
           id: newProfile.id,
           userId: newProfile.user_id,
-          isPaymentExempt: newProfile.is_payment_exempt || false,
+          isPaymentExempt: isProfileExempt || newProfile.is_payment_exempt || false,
           exemptionReason: newProfile.exemption_reason,
           walletBalance: newProfile.wallet_balance || 0,
           totalSpent: newProfile.total_spent || 0,
@@ -233,7 +242,7 @@ export async function getUserPaymentProfile(): Promise<UserPaymentProfile | null
   return {
     id: data.id,
     userId: data.user_id,
-    isPaymentExempt: data.is_payment_exempt || false,
+    isPaymentExempt: isProfileExempt || data.is_payment_exempt || false,
     exemptionReason: data.exemption_reason,
     walletBalance: data.wallet_balance || 0,
     totalSpent: data.total_spent || 0,
