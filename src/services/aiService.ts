@@ -511,6 +511,12 @@ ${data.location ? `8. **LOCATION SPECIFIC CONTEXT:** The school is located in **
    - If the location is a coastal area, use ocean/fishing examples. If forest belt, use farming/forestry examples. If northern savannah, use relevant agricultural/climate examples.
    - Mention local markets, festivals, or sites familiar to students in ${data.location}.` : ''}
 
+**RESOURCES / TEACHING MATERIALS INSTRUCTIONS:**
+- Keep resources simple, relevant, and easy to obtain in a typical Ghanaian school or community.
+- Focus on locally available materials (e.g., counters, stones, bottle caps, manila cards, real objects).
+- Avoid requesting expensive or hard-to-find equipment unless absolutely necessary for the subject (like Science lab equipment).
+- Ensure the listed resources directly support the lesson activities.
+
 **LANGUAGE AND SPELLING INSTRUCTIONS (CRITICAL):**
 - **USE BRITISH ENGLISH SPELLING ONLY.** (e.g., 'colour' not 'color', 'programme' not 'program', 'centre' not 'center', 'behaviour' not 'behavior', 'organise' not 'organize', 'analyse' not 'analyze').
 - This is mandatory for the Ghanaian curriculum context.
@@ -525,6 +531,10 @@ ${data.location ? `8. **LOCATION SPECIFIC CONTEXT:** The school is located in **
 - Number activities clearly (1), 2), 3) or Activity 1:, Activity 2:) with each on its own line.
 - Avoid long run-on paragraphs - break them into digestible chunks.
 - Use bullet points for lists of items.
+- **MATHEMATICS & EQUATIONS:** 
+  - Ensure math equations stay on ONE line. Do NOT break lines after an equals sign (=), plus sign (+), minus sign (-), or other operator.
+  - If an equation is long, break it logically *before* an operator, not after.
+  - Surround operators with spaces (e.g., "2 + 2 = 4" not "2+2=4").
 
 **GHANAIAN EXAMPLES TO USE:**
 ${subjectExamples.map(ex => `- ${ex}`).join('\n')}
