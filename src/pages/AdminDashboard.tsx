@@ -66,6 +66,29 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Upload form state
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [gradeLevels, setGradeLevels] = useState<string[]>([]);
+  const [subject, setSubject] = useState('');
+  const [tags, setTags] = useState('');
+  const [isPublic, setIsPublic] = useState(true);
+  const [uploading, setUploading] = useState(false);
+
+  // Global Curriculum Stats
+  const [globalStats, setGlobalStats] = useState<{ totalItems: number; uniqueSubjects: number; uniqueGrades: number } | null>(null);
+
+  // Analytics state
+  const [userStats, setUserStats] = useState<any>(null);
+  const [contentStats, setContentStats] = useState<any>(null);
+  const [aiStats, setAIStats] = useState<any>(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [lessonsBySubject, setLessonsBySubject] = useState<any[]>([]);
+  const [lessonsByTemplate, setLessonsByTemplate] = useState<any[]>([]);
+  const [monthlyTrends, setMonthlyTrends] = useState<any[]>([]);
+  const [userActivity, setUserActivity] = useState<any[]>([]);
+
   const loadStats = async () => {
     try {
       if (activeTab === 'analytics') {
@@ -100,91 +123,6 @@ const AdminDashboard = () => {
       }
   };
 
-  const verifyAdmin = async () => {
-    setLoading(true);
-    const isAdmin = await checkIsAdmin();
-    if (!isAdmin) {
-      navigate('/');
-      return;
-    }
-    loadFiles();
-    loadStats();
-    loadGlobalCurriculumStats();
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    verifyAdmin();
-  }, [activeTab]);
-
-  if (loading) {
-      return <DashboardSkeleton />;
-  }
-
-  // Upload form state
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [gradeLevels, setGradeLevels] = useState<string[]>([]);
-  const [subject, setSubject] = useState('');
-  const [tags, setTags] = useState('');
-  const [isPublic, setIsPublic] = useState(true);
-  const [uploading, setUploading] = useState(false);
-
-  // Global Curriculum Stats
-  const [globalStats, setGlobalStats] = useState<{ totalItems: number; uniqueSubjects: number; uniqueGrades: number } | null>(null);
-
-  useEffect(() => {
-    if (activeTab === 'curriculum') {
-      CurriculumService.getGlobalStats().then(setGlobalStats);
-    }
-  }, [activeTab]);
-
-  // Analytics state
-  const [userStats, setUserStats] = useState<any>(null);
-  const [contentStats, setContentStats] = useState<any>(null);
-  const [aiStats, setAIStats] = useState<any>(null);
-  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
-  const [lessonsBySubject, setLessonsBySubject] = useState<any[]>([]);
-  const [lessonsByTemplate, setLessonsByTemplate] = useState<any[]>([]);
-  const [monthlyTrends, setMonthlyTrends] = useState<any[]>([]);
-  const [userActivity, setUserActivity] = useState<any[]>([]);
-
-  useEffect(() => {
-    checkAdminAccess();
-    if (activeTab === 'analytics') {
-      loadAnalytics();
-    } else {
-      loadFiles();
-    }
-  }, [activeTab]);
-
-  const loadAnalytics = async () => {
-    setLoadingAnalytics(true);
-    try {
-      const [users, content, ai, subjects, templates, trends, activity] = await Promise.all([
-        getUserStats(),
-        getContentStats(),
-        getAIUsageStats(30),
-        AnalyticsService.getLessonsBySubject(),
-        AnalyticsService.getLessonsByTemplate(),
-        AnalyticsService.getMonthlyTrends(undefined, 12),
-        AnalyticsService.getUserActivityData(10),
-      ]);
-      setUserStats(users);
-      setContentStats(content);
-      setAIStats(ai);
-      setLessonsBySubject(subjects.map((d: any) => ({ name: d.subject, value: d.count })));
-      setLessonsByTemplate(templates.map((d: any) => ({ name: d.template_name, value: d.count })));
-      setMonthlyTrends(trends.map((d: any) => ({ month: d.month, count: d.count })));
-      setUserActivity(activity);
-    } catch (error) {
-      console.error("Error loading analytics:", error);
-    } finally {
-      setLoadingAnalytics(false);
-    }
-  };
-
   const checkAdminAccess = async () => {
     const isAdmin = await checkIsAdmin();
     if (!isAdmin) {
@@ -213,6 +151,68 @@ const AdminDashboard = () => {
       setLoading(false);
     }
   };
+
+  const loadAnalytics = async () => {
+    setLoadingAnalytics(true);
+    try {
+      const [users, content, ai, subjects, templates, trends, activity] = await Promise.all([
+        getUserStats(),
+        getContentStats(),
+        getAIUsageStats(30),
+        AnalyticsService.getLessonsBySubject(),
+        AnalyticsService.getLessonsByTemplate(),
+        AnalyticsService.getMonthlyTrends(undefined, 12),
+        AnalyticsService.getUserActivityData(10),
+      ]);
+      setUserStats(users);
+      setContentStats(content);
+      setAIStats(ai);
+      setLessonsBySubject(subjects.map((d: any) => ({ name: d.subject, value: d.count })));
+      setLessonsByTemplate(templates.map((d: any) => ({ name: d.template_name, value: d.count })));
+      setMonthlyTrends(trends.map((d: any) => ({ month: d.month, count: d.count })));
+      setUserActivity(activity);
+    } catch (error) {
+      console.error("Error loading analytics:", error);
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  };
+
+  const verifyAdmin = async () => {
+    setLoading(true);
+    const isAdmin = await checkIsAdmin();
+    if (!isAdmin) {
+      navigate('/');
+      return;
+    }
+    loadFiles();
+    loadStats();
+    loadGlobalCurriculumStats();
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    verifyAdmin();
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'curriculum') {
+      CurriculumService.getGlobalStats().then(setGlobalStats);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    checkAdminAccess();
+    if (activeTab === 'analytics') {
+      loadAnalytics();
+    } else {
+      loadFiles();
+    }
+  }, [activeTab]);
+
+  if (loading) {
+      return <DashboardSkeleton />;
+  }
 
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
