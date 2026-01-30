@@ -183,7 +183,7 @@ export const getAllResourceFiles = async (
     throw new Error(`Failed to fetch resource files: ${error.message}`);
   }
 
-  return data || [];
+  return (data as unknown as ResourceFile[]) || [];
 };
 
 /**
@@ -208,7 +208,7 @@ export const getPublicResourceFiles = async (
     throw new Error(`Failed to fetch public resource files: ${error.message}`);
   }
 
-  return data || [];
+  return (data as unknown as ResourceFile[]) || [];
 };
 
 /**
@@ -279,7 +279,7 @@ export const updateResourceFile = async (
     throw new Error(`Failed to update file: ${error.message}`);
   }
 
-  return data;
+  return data as unknown as ResourceFile;
 };
 
 /**
@@ -341,7 +341,7 @@ export const searchResourceFiles = async (
     throw new Error(`Search failed: ${error.message}`);
   }
 
-  return data || [];
+  return (data as unknown as ResourceFile[]) || [];
 };
 
 /**
@@ -552,6 +552,14 @@ export const logAIUsage = async (
     console.error("Error logging AI usage:", error);
   }
 };
+
+export interface UserLessonCount {
+  userId: string;
+  email: string;
+  fullName: string;
+  role: string;
+  lessonCount: number;
+}
 
 /**
  * Get all users with their lesson generation counts
