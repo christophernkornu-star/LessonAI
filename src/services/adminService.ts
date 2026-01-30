@@ -552,3 +552,44 @@ export const logAIUsage = async (
     console.error("Error logging AI usage:", error);
   }
 };
+
+/**
+ * Get all users with their lesson generation counts
+ */
+export const getAllUserLessonCounts = async (): Promise<UserLessonCount[]> => {
+  try {
+    // Fetch profiles
+    const { data: profiles, error: profileError } = await supabase
+      .from('profiles')
+      .select('*');
+      
+    if (profileError) throw profileError;
+
+    // Fetch lesson notes (just user_ids to minimize data transfer)
+    const { data: lessons, error: lessonError } = await supabase
+      .from('lesson_notes')
+      .select('user_id');
+      
+    if (lessonError) throw lessonError;
+    
+    // Aggregate lesson counts
+    const lessonCounts: {[key: string]: number} = {};
+    lessons?.forEach(l => {
+      if (l.user_id) {
+        lessonCounts[l.user_id] = (lessonCounts[l.user_id] || 0) + 1;
+      }
+    });
+    
+    // Map to result
+    return profiles.map((p: any) => ({
+      userId: p.id,
+      email: p.email || 'N/A', // Note: profiles might not have email depending on setup
+      fullName: p.full_name || 'Unknown',
+      role: p.role || 'user',
+      lessonCount: lessonCounts[p.id] || 0
+    })).sort((a, b) => b.lessonCount - a.lessonCount);
+  } catch (error) {
+    console.error("Error fetching user lesson counts:", error);
+    return [];
+  }
+};

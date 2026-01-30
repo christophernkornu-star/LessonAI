@@ -11,6 +11,8 @@ import {
   getUserStats,
   getContentStats,
   getAIUsageStats,
+  getAllUserLessonCounts,
+  UserLessonCount,
 } from '@/services/adminService';
 import * as AnalyticsService from '@/services/analyticsService';
 import { CurriculumService } from '@/services/curriculumService';
@@ -88,6 +90,27 @@ const AdminDashboard = () => {
   const [lessonsByTemplate, setLessonsByTemplate] = useState<any[]>([]);
   const [monthlyTrends, setMonthlyTrends] = useState<any[]>([]);
   const [userActivity, setUserActivity] = useState<any[]>([]);
+  
+  // Users Tab Data
+  const [userLessonsData, setUserLessonsData] = useState<UserLessonCount[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  const loadUserLessons = async () => {
+    setLoadingUsers(true);
+    try {
+      const data = await getAllUserLessonCounts();
+      setUserLessonsData(data);
+    } catch (error) {
+       console.error("Error loading user lessons", error);
+       toast({
+         title: "Error",
+         description: "Failed to load user data",
+         variant: "destructive"
+       });
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
 
   const loadStats = async () => {
     try {
@@ -205,6 +228,8 @@ const AdminDashboard = () => {
     checkAdminAccess();
     if (activeTab === 'analytics') {
       loadAnalytics();
+    } else if (activeTab === 'users') {
+      loadUserLessons();
     } else {
       loadFiles();
     }
@@ -351,10 +376,14 @@ const AdminDashboard = () => {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5 mb-8">
+          <TabsList className="grid w-full grid-cols-6 mb-8">
             <TabsTrigger value="analytics" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <BarChart3 className="w-4 h-4" />
               <span className="hidden sm:inline">Analytics</span>
+            </TabsTrigger>
+            <TabsTrigger value="users" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Users className="w-4 h-4" />
+              <span className="hidden sm:inline">Users</span>
             </TabsTrigger>
             <TabsTrigger value="payments" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
               <CreditCard className="w-4 h-4" />
@@ -658,6 +687,83 @@ const AdminDashboard = () => {
                     Refresh Analytics
                   </Button>
                 </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Users Tab */}
+          <TabsContent value="users">
+            {loadingUsers ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {/* Visual Representation */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                   <div className="h-[400px]">
+                      <SimpleBarChart 
+                        title="Top Lesson Generators" 
+                        description="Users with the most lesson notes" 
+                        data={userLessonsData.slice(0, 10).map(u => ({ name: u.fullName || u.email, value: u.lessonCount }))} 
+                        color="#8884d8" 
+                      />
+                   </div>
+                   <Card>
+                      <CardHeader>
+                        <CardTitle>User Summary</CardTitle>
+                        <CardDescription>Overall user engagement statistics</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                           <div className="flex justify-between items-center py-2 border-b">
+                             <span>Total Users</span>
+                             <span className="font-bold">{userLessonsData.length}</span>
+                           </div>
+                           <div className="flex justify-between items-center py-2 border-b">
+                             <span>Active Generators (1+ lessons)</span>
+                             <span className="font-bold">{userLessonsData.filter(u => u.lessonCount > 0).length}</span>
+                           </div>
+                           <div className="flex justify-between items-center py-2 border-b">
+                             <span>Total Lessons Generated</span>
+                             <span className="font-bold">{userLessonsData.reduce((acc, curr) => acc + curr.lessonCount, 0)}</span>
+                           </div>
+                        </div>
+                      </CardContent>
+                   </Card>
+                </div>
+
+                {/* Users Table */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>All Users</CardTitle>
+                    <CardDescription>List of all registered users and their lesson generation counts</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>User Name</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead className="text-right">Lesson Notes Generated</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {userLessonsData.map((user) => (
+                          <TableRow key={user.userId}>
+                             <TableCell className="font-medium">{user.fullName}</TableCell>
+                             <TableCell>{user.email}</TableCell>
+                             <TableCell>
+                               <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>{user.role}</Badge>
+                             </TableCell>
+                             <TableCell className="text-right">{user.lessonCount}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
               </div>
             )}
           </TabsContent>
