@@ -11,7 +11,7 @@ import { MultiSelectCombobox } from "@/components/ui/multi-select-combobox";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Sparkles, Loader2, ChevronLeft, ChevronRight, Save, WifiOff, Info, MapPin, ClipboardPaste, FileText } from "lucide-react";
+import { Sparkles, Loader2, ChevronLeft, ChevronRight, Save, WifiOff, Info, MapPin, ClipboardPaste, FileText, BookOpen } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { generateLessonNote, parseCurriculumPaste, type LessonData } from "@/services/aiService";
 import { LessonNotesService } from "@/services/lessonNotesService";
@@ -1439,6 +1439,17 @@ const ImprovedGenerator = () => {
               <p className="text-sm sm:text-base text-muted-foreground">
                 Follow the steps below to generate a professional lesson note
               </p>
+              
+              <div className="mt-4 flex justify-center">
+                <Button 
+                  variant="outline" 
+                  onClick={() => navigate('/schemes')}
+                  className="gap-2"
+                >
+                  <BookOpen className="h-4 w-4" />
+                  Manage Schemes of Learning
+                </Button>
+              </div>
             </div>
 
             {/* Progress Stepper */}
