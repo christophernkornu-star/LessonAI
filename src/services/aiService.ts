@@ -122,13 +122,26 @@ async function verifyUserEligibility() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return; // Allow anonymous generation if app logic permits, or enforce login here. Assuming logged in.
 
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from('profiles')
-    .select('is_suspended' as any)
+    .select('is_suspended, role')
     .eq('id', user.id)
     .single();
 
-  if ((profile as any)?.is_suspended) {
+  if (error) {
+    console.warn("Failed to check suspension status:", error);
+    // If we can't check, deciding whether to fail closed or open. 
+    // Recommended: Fail open but log, OR Fail closed if security is paramount.
+    // For now, logging.
+    return; 
+  }
+
+  // Explicitly check for true
+  const isSuspended = (profile as any)?.is_suspended === true;
+
+  if (isSuspended) {
+    // Double check it's not an error in the DB call returning weird data
+    console.log(`Blocking suspended user: ${user.id}`);
     throw new Error("Your account has been suspended. Please contact the administrator.");
   }
 }

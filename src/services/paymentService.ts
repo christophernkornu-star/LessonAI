@@ -108,7 +108,8 @@ export function formatPhoneNumber(phone: string): string {
 export async function getPaymentSettings(): Promise<PaymentSettings> {
   const { data, error } = await supabase
     .from('payment_settings')
-    .select('setting_key, setting_value');
+    .select('*')
+    .single();
 
   if (error) {
     console.error('Error fetching payment settings:', error);
@@ -122,34 +123,15 @@ export async function getPaymentSettings(): Promise<PaymentSettings> {
     };
   }
 
-  const settings: PaymentSettings = {
-    tokenPricePer1000: 0.0007,
-    minimumCharge: 0.50,
-    platformFeePercent: 30,
-    freeTokensDaily: 0,
-    currency: 'GHS',
+  // Map database columns to PaymentSettings interface
+  // Database columns: token_price_per_1000, minimum_charge, platform_fee_percent, free_daily_tokens, currency
+  return {
+    tokenPricePer1000: data.token_price_per_1000 || 0.0007,
+    minimumCharge: data.minimum_charge || 0.50,
+    platformFeePercent: data.platform_fee_percent || 30,
+    freeTokensDaily: data.free_daily_tokens || 0,
+    currency: data.currency || 'GHS',
   };
-
-  data?.forEach((row: any) => {
-    const value = row.setting_value;
-    switch (row.setting_key) {
-      case 'token_price_per_1000':
-        settings.tokenPricePer1000 = value.amount;
-        settings.currency = value.currency || 'GHS';
-        break;
-      case 'minimum_charge':
-        settings.minimumCharge = value.amount;
-        break;
-      case 'platform_fee_percent':
-        settings.platformFeePercent = value.percent;
-        break;
-      case 'free_tokens_daily':
-        settings.freeTokensDaily = value.amount;
-        break;
-    }
-  });
-
-  return settings;
 }
 
 /**
