@@ -29,6 +29,20 @@ export default function Login() {
 
       if (error) throw error;
 
+      // Check if user is suspended
+      if (data.session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_suspended')
+          .eq('id', data.session.user.id)
+          .single();
+
+        if (profile?.is_suspended) {
+          await supabase.auth.signOut();
+          throw new Error("Your account has been suspended. Please contact support.");
+        }
+      }
+
       toast({
         title: "Welcome back!",
         description: "You've successfully logged in.",

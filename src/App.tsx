@@ -38,11 +38,24 @@ const App = () => {
   useEffect(() => {
     // Handle Supabase auth errors (like invalid refresh token)
     const checkSession = async () => {
-      const { error } = await supabase.auth.getSession();
+      const { data: { session }, error } = await supabase.auth.getSession();
       if (error) {
         console.error("Session error:", error);
         if (error.message.includes("Refresh Token")) {
           await supabase.auth.signOut();
+        }
+      } else if (session?.user) {
+        // Verify suspension status on app load
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_suspended')
+          .eq('id', session.user.id)
+          .single();
+          
+        if (profile?.is_suspended) {
+          console.log("User is suspended, signing out...");
+          await supabase.auth.signOut();
+          window.location.href = '/login'; // Force redirect
         }
       }
     };

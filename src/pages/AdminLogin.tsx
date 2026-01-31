@@ -38,7 +38,19 @@ const AdminLogin = () => {
         throw new Error('Login failed');
       }
 
-      // Verify admin role
+      // Check suspension logic
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_suspended')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profile?.is_suspended) {
+        await supabase.auth.signOut();
+        throw new Error("Your account has been suspended.");
+      }
+
+      // Check if user is admin
       const isAdmin = await checkIsAdmin();
       
       if (!isAdmin) {
