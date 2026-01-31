@@ -52,7 +52,7 @@ const App = () => {
           .eq('id', session.user.id)
           .single();
           
-        if (profile?.is_suspended) {
+        if ((profile as any)?.is_suspended) {
           console.log("User is suspended, signing out...");
           await supabase.auth.signOut();
           window.location.href = '/login'; // Force redirect

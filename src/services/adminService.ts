@@ -654,28 +654,14 @@ export const getAllUserLessonCounts = async (): Promise<UserLessonCount[]> => {
       
     if (profileError) throw profileError;
 
-    // Fetch lesson notes (just user_ids to minimize data transfer)
-    const { data: lessons, error: lessonError } = await supabase
-      .from('lesson_notes')
-      .select('user_id');
-      
-    if (lessonError) throw lessonError;
-    
-    // Aggregate lesson counts
-    const lessonCounts: {[key: string]: number} = {};
-    lessons?.forEach(l => {
-      if (l.user_id) {
-        lessonCounts[l.user_id] = (lessonCounts[l.user_id] || 0) + 1;
-      }
-    });
-    
-    // Map to result
+    // Use the pre-calculated count from the profile itself
+    // This assumes specific DB trigger logic is protecting 'lessons_generated' integrity
     return profiles.map((p: any) => ({
       userId: p.id,
-      email: p.email || 'N/A', // Note: profiles might not have email depending on setup
+      email: p.email || 'N/A', 
       fullName: p.full_name || 'Unknown',
       role: p.role || 'user',
-      lessonCount: lessonCounts[p.id] || 0,
+      lessonCount: p.lessons_generated || 0, // Use the DB column directly
       isSuspended: p.is_suspended || false,
       isPaymentExempt: p.is_payment_exempt || false,
     })).sort((a, b) => b.lessonCount - a.lessonCount);

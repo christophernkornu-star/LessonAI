@@ -37,7 +37,7 @@ export default function Login() {
           .eq('id', data.session.user.id)
           .single();
 
-        if (profile?.is_suspended) {
+        if ((profile as any)?.is_suspended) {
           await supabase.auth.signOut();
           throw new Error("Your account has been suspended. Please contact support.");
         }
