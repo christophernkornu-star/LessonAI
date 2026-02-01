@@ -630,6 +630,78 @@ export default function SchemeOfLearning() {
             <Button variant="outline" onClick={() => navigate("/dashboard")} className="flex-1 sm:flex-none">
               Back to Dashboard
             </Button>
+            <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="default" className="flex-1 sm:flex-none">
+                  <Upload className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Import Scheme</span>
+                  <span className="sm:hidden">Import</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Import Scheme of Learning</DialogTitle>
+                  <DialogDescription>
+                    Upload a file or import from the system curriculum.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="space-y-2">
+                    <Label className="font-semibold">Option A: Upload File</Label>
+                    <p className="text-sm text-muted-foreground">Supports CSV, PDF, DOCX with columns/fields for Week, Strand, Sub-strand, Content Standard, Indicators.</p>
+                     <div className="grid w-full max-w-sm items-center gap-1.5">
+                        <Label htmlFor="scheme-upload">Choose File</Label>
+                        <Input id="scheme-upload" type="file" onChange={handleFileUpload} accept=".csv,.xlsx,.xls,.docx,.pdf,.txt" />
+                     </div>
+                  </div>
+
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">Or Import System Data</span>
+                    </div>
+                  </div>
+
+                 <div className="space-y-2">
+                    <Label className="font-semibold">Option B: Generate from Database</Label>
+                     <div className="grid gap-2">
+                        <Select onValueChange={setImportLevel} value={importLevel}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select Class Level" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {CLASS_LEVELS.map(level => (
+                                    <SelectItem key={level.value} value={level.value}>{level.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        <Select onValueChange={setImportSubject} value={importSubject}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select Subject" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {SUBJECTS
+                                    .filter(s => {
+                                        if (importLevel === 'kg1' || importLevel === 'kg2') return s.id === 'language_literacy' || s.id === 'numeracy' || s.id === 'our_world_our_people' || s.id === 'creative_arts';
+                                        return true;
+                                    })
+                                    .map(subject => (
+                                    <SelectItem key={subject.id} value={subject.name}>{subject.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Button onClick={handleSystemImport} disabled={isLoading || !importLevel || !importSubject}>
+                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
+                            Load Standard Curriculum
+                        </Button>
+                     </div>
+                 </div>
+                </div>
+              </DialogContent>
+            </Dialog>
             {schemeData.length > 0 && (
               <>
                 <Button variant="outline" onClick={handleDownloadCSV} className="flex-1 sm:flex-none">
