@@ -34,9 +34,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Navbar } from "@/components/Navbar";
 import { BasicInfoStep } from "@/components/generator/BasicInfoStep";
-import * as ReactWindow from 'react-window';
-
-const List = (ReactWindow as any).FixedSizeList || (ReactWindow as any).default?.FixedSizeList;
+// Removed problematic react-window import
+// import { FixedSizeList as List } from 'react-window';
 
 const STEPS = ["Basic Info", "Details", "Review"];
 
@@ -2109,51 +2108,46 @@ const ImprovedGenerator = () => {
                 </Button>
               </div>
 
-              {/* Scheme Items List */}
-              <div className="h-[400px]">
+              {/* Scheme Items List - Simple Scroll (replaced virtual list) */}
+              <div className="h-[400px] overflow-y-auto pr-2 border rounded-md">
                 {filteredSchemeItems.length > 0 ? (
-                  <List
-                    height={400}
-                    itemCount={filteredSchemeItems.length}
-                    itemSize={120} // Adjusted size for content
-                    width="100%"
-                  >
-                    {({ index, style }) => {
-                        const item = filteredSchemeItems[index];
-                        return (
-                            <div style={style} className="px-1 py-1">
-                                <div
-                                    className="p-4 rounded-lg bg-muted cursor-pointer hover:bg-muted/80 transition h-full overflow-hidden"
-                                    onClick={() => handleApplyScheme(item)}
-                                >
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <p className="text-sm font-medium">{item.subject}</p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {item.classLevel} - {item.week}
-                                            </p>
-                                        </div>
-                                        <Button
-                                            variant="outline"
-                                            size="icon"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleApplyScheme(item);
-                                            }}
-                                        >
-                                            <Save className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                    <div className="mt-2">
-                                        <p className="text-xs text-muted-foreground line-clamp-2">
-                                            {item.indicators}
-                                        </p>
-                                    </div>
+                  <div className="space-y-2 p-2">
+                    {filteredSchemeItems.map((item) => (
+                      <div 
+                        key={item.id} 
+                        className="h-[120px] px-1 py-1"
+                      >
+                         <div
+                            className="p-4 rounded-lg bg-muted cursor-pointer hover:bg-muted/80 transition h-full overflow-hidden flex flex-col justify-between"
+                            onClick={() => handleApplyScheme(item)}
+                        >
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <p className="text-sm font-medium">{item.subject}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {item.classLevel} - {item.week}
+                                    </p>
                                 </div>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleApplyScheme(item);
+                                    }}
+                                >
+                                    <Save className="h-4 w-4" />
+                                </Button>
                             </div>
-                        );
-                    }}
-                  </List>
+                            <div className="mt-2">
+                                <p className="text-xs text-muted-foreground line-clamp-2">
+                                    {item.indicators}
+                                </p>
+                            </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <p className="text-sm text-center text-muted-foreground py-4">
                     No schemes found. You can paste new data below.

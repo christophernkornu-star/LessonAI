@@ -479,8 +479,9 @@ function ensurePerformanceIndicatorPrefix(text: string): string {
  */
 export async function generateGhanaLessonDocx(
   jsonData: string | GhanaLessonData | GhanaLessonData[],
-  fileName: string = "ghana-lesson-plan.docx"
-): Promise<void> {
+  fileName: string = "ghana-lesson-plan.docx",
+  returnBlob: boolean = false
+): Promise<Blob | void> {
   try {
     // Normalize input to array
     let dataArray: GhanaLessonData[] = [];
@@ -810,6 +811,11 @@ export async function generateGhanaLessonDocx(
 
     // Generate and download
     const blob = await Packer.toBlob(doc);
+    
+    if (returnBlob) {
+      return blob;
+    }
+
     saveAs(blob, fileName);
 
     console.log("Ghana lesson plan DOCX generated successfully:", fileName);

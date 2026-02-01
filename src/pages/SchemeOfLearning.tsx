@@ -6,16 +6,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, Trash2, FileText, Loader2, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, BookOpen, Calendar, Download, Globe, Play, Search, Sparkles } from "lucide-react";
 import { extractTextFromBrowserFile } from "@/services/fileParsingService";
-import { parseSchemeOfLearning } from "@/services/aiService";
+import { parseSchemeOfLearning, generateLessonNote, type LessonData } from "@/services/aiService";
 import { Navbar } from "@/components/Navbar";
 import { CurriculumService } from "@/services/curriculumService";
 import { SUBJECTS, CLASS_LEVELS } from "@/data/curriculum";
 import { supabase } from "@/integrations/supabase/client";
 import { TableSkeleton } from "@/components/LoadingSkeletons";
+import { LessonNotesService } from "@/services/lessonNotesService";
+import { deductPayment } from "@/services/paymentService";
+import { lessonTemplates } from "@/data/lessonTemplates";
+import { Progress } from "@/components/ui/progress";
+import { TimetableService } from "@/services/timetableService";
+import * as PizZipUtils from "pizzip/utils/index.js";
+import PizZip from "pizzip";
+import { saveAs } from "file-saver";
+import { generateGhanaLessonDocx, generateGhanaLessonFileName } from "@/services/ghanaLessonDocxService";
+import { Check, X } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface SchemeItem {
   id: string;
@@ -45,6 +56,24 @@ export default function SchemeOfLearning() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loadingStep, setLoadingStep] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [isBatchGenerating, setIsBatchGenerating] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, successes: 0, failures: 0 });
+  const [batchDialogConfig, setBatchDialogConfig] = useState<{ open: boolean; items: SchemeItem[] }>({ open: false, items: [] });
+  const [batchFormData, setBatchFormData] = useState({
+    date: new Date().toISOString().split("T")[0],
+    weekEnding: "",
+    duration: "60 mins",
+    classSize: "40",
+    templateId: "ghana-standard",
+    location: "",
+    term: "Second Term",
+    weekNumber: "", // Added state for editable week number
+    classLevel: "", // Added state for editable class level
+  });
+  const [batchResults, setBatchResults] = useState<{data: LessonData, content: string, id: string}[]>([]);
+  const [showBatchSuccess, setShowBatchSuccess] = useState(false);
+  const [batchStep, setBatchStep] = useState<'config' | 'review'>('config');
+  const [selectedBatchItems, setSelectedBatchItems] = useState<string[]>([]);
 
   useEffect(() => {
     const init = async () => {
@@ -637,17 +666,362 @@ export default function SchemeOfLearning() {
      return getWeekNumber(weekA) - getWeekNumber(weekB);
   });
   
-  const handleBatchGenerate = async (items: typeof schemeData) => {
-      // Placeholder for batch generation logic
-      // In a real implementation this would:
-      // 1. Show a modal with progress bar
-      // 2. Iterate through items
-      // 3. Navigate to generator or call API
+  const handleBatchGenerateClick = (items: typeof schemeData) => {
+      // Pre-fill from the first item if possible (term/weekEnding)
+      const first = items[0];
       
-      const confirmMsg = `This will generate ${items.length} lesson notes for ${items[0].week} (${items[0].classLevel}). Continue?`;
-      if (confirm(confirmMsg)) {
-          toast({ title: "Batch Generation Started", description: "Processing first item... (Feature in development)" });
-          handleGenerate(items[0]); // Start with first for now
+      // Normalize Class Level (Label -> Value)
+      // e.g. "Basic 1" -> "basic1"
+      let normalizedClassLevel = first.classLevel || "";
+      const matchedLevel = CLASS_LEVELS.find(l => 
+          l.label.toLowerCase() === normalizedClassLevel.toLowerCase() || 
+          l.value.toLowerCase() === normalizedClassLevel.toLowerCase()
+      );
+      if (matchedLevel) normalizedClassLevel = matchedLevel.value;
+
+      // Format Date (DD/MM/YYYY -> YYYY-MM-DD or other formats)
+      const formatDateForInput = (dateStr?: string) => {
+          if (!dateStr) return "";
+          // Check for DD/MM/YYYY
+          if (dateStr.includes('/')) {
+             const parts = dateStr.split('/');
+             if (parts.length === 3) {
+                 // Assume DD/MM/YYYY
+                 if (parts[2].length === 4) {
+                     return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                 }
+             }
+          }
+           // Attempt direct Date parse
+          const d = new Date(dateStr);
+          if (!isNaN(d.getTime())) {
+              return d.toISOString().split('T')[0];
+          }
+          return "";
+      };
+
+      const weekEndingFormatted = formatDateForInput(first.weekEnding);
+      
+      // Calculate likely Start Date (Mon) from Week Ending (Fri)
+      let startDateStr = new Date().toISOString().split("T")[0];
+      if (weekEndingFormatted) {
+          const d = new Date(weekEndingFormatted);
+          d.setDate(d.getDate() - 4); 
+          startDateStr = d.toISOString().split('T')[0];
+      }
+
+      setBatchFormData(prev => ({
+          ...prev,
+          weekEnding: weekEndingFormatted || prev.weekEnding,
+          term: first.term || prev.term,
+          weekNumber: first.week || prev.weekNumber || "Week 1",
+          classLevel: normalizedClassLevel || prev.classLevel || "",
+          date: startDateStr
+      }));
+      setBatchDialogConfig({ open: true, items });
+      setBatchStep('config');
+      setSelectedBatchItems(items.map(i => i.id)); // Select all by default
+  };
+  
+  const handleBatchGenerateConfirm = async () => {
+      // Filter items based on selection
+      const allItems = batchDialogConfig.items;
+      const items = allItems.filter(item => selectedBatchItems.includes(item.id));
+      
+      if (items.length === 0) {
+        toast({ title: "No Items Selected", description: "Please select at least one subject to generate.", variant: "destructive" });
+        return;
+      }
+
+      setBatchDialogConfig({ open: false, items: [] });
+      setBatchResults([]); // Reset results
+      
+      setIsBatchGenerating(true);
+      setBatchProgress({ current: 0, total: items.length, successes: 0, failures: 0 });
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+          toast({ title: "Authentication Error", description: "You must be logged in.", variant: "destructive" });
+          setIsBatchGenerating(false);
+          return;
+      }
+
+      // Default template
+      const template = lessonTemplates.find(t => t.id === batchFormData.templateId) || lessonTemplates[0];
+
+      // Notification for start
+      toast({
+          title: "Batch Generation Started",
+          description: `Generating notes for ${items.length} items. Please do not close this page.`,
+      });
+      
+      // Fetch Timetable ONCE for the Class/Term context (Assuming all items in batch are same Class/Term)
+      // If batch spans classes, this needs to move inside loop.
+      // Based on grouping, they are same class.
+      let timetableMap: Record<string, { frequency: number, days: string[] }> = {}; 
+      try {
+          // Robust Timetable Fetching Strategy
+          // 1. Try strict match (Class + Term)
+          let timetable = await TimetableService.getTimetable(user.id, items[0].classLevel, items[0].term);
+          
+          // 2. If failure, fetch ALL timetables and find best match for Class Level (ignoring term mismatch issues like "Term 2" vs "Second Term")
+          if (!timetable) {
+              console.log("Strict timetable match failed, trying loose class match...");
+              const allTimetables = await TimetableService.getAllTimetables(user.id);
+              
+              // Normalize item class level for comparison (remove spaces, lowercase)
+              const cleanItemClass = items[0].classLevel.toLowerCase().replace(/[^a-z0-9]/g, '');
+              
+              timetable = allTimetables.find(t => {
+                  const cleanTClass = t.class_level.toLowerCase().replace(/[^a-z0-9]/g, '');
+                  return cleanTClass === cleanItemClass || cleanTClass.includes(cleanItemClass) || cleanItemClass.includes(cleanTClass);
+              }) || null;
+              
+              if (timetable) console.log(`Found fallback timetable: ${timetable.class_level} - ${timetable.term}`);
+          }
+
+          if (timetable && timetable.subject_config) {
+             Object.entries(timetable.subject_config).forEach(([sub, config]) => {
+                  timetableMap[sub.toLowerCase()] = {
+                      frequency: (config as any).frequency || 1,
+                      days: (config as any).days || []
+                  };
+             });
+          } else {
+             console.warn("No compatible timetable found. Defaulting to 1 lesson per subject.");
+          }
+      } catch (err) {
+          console.warn("Could not fetch timetable for batch context:", err);
+      }
+
+      for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          
+          try {
+              // Update state for UI feedback
+              setBatchProgress(prev => ({ ...prev, current: i }));
+
+              // Get Lessons count from Timetable
+              // Match item.subject against timetable keys
+              const subjectKey = item.subject.toLowerCase();
+              
+              let numLessons = 1; // Default
+              let scheduledDays: string[] = [];
+
+              // Helper for lookup
+              const getTimetableInfo = (key: string) => {
+                  // Direct match
+                  if (timetableMap[key]) return timetableMap[key];
+                  // Fuzzy match
+                  const match = Object.keys(timetableMap).find(k => k.includes(key) || key.includes(k));
+                  return match ? timetableMap[match] : null;
+              };
+
+              const tInfo = getTimetableInfo(subjectKey);
+              if (tInfo) {
+                  numLessons = tInfo.frequency;
+                  scheduledDays = tInfo.days;
+              }
+
+              // Use batchFormData.weekNumber if provided by user, else fallback to scheme item.week
+              const finalWeekNumber = (batchFormData.weekNumber && batchFormData.weekNumber.trim() !== "") 
+                    ? batchFormData.weekNumber 
+                    : item.week;
+
+              // Map to LessonData
+              const lessonData: LessonData = {
+                  subject: item.subject,
+                  level: item.classLevel,
+                  strand: item.strand,
+                  subStrand: item.subStrand,
+                  contentStandard: item.contentStandard,
+                  indicators: item.indicators, 
+                  exemplars: item.exemplars,
+                  topic: item.subStrand || item.contentStandard || "Lesson",
+                  subTopic: "", 
+                  date: batchFormData.date,
+                  duration: batchFormData.duration,
+                  classSize: batchFormData.classSize,
+                  coreCompetencies: "", 
+                  learningObjectives: "", 
+                  teachingLearningResources: item.resources, 
+                  weekNumber: finalWeekNumber,
+                  weekEnding: batchFormData.weekEnding || item.weekEnding,
+                  term: batchFormData.term || item.term,
+                  numLessons: numLessons, // Pass full frequency
+                  scheduledDays: scheduledDays, 
+                  template: template,
+                  detailLevel: "moderate", 
+                  includeDiagrams: false,
+                  previousKnowledge: "",
+                  references: "",
+                  keywords: "",
+                  teacherActivities: "",
+                  learnerActivities: "",
+                  evaluation: "",
+                  assignment: "",
+                  remarks: "",
+                  teachingPhilosophy: "balanced",
+                  differentiation: "",
+                  assessment: "",
+                  reflection: "",
+                  gradeLevel: item.classLevel,
+                  unit: "",
+                  content: "",
+                  methodology: "",
+                  materials: "",
+                  objectives: "",
+                  lesson: 1, 
+                  location: batchFormData.location || "",
+              };
+
+              // Generate (AI Service will handle looping if numLessons > 1 and return a JSON Array string)
+              const content = await generateLessonNote(lessonData);
+              
+              // Pay (Estimate 3k tokens per lesson)
+              const estimatedTokens = Math.max(4000, numLessons * 2500);
+              const paymentResult = await deductPayment(estimatedTokens, 'lesson_note', numLessons);
+              
+              if (!paymentResult.success && paymentResult.error?.includes('Insufficient')) {
+                  toast({ title: "Payment Failed", description: `Stopped at ${item.subject}: ${paymentResult.error}`, variant: "destructive" });
+                  setBatchProgress(prev => ({ 
+                      ...prev, 
+                      current: prev.total, 
+                      failures: prev.failures + (items.length - i) 
+                  }));
+                  setIsBatchGenerating(false);
+                  return; 
+              }
+
+              // Save ONE record containing the Array
+              const note = await LessonNotesService.saveLessonNote(user.id, lessonData, content, template.id);
+              
+              // Add to results
+              setBatchResults(prev => [...prev, { data: lessonData, content: content, id: note.id }]);
+              setBatchProgress(prev => ({ ...prev, current: i + 1, successes: prev.successes + 1 }));
+
+          } catch (error) {
+              console.error(`Error generating batch item ${item.subject}:`, error);
+              setBatchProgress(prev => ({ ...prev, current: i + 1, failures: prev.failures + 1 }));
+              toast({ title: "Error", description: `Failed to generate ${item.subject}. Skipping...`, variant: "destructive" });
+          }
+      }
+
+      setIsBatchGenerating(false);
+      setShowBatchSuccess(true);
+      // Removed trigger toast
+  };
+
+  const handleDownloadAll = async () => {
+      if (batchResults.length === 0) return;
+
+      toast({ title: "Preparing Download", description: "Zipping files..." });
+      
+      try {
+          const zip = new PizZip();
+          
+          // Generate all docs
+          for (const result of batchResults) {
+            let finalData: any;
+            
+            // Try to parse the content as JSON first (high fidelity)
+            try {
+                // simple cleanup before parse
+                let cleanContent = result.content;
+                if (cleanContent.startsWith('```')) {
+                     cleanContent = cleanContent.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+                }
+                finalData = JSON.parse(cleanContent);
+                // Ensure it's an array or object
+                // FIX: Do NOT take [0] only! Pass the full array to the docx generator.
+                // It knows how to render multiple lessons.
+                // However, we need to ensure metadata is merged into ALL items in the array if missing
+                
+                if (Array.isArray(finalData)) {
+                    finalData = finalData.map((lesson: any) => ({
+                        ...lesson,
+                        weekEnding: lesson.weekEnding || result.data.weekEnding,
+                        class: lesson.class || result.data.level,
+                        subject: lesson.subject || result.data.subject,
+                        weekNumber: lesson.weekNumber || result.data.weekNumber,
+                    }));
+                } else {
+                    // Merge critical metadata from result.data if missing in AI response
+                    finalData.weekEnding = finalData.weekEnding || result.data.weekEnding;
+                    finalData.class = finalData.class || result.data.level;
+                    finalData.subject = finalData.subject || result.data.subject;
+                    finalData.weekNumber = finalData.weekNumber || result.data.weekNumber;
+                }
+                
+            } catch (e) {
+                // Fallback: Construct object wrapping the raw content
+                const phases = {
+                    phase1_starter: { duration: "10 mins", learnerActivities: "", resources: "" },
+                    phase2_newLearning: { duration: "40 mins", learnerActivities: result.content, resources: "" },
+                    phase3_reflection: { duration: "10 mins", learnerActivities: "", resources: "" }
+                };
+                
+                finalData = {
+                    weekEnding: result.data.weekEnding,
+                    day: new Date(result.data.date || "").toLocaleDateString('en-GB', { weekday: 'long' }),
+                    subject: result.data.subject,
+                    duration: result.data.duration,
+                    strand: result.data.strand,
+                    class: result.data.level,
+                    classSize: result.data.classSize,
+                    subStrand: result.data.subStrand,
+                    contentStandard: result.data.contentStandard,
+                    indicator: result.data.indicators,
+                    lesson: (result.data.lesson || 1).toString(),
+                    performanceIndicator: result.data.learningObjectives,
+                    coreCompetencies: result.data.coreCompetencies,
+                    keywords: result.data.keywords,
+                    reference: result.data.references,
+                    phases: phases
+                };
+            }
+
+            // Generate filename using the standard service
+            const fileName = generateGhanaLessonFileName(finalData);
+
+            // Ensure uniqueness without forced ugly suffixes unless essential
+            let uniqueName = fileName;
+            
+            // Check if this filename is already in the zip
+            if (zip.file(uniqueName)) {
+                 // Try adding "Lesson X" if applicable to differentiate
+                 if (result.data.subTopic && result.data.subTopic.includes("Lesson")) {
+                    const cleanLessonTag = result.data.subTopic.replace(/[^a-zA-Z0-9]/g, '-');
+                    uniqueName = fileName.replace('.docx', `-${cleanLessonTag}.docx`);
+                 }
+                 
+                 // If still duplicate, increment counter
+                 let counter = 1;
+                 while (zip.file(uniqueName)) {
+                     uniqueName = fileName.replace('.docx', `-${counter}.docx`);
+                     counter++;
+                 }
+            }
+
+            // Generate Blob (pass true for returnBlob)
+            // We pass finalData as the first arg. generateGhanaLessonDocx handles object inputs too.
+            const blob = await generateGhanaLessonDocx(finalData, uniqueName, true); 
+            
+            if (blob && blob instanceof Blob) {
+                const arrayBuffer = await blob.arrayBuffer();
+                zip.file(uniqueName, arrayBuffer);
+            } else {
+                console.error("Failed to generate blob for", uniqueName);
+            }
+          }
+          
+          const content = zip.generate({ type: "blob" });
+          saveAs(content, `Batch_Lesson_Notes_${new Date().toISOString().split('T')[0]}.zip`);
+          toast({ title: "Download Complete", description: "Your files have been downloaded." });
+          
+      } catch (e) {
+          console.error("Download error", e);
+          toast({ title: "Download Failed", description: "Could not create zip file.", variant: "destructive" });
       }
   };
 
@@ -762,6 +1136,264 @@ export default function SchemeOfLearning() {
           </div>
         </div>
 
+        {isBatchGenerating && (
+            <Card className="mb-6 p-4 border-primary/20 bg-primary/5">
+                <div className="space-y-2">
+                    <div className="flex justify-between text-sm font-medium">
+                        <span>Generating Batch Compliance...</span>
+                        <span>{batchProgress.current} / {batchProgress.total}</span>
+                    </div>
+                    <Progress value={(batchProgress.current / batchProgress.total) * 100} className="h-2" />
+                    <p className="text-xs text-muted-foreground">Please do not close this window. Processing lesson notes sequentially...</p>
+                </div>
+            </Card>
+        )}
+
+        <Dialog open={batchDialogConfig.open} onOpenChange={(open) => !open && setBatchDialogConfig({ open: false, items: [] })}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Create Your Lesson Note</DialogTitle>
+                        <DialogDescription>
+                            Follow the steps below to generate a professional lesson note
+                        </DialogDescription>
+                    </DialogHeader>
+
+                     {/* Stepper Visual Mock */}
+                    <div className="flex items-center justify-between px-8 py-4 mb-4">
+                        <div className="flex flex-col items-center">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mb-1 ${batchStep === 'config' ? 'bg-primary text-primary-foreground' : 'bg-green-600 text-white'}`}>
+                                {batchStep === 'review' ? <Check className="h-4 w-4" /> : '1'}
+                            </div>
+                            <span className="text-xs font-medium">Basic Info</span>
+                        </div>
+                        <div className={`h-[2px] w-24 ${batchStep === 'review' ? 'bg-green-600' : 'bg-muted'}`} />
+                        <div className="flex flex-col items-center">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mb-1 ${batchStep === 'review' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>2</div>
+                            <span className="text-xs font-medium">Review</span>
+                        </div>
+                    </div>
+
+                    <div className="min-h-[300px] py-4">
+                     {batchStep === 'config' ? (
+                         <div className="space-y-4">
+                            {/* Class Level - Read Only */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Class Level *</Label>
+                                     <Select 
+                                        value={batchFormData.classLevel} 
+                                        onValueChange={(val) => setBatchFormData({...batchFormData, classLevel: val})}
+                                     >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select Class" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {CLASS_LEVELS.map(level => (
+                                                <SelectItem key={level.value} value={level.value}>{level.label}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                     </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Class Size</Label>
+                                     <Input 
+                                        type="number"
+                                        value={batchFormData.classSize}
+                                        onChange={(e) => setBatchFormData({...batchFormData, classSize: e.target.value})} 
+                                     />
+                                </div>
+                            </div>
+                            
+                            {/* Location */}
+                            <div className="space-y-2">
+                                <Label>School Location (Optional)</Label>
+                                <Input 
+                                    value={batchFormData.location} 
+                                    onChange={(e) => setBatchFormData({...batchFormData, location: e.target.value})} 
+                                    placeholder="e.g. Kumasi, Ashanti Region"
+                                />
+                                <p className="text-[10px] text-muted-foreground">Helps generate examples relevant to your students' immediate environment.</p>
+                            </div>
+
+                            {/* Term & Week */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Term</Label>
+                                     <Select 
+                                        value={batchFormData.term} 
+                                        onValueChange={(val) => setBatchFormData({...batchFormData, term: val})}
+                                     >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="First Term">First Term</SelectItem>
+                                            <SelectItem value="Second Term">Second Term</SelectItem>
+                                            <SelectItem value="Third Term">Third Term</SelectItem>
+                                        </SelectContent>
+                                     </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Week Number</Label>
+                                    <Input 
+                                        value={batchFormData.weekNumber} 
+                                        onChange={(e) => setBatchFormData({...batchFormData, weekNumber: e.target.value})} 
+                                        placeholder="Week X"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Week Ending */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Week Ending</Label>
+                                    <Input 
+                                        type="date"
+                                        value={batchFormData.weekEnding} 
+                                        onChange={(e) => setBatchFormData({...batchFormData, weekEnding: e.target.value})} 
+                                    />
+                                </div>
+                                {/* Hidden Placeholder for layout balance if needed, or Date/Time */}
+                                <div className="space-y-2">
+                                   <Label>Teaching Date (Start)</Label>
+                                    <Input 
+                                        type="date" 
+                                        value={batchFormData.date} 
+                                        onChange={(e) => setBatchFormData({...batchFormData, date: e.target.value})} 
+                                    />
+                                </div>
+                            </div>
+                         </div>
+                     ) : (
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center mb-2">
+                                <Label className="text-base font-semibold">Select Subjects to Generate</Label>
+                                <div className="flex gap-2 text-sm">
+                                    <button 
+                                        className="text-primary hover:underline"
+                                        onClick={() => setSelectedBatchItems(batchDialogConfig.items.map(i => i.id))}
+                                    >
+                                        Select All
+                                    </button>
+                                    <span className="text-muted-foreground">|</span>
+                                    <button 
+                                        className="text-primary hover:underline"
+                                        onClick={() => setSelectedBatchItems([])}
+                                    >
+                                        Deselect All
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div className="border rounded-md max-h-[300px] overflow-y-auto p-4 space-y-3 bg-muted/20">
+                                {batchDialogConfig.items.map((item) => (
+                                    <div key={item.id} className="flex items-start space-x-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                                        <Checkbox 
+                                            id={`item-${item.id}`} 
+                                            checked={selectedBatchItems.includes(item.id)}
+                                            onCheckedChange={(checked) => {
+                                                if (checked) {
+                                                    setSelectedBatchItems(prev => [...prev, item.id]);
+                                                } else {
+                                                    setSelectedBatchItems(prev => prev.filter(id => id !== item.id));
+                                                }
+                                            }}
+                                        />
+                                        <div className="grid gap-1.5 leading-none w-full">
+                                            <label
+                                                htmlFor={`item-${item.id}`}
+                                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                            >
+                                                {item.subject}
+                                            </label>
+                                            <p className="text-xs text-muted-foreground line-clamp-1">
+                                                {item.strand}: {item.subStrand}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            <div className="bg-blue-50 text-blue-800 p-3 rounded-md text-xs flex items-center">
+                                <AlertCircle className="h-4 w-4 mr-2" />
+                                <span>You are about to generate <strong>{selectedBatchItems.length}</strong> lesson notes.</span>
+                            </div>
+                        </div>
+                     )}
+                    </div>
+                    <DialogFooter className="flex justify-between items-center sm:justify-between w-full">
+                         <div className="flex-1"></div> {/* Spacer */}
+                         <div className="flex gap-2">
+                            {batchStep === 'config' ? (
+                                <Button variant="outline" onClick={() => setBatchDialogConfig({ open: false, items: [] })}>
+                                    Cancel
+                                </Button>
+                            ) : (
+                                <Button variant="outline" onClick={() => setBatchStep('config')}>
+                                    <ChevronDown className="mr-2 h-4 w-4 rotate-90" />
+                                    Back
+                                </Button>
+                            )}
+                            
+                            {batchStep === 'config' ? (
+                                <Button onClick={() => setBatchStep('review')}>
+                                    Next
+                                    <ChevronRight className="ml-2 h-4 w-4" />
+                                </Button>
+                            ) : (
+                                <Button onClick={handleBatchGenerateConfirm} disabled={selectedBatchItems.length === 0} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                                    <Sparkles className="mr-2 h-4 w-4" />
+                                    Generate ({selectedBatchItems.length})
+                                </Button>
+                            )}
+                        </div>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={showBatchSuccess} onOpenChange={setShowBatchSuccess}>
+                <DialogContent className="sm:max-w-md md:max-w-lg lg:max-w-xl h-auto border-2 border-green-500/50">
+                    <DialogHeader className="text-center pb-6 border-b">
+                        <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                            <Check className="h-6 w-6 text-green-600" />
+                        </div>
+                        <DialogTitle className="text-2xl font-bold text-green-700">Batch Generation Complete!</DialogTitle>
+                        <DialogDescription className="text-base mt-2">
+                             Successfully generated {batchResults.length} out of {batchProgress.total} lesson notes.
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="py-6 space-y-4">
+                        <div className="rounded-lg bg-muted p-4 space-y-2">
+                            <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Summary</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <span className="text-2xl font-bold">{batchResults.length}</span>
+                                    <p className="text-xs text-muted-foreground">Successful</p>
+                                </div>
+                                <div>
+                                    <span className="text-2xl font-bold text-destructive">{batchProgress.failures}</span>
+                                    <p className="text-xs text-muted-foreground">Failed</p>
+                                </div>
+                            </div>
+                        </div>
+                        <p className="text-sm text-center text-muted-foreground">
+                            You can now download all your files in a single zip archive.
+                        </p>
+                    </div>
+
+                    <DialogFooter className="flex-col sm:flex-row gap-3">
+                        <Button variant="outline" className="w-full sm:w-auto" onClick={() => setShowBatchSuccess(false)}>
+                            Close
+                        </Button>
+                        <Button className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white" onClick={handleDownloadAll}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Download All ({batchResults.length})
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            
         {isLoading ? (
             <TableSkeleton />
         ) : (
@@ -785,7 +1417,7 @@ export default function SchemeOfLearning() {
                                     <Button 
                                         variant="secondary" 
                                         size="sm" 
-                                        onClick={() => handleBatchGenerate(items)}
+                                        onClick={() => handleBatchGenerateClick(items)}
                                         className="w-full sm:w-auto"
                                     >
                                         <Sparkles className="mr-2 h-4 w-4 text-primary" />

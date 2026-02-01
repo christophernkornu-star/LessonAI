@@ -47,11 +47,6 @@ export default function TimetableManagement() {
     getUser();
   }, [navigate]);
 
-  if (loading && !selectedClass && configuredClasses.length === 0) {
-      // Still verifying initial user load
-      return <div className="min-h-screen bg-gradient-subtle"><Navbar /><TableSkeleton /></div>;
-  }
-
   // Load timetable when class changes
   useEffect(() => {
     const loadTimetable = async () => {
@@ -79,6 +74,12 @@ export default function TimetableManagement() {
     };
     loadTimetable();
   }, [currentUser, selectedClass]);
+
+  // Moved conditional return AFTER all hooks
+  if (loading && !selectedClass && configuredClasses.length === 0) {
+      // Still verifying initial user load
+      return <div className="min-h-screen bg-gradient-subtle"><Navbar /><TableSkeleton /></div>;
+  }
 
   // Handler for toggling a day for a subject
   const handleDayToggle = (subject: string, day: string) => {
