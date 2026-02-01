@@ -461,45 +461,50 @@ export async function deductPayment(tokens: number, generationType: string = 'le
 
   const { cost } = await calculateCost(tokens);
 
-  // Get user's wallet balance
-  const profile = await getUserPaymentProfile();
-  if (!profile) {
-    return { success: false, error: 'Payment profile not found' };
+  // ATOMIC DEDUCTION via RPC
+  // This prevents race conditions when multiple generations happen simultaneously
+  const { data: result, error: rpcError } = await supabase
+    .rpc('deduct_account_balance', {
+      p_user_id: user.id,
+      p_amount: cost
+    });
+
+  if (rpcError) {
+      console.error("Payment RPC Error:", rpcError);
+      return { success: false, error: 'Payment processing failed' };
   }
 
-  if (profile.walletBalance < cost) {
-    return { 
-      success: false, 
-      error: `Insufficient balance. Required: GHS ${cost.toFixed(2)}, Available: GHS ${profile.walletBalance.toFixed(2)}`,
-      cost 
-    };
+  // Check RPC result logic
+  if (!result || !result.success) {
+      return { 
+          success: false, 
+          error: result?.error || 'Insufficient balance or profile error', 
+          cost 
+      };
   }
 
-  // Deduct from wallet
-  const { error: updateError } = await supabase
-    .from('user_payment_profiles')
-    .update({ 
-      wallet_balance: profile.walletBalance - cost,
-      total_spent: profile.totalSpent + cost,
-      total_tokens_used: profile.totalTokensUsed + tokens,
-    })
-    .eq('user_id', user.id);
-
-  if (updateError) {
-    return { success: false, error: 'Failed to process payment' };
-  }
-
-  // Log usage
-  await supabase.from('token_usage_log').insert({
+  // Log usage (asynchronous, non-blocking)
+  // We add total_tokens_used update separately or let it drift slightly as it's for stats
+  supabase.from('token_usage_log').insert({
     user_id: user.id,
     tokens_used: tokens,
     cost_charged: cost,
     generation_type: generationType,
     lesson_count: numLessons,
-  });
+  }).then(); // fire and forget log
+
+  // Optionally update local token stats if needed
+  supabase.rpc('increment_token_usage', { p_user_id: user.id, p_tokens: tokens }).then(() => {}, () => {});
 
   return { success: true, cost };
 }
+
+// Helper RPC for stats (optional, ensures stats are accurate over time)
+/* 
+create or replace function increment_token_usage(p_user_id uuid, p_tokens int) returns void as $$
+update user_payment_profiles set total_tokens_used = total_tokens_used + p_tokens where user_id = p_user_id;
+$$ language sql security definer;
+*/
 
 /**
  * Get user's transaction history

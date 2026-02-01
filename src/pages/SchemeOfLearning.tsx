@@ -794,25 +794,25 @@ export default function SchemeOfLearning() {
           console.warn("Could not fetch timetable for batch context:", err);
       }
 
-      for (let i = 0; i < items.length; i++) {
-          const item = items[i];
-          
+      // Process queue with concurrency limit of 3
+      const CONCURRENCY_LIMIT = 3;
+      let activePromises: Promise<void>[] = [];
+      let nextItemIndex = 0;
+      
+      const processItem = async (index: number) => {
+          const item = items[index];
           try {
-              // Update state for UI feedback
-              setBatchProgress(prev => ({ ...prev, current: i }));
-
-              // Get Lessons count from Timetable
-              // Match item.subject against timetable keys
-              const subjectKey = item.subject.toLowerCase();
+              // Update status - keep it simple, just increment processed
+              // (Cannot update current index strictly in order due to async)
               
+              // Get Lessons count from Timetable
+              const subjectKey = item.subject.toLowerCase();
               let numLessons = 1; // Default
               let scheduledDays: string[] = [];
 
               // Helper for lookup
               const getTimetableInfo = (key: string) => {
-                  // Direct match
                   if (timetableMap[key]) return timetableMap[key];
-                  // Fuzzy match
                   const match = Object.keys(timetableMap).find(k => k.includes(key) || key.includes(k));
                   return match ? timetableMap[match] : null;
               };
@@ -828,7 +828,6 @@ export default function SchemeOfLearning() {
                     ? batchFormData.weekNumber 
                     : item.week;
 
-              // Map to LessonData
               const lessonData: LessonData = {
                   subject: item.subject,
                   level: item.classLevel,
@@ -848,64 +847,63 @@ export default function SchemeOfLearning() {
                   weekNumber: finalWeekNumber,
                   weekEnding: batchFormData.weekEnding || item.weekEnding,
                   term: batchFormData.term || item.term,
-                  numLessons: numLessons, // Pass full frequency
+                  numLessons: numLessons, 
                   scheduledDays: scheduledDays, 
                   template: template,
                   detailLevel: "moderate", 
-                  includeDiagrams: false,
-                  previousKnowledge: "",
-                  references: "",
-                  keywords: "",
-                  teacherActivities: "",
-                  learnerActivities: "",
-                  evaluation: "",
-                  assignment: "",
-                  remarks: "",
-                  teachingPhilosophy: "balanced",
-                  differentiation: "",
-                  assessment: "",
-                  reflection: "",
-                  gradeLevel: item.classLevel,
-                  unit: "",
-                  content: "",
-                  methodology: "",
-                  materials: "",
-                  objectives: "",
-                  lesson: 1, 
+                  // ... rest unrelated fields
+                  includeDiagrams: false, previousKnowledge: "", references: "", keywords: "",
+                  teacherActivities: "", learnerActivities: "", evaluation: "", assignment: "",
+                  remarks: "", teachingPhilosophy: "balanced", differentiation: "", assessment: "",
+                  reflection: "", gradeLevel: item.classLevel, unit: "", content: "",
+                  methodology: "", materials: "", objectives: "", lesson: 1, 
                   location: batchFormData.location || "",
               };
 
-              // Generate (AI Service will handle looping if numLessons > 1 and return a JSON Array string)
+              // Generate
               const content = await generateLessonNote(lessonData);
               
-              // Pay (Estimate 3k tokens per lesson)
+              // Pay
               const estimatedTokens = Math.max(4000, numLessons * 2500);
               const paymentResult = await deductPayment(estimatedTokens, 'lesson_note', numLessons);
               
               if (!paymentResult.success && paymentResult.error?.includes('Insufficient')) {
                   toast({ title: "Payment Failed", description: `Stopped at ${item.subject}: ${paymentResult.error}`, variant: "destructive" });
-                  setBatchProgress(prev => ({ 
-                      ...prev, 
-                      current: prev.total, 
-                      failures: prev.failures + (items.length - i) 
-                  }));
-                  setIsBatchGenerating(false);
+                  setBatchProgress(prev => ({ ...prev, failures: prev.failures + 1 }));
                   return; 
               }
 
-              // Save ONE record containing the Array
+              // Save
               const note = await LessonNotesService.saveLessonNote(user.id, lessonData, content, template.id);
               
-              // Add to results
+              // Add result
               setBatchResults(prev => [...prev, { data: lessonData, content: content, id: note.id }]);
-              setBatchProgress(prev => ({ ...prev, current: i + 1, successes: prev.successes + 1 }));
+              setBatchProgress(prev => ({ ...prev, current: prev.current + 1, successes: prev.successes + 1 }));
 
           } catch (error) {
               console.error(`Error generating batch item ${item.subject}:`, error);
-              setBatchProgress(prev => ({ ...prev, current: i + 1, failures: prev.failures + 1 }));
+              setBatchProgress(prev => ({ ...prev, current: prev.current + 1, failures: prev.failures + 1 }));
               toast({ title: "Error", description: `Failed to generate ${item.subject}. Skipping...`, variant: "destructive" });
           }
+      };
+
+      // Loop until all items are processed
+      // We start CONCURRENCY_LIMIT items, and whenever one finishes, we start the next.
+      while (nextItemIndex < items.length) {
+          if (activePromises.length < CONCURRENCY_LIMIT) {
+              const p = processItem(nextItemIndex).then(() => {
+                  activePromises = activePromises.filter(ap => ap !== p);
+              });
+              activePromises.push(p);
+              nextItemIndex++;
+          } else {
+              // Wait for race of any promise to finish
+              await Promise.race(activePromises);
+          }
       }
+      
+      // key detail: wait for remaining active promises
+      await Promise.all(activePromises);
 
       setIsBatchGenerating(false);
       setShowBatchSuccess(true);
@@ -1016,7 +1014,31 @@ export default function SchemeOfLearning() {
           }
           
           const content = zip.generate({ type: "blob" });
-          saveAs(content, `Batch_Lesson_Notes_${new Date().toISOString().split('T')[0]}.zip`);
+          
+          // Generate meaningful zip filename: Class_Week (e.g. BS1_WK1.zip)
+          let zipName = `Batch_Lesson_Notes_${new Date().toISOString().split('T')[0]}.zip`; // Fallback
+          
+          if (batchResults.length > 0) {
+             const firstItem = batchResults[0].data;
+             // Helper to clean strings
+             const clean = (s: string) => (s || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+             
+             // Get Class Abbreviation (Basic 1 -> BS1, KG 1 -> KG1)
+             let classAbbr = clean(firstItem.level || "");
+             if (classAbbr.startsWith("BASIC")) classAbbr = classAbbr.replace("BASIC", "BS");
+             if (classAbbr.startsWith("BS") && !classAbbr.startsWith("BS")) classAbbr = "BS" + classAbbr.replace("B", "");
+
+             // Get Week Abbreviation (Week 1 -> WK1)
+             let weekVal = clean(firstItem.weekNumber || "");
+             if (weekVal.includes("WEEK")) weekVal = weekVal.replace("WEEK", "WK");
+             else if (/^\d+$/.test(weekVal)) weekVal = "WK" + weekVal;
+             
+             if (classAbbr && weekVal) {
+                 zipName = `${classAbbr}_${weekVal}.zip`;
+             }
+          }
+
+          saveAs(content, zipName);
           toast({ title: "Download Complete", description: "Your files have been downloaded." });
           
       } catch (e) {
