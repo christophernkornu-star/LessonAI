@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Trash2, FileText, Loader2, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, BookOpen, Calendar, Download, Globe, Play, Search } from "lucide-react";
+import { Upload, Trash2, FileText, Loader2, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, BookOpen, Calendar, Download, Globe, Play, Search, Sparkles } from "lucide-react";
 import { extractTextFromBrowserFile } from "@/services/fileParsingService";
 import { parseSchemeOfLearning } from "@/services/aiService";
 import { Navbar } from "@/components/Navbar";
@@ -596,6 +596,11 @@ export default function SchemeOfLearning() {
     document.body.removeChild(link);
   };
 
+  const getWeekNumber = (weekStr: string) => {
+    const match = weekStr.match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : 999;
+  };
+
   const filteredSchemeData = schemeData.filter((item) => {
     const searchLower = searchTerm.toLowerCase();
     return (
@@ -606,7 +611,45 @@ export default function SchemeOfLearning() {
       item.term?.toString().toLowerCase().includes(searchLower) ||
       item.week?.toString().toLowerCase().includes(searchLower)
     );
+  }).sort((a, b) => {
+     // Sort by Class Level first (optional but good)
+     if (a.classLevel < b.classLevel) return -1;
+     if (a.classLevel > b.classLevel) return 1;
+     
+     // Then by Week Number
+     return getWeekNumber(a.week) - getWeekNumber(b.week);
   });
+
+  // Group by Week + Class for Batch Display
+  const groupedData = filteredSchemeData.reduce((acc, item) => {
+    const key = `${item.classLevel} - ${item.week}`;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(item);
+    return acc;
+  }, {} as Record<string, typeof schemeData>);
+
+  // Helper to get consistent sorting for groups
+  const sortedGroupKeys = Object.keys(groupedData).sort((keyA, keyB) => {
+     const [classA, weekA] = keyA.split(' - ');
+     const [classB, weekB] = keyB.split(' - ');
+     
+     if (classA !== classB) return classA.localeCompare(classB);
+     return getWeekNumber(weekA) - getWeekNumber(weekB);
+  });
+  
+  const handleBatchGenerate = async (items: typeof schemeData) => {
+      // Placeholder for batch generation logic
+      // In a real implementation this would:
+      // 1. Show a modal with progress bar
+      // 2. Iterate through items
+      // 3. Navigate to generator or call API
+      
+      const confirmMsg = `This will generate ${items.length} lesson notes for ${items[0].week} (${items[0].classLevel}). Continue?`;
+      if (confirm(confirmMsg)) {
+          toast({ title: "Batch Generation Started", description: "Processing first item... (Feature in development)" });
+          handleGenerate(items[0]); // Start with first for now
+      }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
@@ -685,11 +728,11 @@ export default function SchemeOfLearning() {
                             <SelectContent>
                                 {SUBJECTS
                                     .filter(s => {
-                                        if (importLevel === 'kg1' || importLevel === 'kg2') return s.id === 'language_literacy' || s.id === 'numeracy' || s.id === 'our_world_our_people' || s.id === 'creative_arts';
+                                        if (importLevel === 'kg1' || importLevel === 'kg2') return s.value === 'language_literacy' || s.value === 'numeracy' || s.value === 'our_world_our_people' || s.value === 'creative_arts';
                                         return true;
                                     })
                                     .map(subject => (
-                                    <SelectItem key={subject.id} value={subject.name}>{subject.name}</SelectItem>
+                                    <SelectItem key={subject.value} value={subject.label}>{subject.label}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -722,42 +765,77 @@ export default function SchemeOfLearning() {
         {isLoading ? (
             <TableSkeleton />
         ) : (
-            <Card className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-secondary/20">
-                 <div className="rounded-md border">
-                        <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="w-[80px]">Week</TableHead>
-                                <TableHead className="w-[100px]">Ending</TableHead>
-                                <TableHead className="w-[100px]">Term</TableHead>
-                                <TableHead>Strand / Sub-Strand</TableHead>
-                                <TableHead className="w-[100px]">Action</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {filteredSchemeData.map((item) => (
-                                <TableRow key={item.id}>
-                                  <TableCell className="font-medium bg-muted/5">{item.week}</TableCell>
-                                  <TableCell>{item.weekEnding}</TableCell>
-                                  <TableCell>{item.term}</TableCell>
-                                  <TableCell>
-                                    <div className="flex flex-col gap-1">
-                                      <span className="font-medium">{item.strand}</span>
-                                      <span className="text-xs text-muted-foreground">{item.subStrand}</span>
+            <div className="space-y-8">
+                {sortedGroupKeys.length === 0 ? (
+                    <Card className="p-8 text-center text-muted-foreground bg-muted/20">
+                        No scheme data found. Import or add data to get started.
+                    </Card>
+                ) : (
+                    sortedGroupKeys.map(groupKey => {
+                        const items = groupedData[groupKey];
+                        const [className, weekName] = groupKey.split(' - ');
+                        
+                        return (
+                            <Card key={groupKey} className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-secondary/20 overflow-hidden">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+                                    <div>
+                                        <h3 className="text-lg font-semibold">{weekName}</h3>
+                                        <p className="text-sm text-muted-foreground">{className}</p>
                                     </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Button size="sm" onClick={() => handleGenerate(item)}>
-                                      <Play className="mr-2 h-4 w-4" />
-                                      Generate
+                                    <Button 
+                                        variant="secondary" 
+                                        size="sm" 
+                                        onClick={() => handleBatchGenerate(items)}
+                                        className="w-full sm:w-auto"
+                                    >
+                                        <Sparkles className="mr-2 h-4 w-4 text-primary" />
+                                        Generate Full Week ({items.length})
                                     </Button>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                        </Table>
-                 </div>
-            </Card>
+                                </div>
+                                <div className="rounded-md border bg-background/50">
+                                    <Table>
+                                        <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="w-[150px]">Subject</TableHead>
+                                            <TableHead>Strand / Sub-Strand</TableHead>
+                                            <TableHead className="hidden md:table-cell">Standard</TableHead>
+                                            <TableHead className="w-[100px]">Action</TableHead>
+                                        </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                        {items.map((item) => (
+                                            <TableRow key={item.id}>
+                                            <TableCell className="font-medium">
+                                                {item.subject}
+                                                {item.weekEnding && <div className="text-xs text-muted-foreground mt-1">Ends: {item.weekEnding}</div>}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-col gap-1">
+                                                <span className="font-medium text-sm">{item.strand}</span>
+                                                <span className="text-xs text-muted-foreground">{item.subStrand}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="hidden md:table-cell">
+                                                <span className="text-xs line-clamp-2" title={item.contentStandard}>
+                                                    {item.contentStandard}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Button size="sm" variant="ghost" onClick={() => handleGenerate(item)}>
+                                                <Play className="h-4 w-4" />
+                                                <span className="sr-only">Generate</span>
+                                                </Button>
+                                            </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </Card>
+                        );
+                    })
+                )}
+            </div>
         )}
       </div>
     </div>
