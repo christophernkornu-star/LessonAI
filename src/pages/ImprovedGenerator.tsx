@@ -34,7 +34,9 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Navbar } from "@/components/Navbar";
 import { BasicInfoStep } from "@/components/generator/BasicInfoStep";
-import { FixedSizeList as List } from 'react-window';
+import * as ReactWindow from 'react-window';
+
+const List = (ReactWindow as any).FixedSizeList || (ReactWindow as any).default?.FixedSizeList;
 
 const STEPS = ["Basic Info", "Details", "Review"];
 
