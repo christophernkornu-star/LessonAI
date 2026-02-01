@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Trash2, FileText, Loader2, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, BookOpen, Calendar, Download, Globe, Play } from "lucide-react";
+import { Upload, Trash2, FileText, Loader2, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, BookOpen, Calendar, Download, Globe, Play, Search } from "lucide-react";
 import { extractTextFromBrowserFile } from "@/services/fileParsingService";
 import { parseSchemeOfLearning } from "@/services/aiService";
 import { Navbar } from "@/components/Navbar";
@@ -43,6 +43,8 @@ export default function SchemeOfLearning() {
   const [importLevel, setImportLevel] = useState("");
   const [importSubject, setImportSubject] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
+  const [loadingStep, setLoadingStep] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     const init = async () => {
@@ -594,6 +596,18 @@ export default function SchemeOfLearning() {
     document.body.removeChild(link);
   };
 
+  const filteredSchemeData = schemeData.filter((item) => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      item.subject?.toLowerCase().includes(searchLower) ||
+      item.classLevel?.toLowerCase().includes(searchLower) ||
+      item.strand?.toLowerCase().includes(searchLower) ||
+      item.subStrand?.toLowerCase().includes(searchLower) ||
+      item.term?.toString().toLowerCase().includes(searchLower) ||
+      item.week?.toString().toLowerCase().includes(searchLower)
+    );
+  });
+
   return (
     <div className="min-h-screen bg-gradient-subtle">
       <Navbar />
@@ -603,7 +617,16 @@ export default function SchemeOfLearning() {
             <h1 className="text-3xl font-bold mb-2">Scheme of Learning</h1>
             <p className="text-muted-foreground">Manage and view your weekly schemes.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search class, subject, strand..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8"
+              />
+            </div>
             <Button variant="outline" onClick={() => navigate("/dashboard")} className="flex-1 sm:flex-none">
               Back to Dashboard
             </Button>
@@ -629,8 +652,8 @@ export default function SchemeOfLearning() {
         ) : (
             <Card className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-secondary/20">
                  <div className="rounded-md border">
-                    <Table>
-                    <TableHeader>
+                        <Table>
+                            <TableHeader>
                               <TableRow>
                                 <TableHead className="w-[80px]">Week</TableHead>
                                 <TableHead className="w-[100px]">Ending</TableHead>
@@ -640,7 +663,7 @@ export default function SchemeOfLearning() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {schemeData.map((item) => (
+                              {filteredSchemeData.map((item) => (
                                 <TableRow key={item.id}>
                                   <TableCell className="font-medium bg-muted/5">{item.week}</TableCell>
                                   <TableCell>{item.weekEnding}</TableCell>
@@ -660,7 +683,7 @@ export default function SchemeOfLearning() {
                                 </TableRow>
                               ))}
                             </TableBody>
-                    </Table>
+                        </Table>
                  </div>
             </Card>
         )}

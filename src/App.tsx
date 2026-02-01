@@ -41,8 +41,11 @@ const App = () => {
       const { data: { session }, error } = await supabase.auth.getSession();
       if (error) {
         console.error("Session error:", error);
-        if (error.message.includes("Refresh Token")) {
-          await supabase.auth.signOut();
+        if (error.message.includes("Refresh Token") || error.message.includes("refresh_token_not_found")) {
+          // Clear invalid session data
+          await supabase.auth.signOut().catch(console.error);
+          localStorage.removeItem('sb-uihhwjloceffyksuscmg-auth-token');
+          window.location.href = '/login';
         }
       } else if (session?.user) {
         // Verify suspension status on app load
