@@ -1299,8 +1299,8 @@ export default function SchemeOfLearning() {
         )}
 
         <Dialog open={batchDialogConfig.open} onOpenChange={(open) => !open && setBatchDialogConfig({ open: false, items: [] })}>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
-                    <DialogHeader>
+                <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+                    <DialogHeader className="px-1 sm:px-0">
                         <DialogTitle>Create Your Lesson Note</DialogTitle>
                         <DialogDescription>
                             Follow the steps below to generate a professional lesson note
@@ -1308,14 +1308,14 @@ export default function SchemeOfLearning() {
                     </DialogHeader>
 
                      {/* Stepper Visual Mock */}
-                    <div className="flex items-center justify-between px-4 sm:px-8 py-4 mb-4">
+                    <div className="flex items-center justify-between px-2 sm:px-8 py-4 mb-4">
                         <div className="flex flex-col items-center">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mb-1 ${batchStep === 'config' ? 'bg-primary text-primary-foreground' : 'bg-green-600 text-white'}`}>
                                 {batchStep === 'review' ? <Check className="h-4 w-4" /> : '1'}
                             </div>
                             <span className="text-xs font-medium">Basic Info</span>
                         </div>
-                        <div className={`h-[2px] w-16 sm:w-24 ${batchStep === 'review' ? 'bg-green-600' : 'bg-muted'}`} />
+                        <div className={`h-[2px] flex-1 mx-2 sm:mx-4 ${batchStep === 'review' ? 'bg-green-600' : 'bg-muted'}`} />
                         <div className="flex flex-col items-center">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mb-1 ${batchStep === 'review' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>2</div>
                             <span className="text-xs font-medium">Review</span>
@@ -1333,7 +1333,7 @@ export default function SchemeOfLearning() {
                                         value={batchFormData.classLevel} 
                                         onValueChange={(val) => setBatchFormData({...batchFormData, classLevel: val})}
                                      >
-                                        <SelectTrigger>
+                                        <SelectTrigger className="w-full">
                                             <SelectValue placeholder="Select Class" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -1385,7 +1385,7 @@ export default function SchemeOfLearning() {
                                         value={batchFormData.term} 
                                         onValueChange={(val) => setBatchFormData({...batchFormData, term: val})}
                                      >
-                                        <SelectTrigger>
+                                        <SelectTrigger className="w-full">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
