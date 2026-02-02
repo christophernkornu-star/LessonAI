@@ -463,7 +463,7 @@ export async function deductPayment(tokens: number, generationType: string = 'le
 
   // ATOMIC DEDUCTION via RPC
   // This prevents race conditions when multiple generations happen simultaneously
-  const { data: result, error: rpcError } = await supabase
+  const { data: result, error: rpcError } = await (supabase as any)
     .rpc('deduct_account_balance', {
       p_user_id: user.id,
       p_amount: cost
@@ -494,7 +494,7 @@ export async function deductPayment(tokens: number, generationType: string = 'le
   }).then(); // fire and forget log
 
   // Optionally update local token stats if needed
-  supabase.rpc('increment_token_usage', { p_user_id: user.id, p_tokens: tokens }).then(() => {}, () => {});
+  (supabase as any).rpc('increment_token_usage', { p_user_id: user.id, p_tokens: tokens }).then(() => {}, () => {});
 
   return { success: true, cost };
 }
@@ -606,23 +606,33 @@ export async function getAllUserPaymentProfiles(): Promise<any[]> {
     return [];
   }
 
-  const { data, error } = await supabase
+  // First get payment profiles
+  const { data: paymentProfiles, error } = await supabase
     .from('user_payment_profiles')
-    .select(`
-      *,
-      profiles:user_id (
-        id,
-        email,
-        full_name,
-        role
-      )
-    `)
+    .select('*')
     .order('created_at', { ascending: false });
 
   if (error) {
     console.error('Error fetching payment profiles:', error);
     return [];
   }
+
+  if (!paymentProfiles || paymentProfiles.length === 0) {
+    return [];
+  }
+
+  // Then get user details from profiles table
+  const userIds = paymentProfiles.map(p => p.user_id);
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, email, full_name, role')
+    .in('id', userIds);
+
+  // Merge the data
+  const data = paymentProfiles.map(payment => ({
+    ...payment,
+    profiles: profiles?.find(p => p.id === payment.user_id) || null
+  }));
 
   return data || [];
 }

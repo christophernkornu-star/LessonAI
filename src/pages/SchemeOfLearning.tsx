@@ -63,7 +63,7 @@ export default function SchemeOfLearning() {
     date: new Date().toISOString().split("T")[0],
     weekEnding: "",
     duration: "60 mins",
-    classSize: "40",
+    classSize: "",
     templateId: "ghana-standard",
     location: "",
     term: "Second Term",
@@ -759,6 +759,8 @@ export default function SchemeOfLearning() {
       // If batch spans classes, this needs to move inside loop.
       // Based on grouping, they are same class.
       let timetableMap: Record<string, { frequency: number, days: string[] }> = {}; 
+      let fetchedClassSize = "";
+
       try {
           // Robust Timetable Fetching Strategy
           // 1. Try strict match (Class + Term)
@@ -778,6 +780,10 @@ export default function SchemeOfLearning() {
               }) || null;
               
               if (timetable) console.log(`Found fallback timetable: ${timetable.class_level} - ${timetable.term}`);
+          }
+
+          if (timetable && timetable.class_size) {
+              fetchedClassSize = timetable.class_size.toString();
           }
 
           if (timetable && timetable.subject_config) {
@@ -840,7 +846,7 @@ export default function SchemeOfLearning() {
                   subTopic: "", 
                   date: batchFormData.date,
                   duration: batchFormData.duration,
-                  classSize: batchFormData.classSize,
+                  classSize: batchFormData.classSize || fetchedClassSize || "40",
                   coreCompetencies: "", 
                   learningObjectives: "", 
                   teachingLearningResources: item.resources, 
@@ -1220,6 +1226,7 @@ export default function SchemeOfLearning() {
                                     <Label>Class Size</Label>
                                      <Input 
                                         type="number"
+                                        placeholder="Auto from Timetable"
                                         value={batchFormData.classSize}
                                         onChange={(e) => setBatchFormData({...batchFormData, classSize: e.target.value})} 
                                      />
