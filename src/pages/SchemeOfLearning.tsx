@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Trash2, FileText, Loader2, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, BookOpen, Calendar, Download, Globe, Play, Search, Sparkles } from "lucide-react";
+import { Upload, Trash2, FileText, Loader2, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, BookOpen, Calendar, Download, Globe, Play, Search, Sparkles, MapPin } from "lucide-react";
 import { extractTextFromBrowserFile } from "@/services/fileParsingService";
 import { parseSchemeOfLearning, generateLessonNote, type LessonData } from "@/services/aiService";
 import { Navbar } from "@/components/Navbar";
@@ -65,7 +65,7 @@ export default function SchemeOfLearning() {
     duration: "60 mins",
     classSize: "",
     templateId: "ghana-standard",
-    location: "",
+    location: "Biriwa, Central Region",
     term: "Second Term",
     weekNumber: "", // Added state for editable week number
     classLevel: "", // Added state for editable class level
@@ -666,7 +666,9 @@ export default function SchemeOfLearning() {
      return getWeekNumber(weekA) - getWeekNumber(weekB);
   });
   
-  const handleBatchGenerateClick = (items: typeof schemeData) => {
+
+
+  const handleBatchGenerateClick = async (items: typeof schemeData) => {
       // Pre-fill from the first item if possible (term/weekEnding)
       const first = items[0];
       
@@ -710,12 +712,39 @@ export default function SchemeOfLearning() {
           startDateStr = d.toISOString().split('T')[0];
       }
 
+      let fetchedClassSize = "";
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+             // 1. Try strict match (Class + Term)
+             let timetable = await TimetableService.getTimetable(user.id, normalizedClassLevel, first.term);
+             
+             // 2. If failure, fetch ALL timetables and find best match
+             if (!timetable) {
+                 const allTimetables = await TimetableService.getAllTimetables(user.id);
+                 const cleanItemClass = normalizedClassLevel.toLowerCase().replace(/[^a-z0-9]/g, '');
+                 
+                 timetable = allTimetables.find(t => {
+                     const cleanTClass = t.class_level.toLowerCase().replace(/[^a-z0-9]/g, '');
+                     return cleanTClass === cleanItemClass || cleanTClass.includes(cleanItemClass) || cleanItemClass.includes(cleanTClass);
+                 }) || null;
+             }
+             
+             if (timetable && timetable.class_size) {
+                 fetchedClassSize = timetable.class_size.toString();
+             }
+        }
+      } catch (err) {
+         console.warn("Could not fetch timetable for class size:", err);
+      }
+
       setBatchFormData(prev => ({
           ...prev,
           weekEnding: weekEndingFormatted || prev.weekEnding,
           term: first.term || prev.term,
           weekNumber: first.week || prev.weekNumber || "Week 1",
           classLevel: normalizedClassLevel || prev.classLevel || "",
+          classSize: fetchedClassSize || prev.classSize,
           date: startDateStr
       }));
       setBatchDialogConfig({ open: true, items });
@@ -1053,6 +1082,69 @@ export default function SchemeOfLearning() {
       }
   };
 
+  const handleLocationDetect = () => {
+    if (!navigator.geolocation) {
+      toast({
+        title: "Geolocation not supported",
+        description: "Your browser does not support location detection.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Detecting location...",
+      description: "Please allow location access if prompted.",
+    });
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          // Use OpenStreetMap Nominatim API for reverse geocoding (free, no key required)
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+          );
+          const data = await response.json();
+          
+          const city = data.address.city || data.address.town || data.address.village || data.address.county;
+          const region = data.address.state || data.address.region;
+          const locationString = [city, region].filter(Boolean).join(", ");
+
+          if (locationString) {
+            setBatchFormData(prev => ({ ...prev, location: locationString }));
+            toast({
+              title: "Location detected",
+              description: `Set location to: ${locationString}`,
+            });
+          } else {
+             const coordString = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+             setBatchFormData(prev => ({ ...prev, location: coordString }));
+             toast({
+              title: "Location detected",
+              description: "Coordinates set. You can edit the location name manually.",
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching location name:", error);
+          toast({
+            title: "Could not get location name",
+            description: "Please enter your location manually.",
+            variant: "destructive",
+          });
+        }
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        toast({
+          title: "Location detection failed",
+          description: "Please enter your location manually.",
+          variant: "destructive",
+        });
+      }
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-subtle">
       <Navbar />
@@ -1236,11 +1328,22 @@ export default function SchemeOfLearning() {
                             {/* Location */}
                             <div className="space-y-2">
                                 <Label>School Location (Optional)</Label>
-                                <Input 
-                                    value={batchFormData.location} 
-                                    onChange={(e) => setBatchFormData({...batchFormData, location: e.target.value})} 
-                                    placeholder="e.g. Kumasi, Ashanti Region"
-                                />
+                                <div className="flex gap-2">
+                                    <Input 
+                                        value={batchFormData.location} 
+                                        onChange={(e) => setBatchFormData({...batchFormData, location: e.target.value})} 
+                                        placeholder="e.g. Biriwa, Central Region"
+                                    />
+                                    <Button 
+                                        type="button" 
+                                        variant="outline" 
+                                        size="icon"
+                                        onClick={handleLocationDetect}
+                                        title="Detect Location"
+                                    >
+                                        <MapPin className="h-4 w-4" />
+                                    </Button>
+                                </div>
                                 <p className="text-[10px] text-muted-foreground">Helps generate examples relevant to your students' immediate environment.</p>
                             </div>
 
