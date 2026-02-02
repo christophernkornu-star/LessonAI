@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -630,41 +630,47 @@ export default function SchemeOfLearning() {
     return match ? parseInt(match[1], 10) : 999;
   };
 
-  const filteredSchemeData = schemeData.filter((item) => {
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      item.subject?.toLowerCase().includes(searchLower) ||
-      item.classLevel?.toLowerCase().includes(searchLower) ||
-      item.strand?.toLowerCase().includes(searchLower) ||
-      item.subStrand?.toLowerCase().includes(searchLower) ||
-      item.term?.toString().toLowerCase().includes(searchLower) ||
-      item.week?.toString().toLowerCase().includes(searchLower)
-    );
-  }).sort((a, b) => {
-     // Sort by Class Level first (optional but good)
-     if (a.classLevel < b.classLevel) return -1;
-     if (a.classLevel > b.classLevel) return 1;
-     
-     // Then by Week Number
-     return getWeekNumber(a.week) - getWeekNumber(b.week);
-  });
+  const filteredSchemeData = useMemo(() => {
+    return schemeData.filter((item) => {
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        item.subject?.toLowerCase().includes(searchLower) ||
+        item.classLevel?.toLowerCase().includes(searchLower) ||
+        item.strand?.toLowerCase().includes(searchLower) ||
+        item.subStrand?.toLowerCase().includes(searchLower) ||
+        item.term?.toString().toLowerCase().includes(searchLower) ||
+        item.week?.toString().toLowerCase().includes(searchLower)
+      );
+    }).sort((a, b) => {
+       // Sort by Class Level first (optional but good)
+       if (a.classLevel < b.classLevel) return -1;
+       if (a.classLevel > b.classLevel) return 1;
+       
+       // Then by Week Number
+       return getWeekNumber(a.week) - getWeekNumber(b.week);
+    });
+  }, [schemeData, searchTerm]);
 
   // Group by Week + Class for Batch Display
-  const groupedData = filteredSchemeData.reduce((acc, item) => {
-    const key = `${item.classLevel} - ${item.week}`;
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(item);
-    return acc;
-  }, {} as Record<string, typeof schemeData>);
+  const groupedData = useMemo(() => {
+    return filteredSchemeData.reduce((acc, item) => {
+      const key = `${item.classLevel} - ${item.week}`;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(item);
+      return acc;
+    }, {} as Record<string, typeof schemeData>);
+  }, [filteredSchemeData]);
 
   // Helper to get consistent sorting for groups
-  const sortedGroupKeys = Object.keys(groupedData).sort((keyA, keyB) => {
-     const [classA, weekA] = keyA.split(' - ');
-     const [classB, weekB] = keyB.split(' - ');
-     
-     if (classA !== classB) return classA.localeCompare(classB);
-     return getWeekNumber(weekA) - getWeekNumber(weekB);
-  });
+  const sortedGroupKeys = useMemo(() => {
+    return Object.keys(groupedData).sort((keyA, keyB) => {
+       const [classA, weekA] = keyA.split(' - ');
+       const [classB, weekB] = keyB.split(' - ');
+       
+       if (classA !== classB) return classA.localeCompare(classB);
+       return getWeekNumber(weekA) - getWeekNumber(weekB);
+    });
+  }, [groupedData]);
   
 
 
