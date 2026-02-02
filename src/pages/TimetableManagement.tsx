@@ -131,10 +131,14 @@ export default function TimetableManagement() {
     }
   };
 
-  // Filter subjects relevant to selected class if possible, otherwise show all
-  // Simple logic: If subject has 'levels' property, check if it includes selectedClass (normalized)
-  // But our levels form 'basic1' doesn't match 'Basic 1' perfectly without normalization
-  const relevantSubjects = SUBJECTS.map(s => s.label); 
+  // Filter subjects relevant to selected class
+  const relevantSubjects = SUBJECTS.filter(s => {
+    // Find the value associated with the selected class label
+    const selectedLevelValue = CLASS_LEVELS.find(l => l.label === selectedClass)?.value;
+    // If no valid level selected or subject has no restrictions, include it (though UI hides this section if no class selected)
+    // Otherwise check if subject levels include the selected level value
+    return !selectedLevelValue || !s.levels || s.levels.includes(selectedLevelValue);
+  }).map(s => s.label); 
 
   return (
     <div className="min-h-screen bg-gray-50/50">

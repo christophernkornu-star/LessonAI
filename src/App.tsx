@@ -38,37 +38,55 @@ const App = () => {
   useEffect(() => {
     // Handle Supabase auth errors (like invalid refresh token)
     const checkSession = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (error) {
-        console.error("Session error:", error);
-        if (error.message.includes("Refresh Token") || error.message.includes("refresh_token_not_found")) {
-          // Clear invalid session data
-          await supabase.auth.signOut().catch(console.error);
-          localStorage.removeItem('sb-uihhwjloceffyksuscmg-auth-token');
-          window.location.href = '/login';
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error("Session error:", error);
+          if (error.message.includes("Refresh Token") || error.message.includes("refresh_token_not_found")) {
+            // Clear invalid session data
+            await supabase.auth.signOut().catch(console.error);
+            localStorage.removeItem('sb-uihhwjloceffyksuscmg-auth-token');
+            // Also clear any other supabase tokens to be safe
+            Object.keys(localStorage).forEach(key => {
+              if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+                localStorage.removeItem(key);
+              }
+            });
+            window.location.href = '/login';
+          }
+        } else if (session?.user) {
+          // Verify suspension status on app load
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_suspended')
+            .eq('id', session.user.id)
+            .single();
+            
+          if ((profile as any)?.is_suspended) {
+            console.log("User is suspended, signing out...");
+            await supabase.auth.signOut();
+            window.location.href = '/login'; // Force redirect
+          }
         }
-      } else if (session?.user) {
-        // Verify suspension status on app load
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('is_suspended')
-          .eq('id', session.user.id)
-          .single();
-          
-        if ((profile as any)?.is_suspended) {
-          console.log("User is suspended, signing out...");
-          await supabase.auth.signOut();
-          window.location.href = '/login'; // Force redirect
-        }
+      } catch (e) {
+        console.error("Unexpected auth error:", e);
       }
     };
     
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT') {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESH_ERRORED' as any) {
         // Ensure local storage is cleared
-        localStorage.removeItem('sb-uihhwjloceffyksuscmg-auth-token'); // Adjust key if needed or rely on supabase
+        localStorage.removeItem('sb-uihhwjloceffyksuscmg-auth-token'); 
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+            localStorage.removeItem(key);
+          }
+        });
+        if (event === 'TOKEN_REFRESH_ERRORED' as any) {
+           window.location.href = '/login';
+        }
       }
     });
 
