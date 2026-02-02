@@ -1101,7 +1101,7 @@ export default function SchemeOfLearning() {
       async (position) => {
         try {
           const { latitude, longitude } = position.coords;
-          // Use OpenStreetMap Nominatim API for reverse geocoding (free, no key required)
+          // Use OpenStreetMap N
           const response = await fetch(
             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
           );
@@ -1143,6 +1143,29 @@ export default function SchemeOfLearning() {
         });
       }
     );
+  };
+
+  const handleDeleteGroup = (items: SchemeItem[]) => {
+     if (confirm("Are you sure you want to delete this entire week/group?")) {
+         const idsToDelete = items.map(i => i.id);
+         setSchemeData(prev => {
+             const newData = prev.filter(item => !idsToDelete.includes(item.id));
+             localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+             return newData;
+         });
+         toast({ title: "Deleted", description: "Week group deleted successfully." });
+     }
+  };
+
+  const handleDeleteItem = (id: string) => {
+      if (confirm("Delete this item?")) {
+          setSchemeData(prev => {
+              const newData = prev.filter(item => item.id !== id);
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+              return newData;
+          });
+          toast({ title: "Deleted", description: "Item deleted." });
+      }
   };
 
   return (
@@ -1546,15 +1569,26 @@ export default function SchemeOfLearning() {
                                         <h3 className="text-lg font-semibold">{weekName}</h3>
                                         <p className="text-sm text-muted-foreground">{className}</p>
                                     </div>
-                                    <Button 
-                                        variant="secondary" 
-                                        size="sm" 
-                                        onClick={() => handleBatchGenerateClick(items)}
-                                        className="w-full sm:w-auto"
-                                    >
-                                        <Sparkles className="mr-2 h-4 w-4 text-primary" />
-                                        Generate Full Week ({items.length})
-                                    </Button>
+                                    <div className="flex gap-2">
+                                        <Button 
+                                            variant="destructive" 
+                                            size="sm" 
+                                            onClick={() => handleDeleteGroup(items)}
+                                            className="w-full sm:w-auto"
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            Delete Week
+                                        </Button>
+                                        <Button 
+                                            variant="secondary" 
+                                            size="sm" 
+                                            onClick={() => handleBatchGenerateClick(items)}
+                                            className="w-full sm:w-auto"
+                                        >
+                                            <Sparkles className="mr-2 h-4 w-4 text-primary" />
+                                            Generate Full Week ({items.length})
+                                        </Button>
+                                    </div>
                                 </div>
                                 <div className="rounded-md border bg-background/50">
                                     <Table>
@@ -1585,10 +1619,16 @@ export default function SchemeOfLearning() {
                                                 </span>
                                             </TableCell>
                                             <TableCell>
-                                                <Button size="sm" variant="ghost" onClick={() => handleGenerate(item)}>
-                                                <Play className="h-4 w-4" />
-                                                <span className="sr-only">Generate</span>
-                                                </Button>
+                                                <div className="flex gap-1">
+                                                    <Button size="sm" variant="ghost" onClick={() => handleGenerate(item)}>
+                                                        <Play className="h-4 w-4" />
+                                                        <span className="sr-only">Generate</span>
+                                                    </Button>
+                                                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive/90" onClick={() => handleDeleteItem(item.id)}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                        <span className="sr-only">Delete</span>
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                             </TableRow>
                                         ))}
