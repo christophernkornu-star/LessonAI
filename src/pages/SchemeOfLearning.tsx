@@ -1299,7 +1299,7 @@ export default function SchemeOfLearning() {
         )}
 
         <Dialog open={batchDialogConfig.open} onOpenChange={(open) => !open && setBatchDialogConfig({ open: false, items: [] })}>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
                     <DialogHeader>
                         <DialogTitle>Create Your Lesson Note</DialogTitle>
                         <DialogDescription>
@@ -1308,14 +1308,14 @@ export default function SchemeOfLearning() {
                     </DialogHeader>
 
                      {/* Stepper Visual Mock */}
-                    <div className="flex items-center justify-between px-8 py-4 mb-4">
+                    <div className="flex items-center justify-between px-4 sm:px-8 py-4 mb-4">
                         <div className="flex flex-col items-center">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mb-1 ${batchStep === 'config' ? 'bg-primary text-primary-foreground' : 'bg-green-600 text-white'}`}>
                                 {batchStep === 'review' ? <Check className="h-4 w-4" /> : '1'}
                             </div>
                             <span className="text-xs font-medium">Basic Info</span>
                         </div>
-                        <div className={`h-[2px] w-24 ${batchStep === 'review' ? 'bg-green-600' : 'bg-muted'}`} />
+                        <div className={`h-[2px] w-16 sm:w-24 ${batchStep === 'review' ? 'bg-green-600' : 'bg-muted'}`} />
                         <div className="flex flex-col items-center">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mb-1 ${batchStep === 'review' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>2</div>
                             <span className="text-xs font-medium">Review</span>
@@ -1362,6 +1362,7 @@ export default function SchemeOfLearning() {
                                         value={batchFormData.location} 
                                         onChange={(e) => setBatchFormData({...batchFormData, location: e.target.value})} 
                                         placeholder="e.g. Biriwa, Central Region"
+                                        className="flex-1"
                                     />
                                     <Button 
                                         type="button" 
@@ -1427,7 +1428,7 @@ export default function SchemeOfLearning() {
                          </div>
                      ) : (
                         <div className="space-y-4">
-                            <div className="flex justify-between items-center mb-2">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
                                 <Label className="text-base font-semibold">Select Subjects to Generate</Label>
                                 <div className="flex gap-2 text-sm">
                                     <button 
@@ -1482,27 +1483,27 @@ export default function SchemeOfLearning() {
                         </div>
                      )}
                     </div>
-                    <DialogFooter className="flex justify-between items-center sm:justify-between w-full">
-                         <div className="flex-1"></div> {/* Spacer */}
-                         <div className="flex gap-2">
+                    <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-between w-full gap-3 sm:gap-0">
+                         <div className="hidden sm:block flex-1"></div> {/* Spacer */}
+                         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                             {batchStep === 'config' ? (
-                                <Button variant="outline" onClick={() => setBatchDialogConfig({ open: false, items: [] })}>
+                                <Button variant="outline" onClick={() => setBatchDialogConfig({ open: false, items: [] })} className="w-full sm:w-auto">
                                     Cancel
                                 </Button>
                             ) : (
-                                <Button variant="outline" onClick={() => setBatchStep('config')}>
+                                <Button variant="outline" onClick={() => setBatchStep('config')} className="w-full sm:w-auto">
                                     <ChevronDown className="mr-2 h-4 w-4 rotate-90" />
                                     Back
                                 </Button>
                             )}
                             
                             {batchStep === 'config' ? (
-                                <Button onClick={() => setBatchStep('review')}>
+                                <Button onClick={() => setBatchStep('review')} className="w-full sm:w-auto">
                                     Next
                                     <ChevronRight className="ml-2 h-4 w-4" />
                                 </Button>
                             ) : (
-                                <Button onClick={handleBatchGenerateConfirm} disabled={selectedBatchItems.length === 0} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                                <Button onClick={handleBatchGenerateConfirm} disabled={selectedBatchItems.length === 0} className="bg-primary text-primary-foreground hover:bg-primary/90 w-full sm:w-auto">
                                     <Sparkles className="mr-2 h-4 w-4" />
                                     Generate ({selectedBatchItems.length})
                                 </Button>
