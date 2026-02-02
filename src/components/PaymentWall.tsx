@@ -237,7 +237,7 @@ export function PaymentWall({ numLessons, onPaymentComplete, onCancel }: Payment
               {/* Top Up Amount */}
               <div className="space-y-2">
                 <Label>Top Up Amount (GHS)</Label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   {[2, 5, 10, 20].map((amount) => (
                     <Button
                       key={amount}

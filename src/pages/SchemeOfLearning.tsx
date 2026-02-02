@@ -1575,7 +1575,7 @@ export default function SchemeOfLearning() {
                                         <h3 className="text-lg font-semibold">{weekName}</h3>
                                         <p className="text-sm text-muted-foreground">{className}</p>
                                     </div>
-                                    <div className="flex gap-2">
+                                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                                         <Button 
                                             variant="destructive" 
                                             size="sm" 
