@@ -44,6 +44,7 @@ interface SchemeItem {
 }
 
 const STORAGE_KEY = "scheme_of_learning_data";
+const BATCH_FORM_STORAGE_KEY = "batch_form_data";
 
 export default function SchemeOfLearning() {
   const navigate = useNavigate();
@@ -74,6 +75,23 @@ export default function SchemeOfLearning() {
   const [showBatchSuccess, setShowBatchSuccess] = useState(false);
   const [batchStep, setBatchStep] = useState<'config' | 'review'>('config');
   const [selectedBatchItems, setSelectedBatchItems] = useState<string[]>([]);
+  
+  // Persistence for batch form data
+  useEffect(() => {
+    const saved = localStorage.getItem(BATCH_FORM_STORAGE_KEY);
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            setBatchFormData(prev => ({ ...prev, ...parsed }));
+        } catch (e) {
+            console.error("Failed to load saved batch form", e);
+        }
+    }
+  }, []);
+
+  useEffect(() => {
+      localStorage.setItem(BATCH_FORM_STORAGE_KEY, JSON.stringify(batchFormData));
+  }, [batchFormData]);
 
   useEffect(() => {
     const init = async () => {
@@ -1299,32 +1317,34 @@ export default function SchemeOfLearning() {
         )}
 
         <Dialog open={batchDialogConfig.open} onOpenChange={(open) => !open && setBatchDialogConfig({ open: false, items: [] })}>
-                <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-                    <DialogHeader className="px-1 sm:px-0">
-                        <DialogTitle>Create Your Lesson Note</DialogTitle>
-                        <DialogDescription>
-                            Follow the steps below to generate a professional lesson note
-                        </DialogDescription>
-                    </DialogHeader>
+                <DialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] w-[95vw] max-w-2xl max-h-[90vh] flex flex-col p-0">
+                    <div className="p-4 sm:p-6 pb-0">
+                        <DialogHeader className="px-1 sm:px-0">
+                            <DialogTitle>Create Your Lesson Note</DialogTitle>
+                            <DialogDescription>
+                                Follow the steps below to generate a professional lesson note
+                            </DialogDescription>
+                        </DialogHeader>
 
-                     {/* Stepper Visual Mock */}
-                    <div className="flex items-center justify-between px-2 sm:px-8 py-4 mb-4">
-                        <div className="flex flex-col items-center">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mb-1 ${batchStep === 'config' ? 'bg-primary text-primary-foreground' : 'bg-green-600 text-white'}`}>
-                                {batchStep === 'review' ? <Check className="h-4 w-4" /> : '1'}
+                        {/* Stepper Visual Mock */}
+                        <div className="flex items-center justify-between px-2 sm:px-8 py-4 mb-2">
+                            <div className="flex flex-col items-center">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mb-1 ${batchStep === 'config' ? 'bg-primary text-primary-foreground' : 'bg-green-600 text-white'}`}>
+                                    {batchStep === 'review' ? <Check className="h-4 w-4" /> : '1'}
+                                </div>
+                                <span className="text-xs font-medium">Basic Info</span>
                             </div>
-                            <span className="text-xs font-medium">Basic Info</span>
-                        </div>
-                        <div className={`h-[2px] flex-1 mx-2 sm:mx-4 ${batchStep === 'review' ? 'bg-green-600' : 'bg-muted'}`} />
-                        <div className="flex flex-col items-center">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mb-1 ${batchStep === 'review' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>2</div>
-                            <span className="text-xs font-medium">Review</span>
+                            <div className={`h-[2px] flex-1 mx-2 sm:mx-4 ${batchStep === 'review' ? 'bg-green-600' : 'bg-muted'}`} />
+                            <div className="flex flex-col items-center">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold mb-1 ${batchStep === 'review' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>2</div>
+                                <span className="text-xs font-medium">Review</span>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="min-h-[300px] py-4">
+                    <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-2">
                      {batchStep === 'config' ? (
-                         <div className="space-y-4">
+                         <div className="space-y-4 pb-4">
                             {/* Class Level - Read Only */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
@@ -1427,7 +1447,7 @@ export default function SchemeOfLearning() {
                             </div>
                          </div>
                      ) : (
-                        <div className="space-y-4">
+                        <div className="space-y-4 pb-4">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
                                 <Label className="text-base font-semibold">Select Subjects to Generate</Label>
                                 <div className="flex gap-2 text-sm">
@@ -1449,22 +1469,29 @@ export default function SchemeOfLearning() {
                             
                             <div className="border rounded-md max-h-[300px] overflow-y-auto p-4 space-y-3 bg-muted/20">
                                 {batchDialogConfig.items.map((item) => (
-                                    <div key={item.id} className="flex items-start space-x-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                                    <div 
+                                        key={item.id} 
+                                        className="flex items-start space-x-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer group"
+                                        onClick={() => {
+                                            if (selectedBatchItems.includes(item.id)) {
+                                                setSelectedBatchItems(prev => prev.filter(id => id !== item.id));
+                                            } else {
+                                                setSelectedBatchItems(prev => [...prev, item.id]);
+                                            }
+                                        }}
+                                    >
                                         <Checkbox 
                                             id={`item-${item.id}`} 
                                             checked={selectedBatchItems.includes(item.id)}
                                             onCheckedChange={(checked) => {
-                                                if (checked) {
-                                                    setSelectedBatchItems(prev => [...prev, item.id]);
-                                                } else {
-                                                    setSelectedBatchItems(prev => prev.filter(id => id !== item.id));
-                                                }
+                                                // Event handled by parent div logic, but we keep this for a11y
                                             }}
+                                            className="mt-1"
                                         />
-                                        <div className="grid gap-1.5 leading-none w-full">
+                                        <div className="grid gap-1.5 leading-none w-full pointer-events-none group-hover:text-primary transition-colors">
                                             <label
                                                 htmlFor={`item-${item.id}`}
-                                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                                className="text-sm font-medium leading-none"
                                             >
                                                 {item.subject}
                                             </label>
@@ -1483,6 +1510,7 @@ export default function SchemeOfLearning() {
                         </div>
                      )}
                     </div>
+                    <div className="p-4 sm:p-6 pt-2 border-t mt-auto bg-background rounded-b-lg">
                     <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-between w-full gap-3 sm:gap-0">
                          <div className="hidden sm:block flex-1"></div> {/* Spacer */}
                          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -1510,6 +1538,7 @@ export default function SchemeOfLearning() {
                             )}
                         </div>
                     </DialogFooter>
+                    </div>
                 </DialogContent>
             </Dialog>
 
