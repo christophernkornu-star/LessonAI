@@ -679,7 +679,7 @@ const AdminDashboard = () => {
                         <CardTitle>Top Contributors</CardTitle>
                         <CardDescription>Most active users in the last 30 days</CardDescription>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -831,7 +831,7 @@ const AdminDashboard = () => {
                     <CardTitle>All Users</CardTitle>
                     <CardDescription>List of all registered users and their lesson generation counts</CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>

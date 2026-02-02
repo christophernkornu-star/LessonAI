@@ -1596,7 +1596,7 @@ export default function SchemeOfLearning() {
                                         </Button>
                                     </div>
                                 </div>
-                                <div className="rounded-md border bg-background/50">
+                                <div className="rounded-md border bg-background/50 overflow-x-auto">
                                     <Table>
                                         <TableHeader>
                                         <TableRow>
