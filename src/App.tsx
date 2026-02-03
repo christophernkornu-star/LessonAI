@@ -78,12 +78,22 @@ const App = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESH_ERRORED' as any) {
         // Ensure local storage is cleared
-        localStorage.removeItem('sb-uihhwjloceffyksuscmg-auth-token'); 
+        localStorage.removeItem('sb-uihhwjloceffyksuscmg-auth-token');
+        
+        // Clear application specific data to prevent data leaking between users
+        localStorage.removeItem('scheme_of_learning_data');
+        localStorage.removeItem('batch_form_data');
+        
+        // Clear draft data
         Object.keys(localStorage).forEach(key => {
           if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
             localStorage.removeItem(key);
           }
+          if (key.startsWith('draft_')) {
+            localStorage.removeItem(key);
+          }
         });
+
         if (event === 'TOKEN_REFRESH_ERRORED' as any) {
            window.location.href = '/login';
         }
