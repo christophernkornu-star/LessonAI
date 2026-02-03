@@ -248,7 +248,17 @@ const Dashboard = () => {
       
       setAchievements(achievementsData);
       setInsights(insightsData);
-      setQualityMetrics(null); // Skipping expensive quality metrics fetch
+      
+      // Calculate Quality Metrics locally to fix "Total Lessons: 0"
+      const totalLessons = notesData.length;
+      const favoritesCount = notesData.filter((n: any) => n.is_favorite).length;
+      setQualityMetrics({
+        total_lessons: totalLessons,
+        favorites_count: favoritesCount,
+        favorite_rate: totalLessons > 0 ? Math.round((favoritesCount / totalLessons) * 100) : 0,
+        avg_content_length: 0, // Not available in lightweight fetch
+        lessons_with_resources: 0 // Not available in lightweight fetch
+      });
       
     } catch (error: any) {
       toast({
