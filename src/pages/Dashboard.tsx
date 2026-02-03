@@ -138,13 +138,42 @@ const Dashboard = () => {
       // Instead of making 5+ separate API calls that fetch the same data, 
       // we compute metrics from the already fetched lessonNotes.
       
-      // 1. Subjects Distribution
+      // 1. Subjects Distribution (Cleaned & Normalized)
       const subjectMap: Record<string, number> = {};
+      const subjectNormalization: Record<string, string> = {
+        "rme": "Religious and Moral Education",
+        "religious and moral education (rme)": "Religious and Moral Education",
+        "math": "Mathematics",
+        "history of ghana": "History",
+        "our world our people": "Our World Our People",
+        "creative arts and design": "Creative Arts", // Grouping for cleaner chart
+        "computing": "Computing",
+        "science": "Science",
+        "english": "English Language",
+        "english language": "English Language",
+        "career technology": "Career Technology",
+        "social studies": "Social Studies",
+        "ghanian language": "Ghanaian Language"
+      };
+
       notesData.forEach((n: any) => {
-        const s = n.subject || 'Unknown';
+        let s = (n.subject || 'Unknown').trim();
+        const lowerS = s.toLowerCase();
+        
+        // Normalize common variations
+        if (subjectNormalization[lowerS]) {
+            s = subjectNormalization[lowerS];
+        } else {
+             // Title Case basics
+             s = s.charAt(0).toUpperCase() + s.slice(1);
+        }
+
         subjectMap[s] = (subjectMap[s] || 0) + 1;
       });
-      setLessonsBySubject(Object.entries(subjectMap).map(([name, value]) => ({ name, value })));
+      setLessonsBySubject(Object.entries(subjectMap)
+        .sort((a, b) => b[1] - a[1]) // Sort highest first for better readability
+        .slice(0, 8) // Limit to top 8 to prevent chart crowding
+        .map(([name, value]) => ({ name, value })));
 
       // 2. Grade Distribution
       const gradeMap: Record<string, number> = {};
