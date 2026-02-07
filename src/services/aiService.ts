@@ -12,7 +12,7 @@ import { extractTextFromFile } from "./fileParsingService";
 // Enforced to DeepSeek for production
 const AI_PROVIDER = "deepseek";
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY; // Kept for reference but unused
-// DEEPSEEK_API_KEY is handled securely on the server side via Edge Function
+const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY;
 
 const GROQ_API_URL = "https://api.deepseek.com/chat/completions";
 const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
@@ -257,32 +257,48 @@ async function callDeepSeekAPI(prompt: string, systemMessage?: string, numLesson
 
   const defaultSystemMessage = "You are an expert educational content creator specializing in creating comprehensive, professional lesson plans for Ghanaian teachers following the National Pre-tertiary Curriculum.";
   
-  // Calculate max_tokens logic remains for passing to edge function
+  // Calculate max_tokens based on number of lessons if not explicitly provided
+  // DeepSeek has a max_tokens limit of 8192
   const baseTokens = 4000;
   const tokensPerLesson = 2500;
-  const calculatedMaxTokens = numLessons && numLessons > 1 
-    ? Math.min(baseTokens + (numLessons * tokensPerLesson), 8192)
-    : Math.min(baseTokens, 8192);
+  const calculatedMaxTokens = maxTokens 
+    ? Math.min(maxTokens, 8192)  // Cap explicit maxTokens at 8192
+    : (numLessons && numLessons > 1 
+      ? Math.min(baseTokens + (numLessons * tokensPerLesson), 8192)
+      : Math.min(baseTokens, 8192));
   
   try {
-    const { data, error } = await supabase.functions.invoke('deepseek-proxy', {
-      body: {
-        prompt,
-        systemMessage: systemMessage || defaultSystemMessage,
-        maxTokens: calculatedMaxTokens,
-        numLessons
-      }
+    const response = await fetch(DEEPSEEK_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "system",
+            content: systemMessage || defaultSystemMessage
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: calculatedMaxTokens,
+        stream: false
+      })
     });
 
-    if (error) {
-      console.error("DeepSeek Edge Function Error:", error);
-      const errorMsg = `Edge Function Error: ${error.message}`;
-      logAIUsage("deepseek-chat", "text-generation", false, 0, errorMsg);
-      throw new Error(errorMsg);
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error("DeepSeek API Error:", response.status, errorText);
+        throw new Error(`DeepSeek API Error: ${response.status} ${errorText}`);
     }
-    
-    // The edge function should return the DeepSeek response format
-    // deepseek-proxy sends back: new Response(JSON.stringify(data), ...) where data is the deepseek response
+
+    const data = await response.json();
     
     if (!data.choices || !data.choices[0]?.message?.content) {
       console.error("Invalid response structure from Edge Function:", data);
