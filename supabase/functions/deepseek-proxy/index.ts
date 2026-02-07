@@ -12,11 +12,13 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { prompt, systemMessage, apiKey, maxTokens, numLessons } = await req.json();
-
+    // SECURITY: Get key from server environment, NOT from the request body
+    const apiKey = Deno.env.get('DEEPSEEK_API_KEY');
     if (!apiKey) {
-      throw new Error('API key is required');
+      throw new Error('Server configuration error: DEEPSEEK_API_KEY not found in secrets');
     }
+
+    const { prompt, systemMessage, maxTokens, numLessons } = await req.json();
 
     // Calculate max_tokens based on number of lessons if not explicitly provided
     // DeepSeek has a max_tokens limit of 8192

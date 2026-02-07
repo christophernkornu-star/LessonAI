@@ -64,7 +64,7 @@ If you prefer DeepSeek:
 Update `.env`:
 ```env
 VITE_AI_PROVIDER=deepseek
-VITE_DEEPSEEK_API_KEY=sk-70bf7507cbbd417283457b9e5cc9c65a
+VITE_DEEPSEEK_API_KEY=sk-YOUR_KEY_HERE
 ```
 
 ## What Changed

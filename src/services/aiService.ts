@@ -12,9 +12,9 @@ import { extractTextFromFile } from "./fileParsingService";
 // Enforced to DeepSeek for production
 const AI_PROVIDER = "deepseek";
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY; // Kept for reference but unused
-const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY;
+// DEEPSEEK_API_KEY is handled securely on the server side via Edge Function
 
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_API_URL = "https://api.deepseek.com/chat/completions";
 const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
 
 // Helper functions for teaching philosophy and detail level
@@ -253,76 +253,54 @@ async function callGroqAPI(prompt: string, systemMessage?: string, numLessons?: 
 
 
 async function callDeepSeekAPI(prompt: string, systemMessage?: string, numLessons?: number): Promise<string> {
-  // Validate API key
-  if (!DEEPSEEK_API_KEY || DEEPSEEK_API_KEY === "YOUR_API_KEY_HERE") {
-    console.error("DeepSeek API key missing:", DEEPSEEK_API_KEY);
-    throw new Error("DeepSeek API key is not configured. Please add VITE_DEEPSEEK_API_KEY to your .env file.");
-  }
-
-  console.log("DeepSeek API Key loaded:", DEEPSEEK_API_KEY.substring(0, 10) + "...");
-  console.log("Making request to DeepSeek API via Vite Proxy...");
+  console.log("Calling DeepSeek via Secure Edge Function...");
 
   const defaultSystemMessage = "You are an expert educational content creator specializing in creating comprehensive, professional lesson plans for Ghanaian teachers following the National Pre-tertiary Curriculum.";
   
-  // Calculate max_tokens based on number of lessons (each lesson needs ~2500 tokens)
-  // DeepSeek has a max_tokens limit of 8192
+  // Calculate max_tokens logic remains for passing to edge function
   const baseTokens = 4000;
   const tokensPerLesson = 2500;
   const calculatedMaxTokens = numLessons && numLessons > 1 
-    ? Math.min(baseTokens + (numLessons * tokensPerLesson), 8192) // Cap at 8192 for DeepSeek
+    ? Math.min(baseTokens + (numLessons * tokensPerLesson), 8192)
     : Math.min(baseTokens, 8192);
   
-  console.log(`Requesting ${calculatedMaxTokens} max_tokens for ${numLessons || 1} lesson(s)`);
-  
-  const controller = new AbortController();
-  // Increase timeout for multi-lesson generation (30 seconds per lesson)
-  const timeoutMs = numLessons && numLessons > 1 ? Math.max(120000, numLessons * 30000) : 120000;
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
   try {
-    // Use local proxy configured in vite.config.ts to bypass CORS
-    const response = await fetch('/api/deepseek/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "system",
-            content: systemMessage || defaultSystemMessage
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: calculatedMaxTokens,
-      }),
-      signal: controller.signal
+    const { data, error } = await supabase.functions.invoke('deepseek-proxy', {
+      body: {
+        prompt,
+        systemMessage: systemMessage || defaultSystemMessage,
+        maxTokens: calculatedMaxTokens,
+        numLessons
+      }
     });
-    
-    clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error("DeepSeek API Error:", response.status, errorData);
-      const errorMsg = `API Error: ${response.status} ${errorData.error?.message || response.statusText}`;
+    if (error) {
+      console.error("DeepSeek Edge Function Error:", error);
+      const errorMsg = `Edge Function Error: ${error.message}`;
       logAIUsage("deepseek-chat", "text-generation", false, 0, errorMsg);
       throw new Error(errorMsg);
     }
-
-    const data = await response.json();
-
-    console.log("DeepSeek API success via proxy");
+    
+    // The edge function should return the DeepSeek response format
+    // deepseek-proxy sends back: new Response(JSON.stringify(data), ...) where data is the deepseek response
     
     if (!data.choices || !data.choices[0]?.message?.content) {
-      logAIUsage("deepseek-chat", "text-generation", false, 0, "Invalid response");
-      throw new Error("Invalid response from DeepSeek API");
+      console.error("Invalid response structure from Edge Function:", data);
+      logAIUsage("deepseek-chat", "text-generation", false, 0, "Invalid response from Edge Function");
+      throw new Error("Invalid response from AI Service");
     }
+
+    const content = data.choices[0].message.content;
+    const tokens = data.usage?.total_tokens || 0;
+    
+    logAIUsage("deepseek-chat", "text-generation", true, tokens);
+    return content;
+
+  } catch (error: any) {
+    console.error("Call DeepSeek API failed:", error);
+    throw error;
+  }
+}
     
     const content = data.choices[0].message.content;
     const tokens = data.usage?.total_tokens || 0;
