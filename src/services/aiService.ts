@@ -301,26 +301,6 @@ async function callDeepSeekAPI(prompt: string, systemMessage?: string, numLesson
     throw error;
   }
 }
-    
-    const content = data.choices[0].message.content;
-    const tokens = data.usage?.total_tokens || 0;
-    logAIUsage("deepseek-chat", "text-generation", true, tokens);
-    
-    return content;
-  } catch (error) {
-    clearTimeout(timeoutId);
-    console.error("DeepSeek API call failed:", error);
-    if (error instanceof Error) {
-       if (error.name === 'AbortError') {
-          logAIUsage("deepseek-chat", "text-generation", false, 0, "Timeout > 120s");
-          throw new Error("Request timed out after 2 minutes. The AI is taking too long to respond.");
-       }
-       logAIUsage("deepseek-chat", "text-generation", false, 0, error.message);
-       throw error;
-    }
-    throw new Error("Network error. Please check your internet connection.");
-  }
-}
 
 export async function generateLessonNote(originalData: LessonData): Promise<string> {
   try {
