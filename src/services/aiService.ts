@@ -146,10 +146,10 @@ async function verifyUserEligibility() {
   }
 }
 
-export async function callAIAPI(prompt: string, systemMessage?: string, numLessons?: number): Promise<string> {
+export async function callAIAPI(prompt: string, systemMessage?: string, numLessons?: number, maxTokens?: number): Promise<string> {
   await verifyUserEligibility();
   // Strictly use DeepSeek API
-  return callDeepSeekAPI(prompt, systemMessage, numLessons);
+  return callDeepSeekAPI(prompt, systemMessage, numLessons, maxTokens);
 }
 
 async function callGroqAPI(prompt: string, systemMessage?: string, numLessons?: number): Promise<string> {
@@ -252,7 +252,7 @@ async function callGroqAPI(prompt: string, systemMessage?: string, numLessons?: 
 }
 
 
-async function callDeepSeekAPI(prompt: string, systemMessage?: string, numLessons?: number): Promise<string> {
+async function callDeepSeekAPI(prompt: string, systemMessage?: string, numLessons?: number, maxTokens?: number): Promise<string> {
   console.log("Calling DeepSeek via Secure Edge Function...");
 
   const defaultSystemMessage = "You are an expert educational content creator specializing in creating comprehensive, professional lesson plans for Ghanaian teachers following the National Pre-tertiary Curriculum.";
