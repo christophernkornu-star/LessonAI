@@ -331,10 +331,7 @@ export function AdminPaymentManagement() {
                           const value = parseFloat(e.target.value);
                           setSettings({ ...settings, tokenPricePer1000: value });
                         }}
-                        onBlur={() => handleUpdateSetting('token_price_per_1000', {
-                          amount: settings.tokenPricePer1000,
-                          currency: 'GHS'
-                        })}
+                        onBlur={() => handleUpdateSetting('token_price_per_1000', settings.tokenPricePer1000)}
                       />
                       <p className="text-xs text-muted-foreground">
                         Base cost for AI token usage
@@ -350,9 +347,7 @@ export function AdminPaymentManagement() {
                           const value = parseFloat(e.target.value);
                           setSettings({ ...settings, platformFeePercent: value });
                         }}
-                        onBlur={() => handleUpdateSetting('platform_fee_percent', {
-                          percent: settings.platformFeePercent
-                        })}
+                        onBlur={() => handleUpdateSetting('platform_fee_percent', settings.platformFeePercent)}
                       />
                       <p className="text-xs text-muted-foreground">
                         Profit margin on top of AI costs
@@ -369,10 +364,7 @@ export function AdminPaymentManagement() {
                           const value = parseFloat(e.target.value);
                           setSettings({ ...settings, minimumCharge: value });
                         }}
-                        onBlur={() => handleUpdateSetting('minimum_charge', {
-                          amount: settings.minimumCharge,
-                          currency: 'GHS'
-                        })}
+                        onBlur={() => handleUpdateSetting('minimum_charge', settings.minimumCharge)}
                       />
                       <p className="text-xs text-muted-foreground">
                         Minimum amount per generation
@@ -388,9 +380,7 @@ export function AdminPaymentManagement() {
                           const value = parseInt(e.target.value);
                           setSettings({ ...settings, freeTokensDaily: value });
                         }}
-                        onBlur={() => handleUpdateSetting('free_tokens_daily', {
-                          amount: settings.freeTokensDaily
-                        })}
+                        onBlur={() => handleUpdateSetting('free_daily_tokens', settings.freeTokensDaily)}
                       />
                       <p className="text-xs text-muted-foreground">
                         Free tokens per user per day (0 = none)
