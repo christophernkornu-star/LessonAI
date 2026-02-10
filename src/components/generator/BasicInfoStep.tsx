@@ -7,9 +7,11 @@ import { Combobox } from "@/components/ui/combobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
+import { toast } from "sonner"; // Import toast for feedback
+
 export interface BasicInfoStepProps {
   lessonData: any;
-  setLessonData: (data: any) => void;
+  setLessonData: React.Dispatch<React.SetStateAction<any>>;
   availableLevels: Array<{ value: string; label: string }>;
   availableSubjects: Array<{ value: string; label: string }>;
   userProfile: any;
@@ -190,18 +192,21 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = React.memo(({
                  id="numLessons"
                  type="text"
                  inputMode="numeric"
-                 pattern="[0-9]*"
                  className="w-20"
                  value={lessonData.numLessons ?? ""}
-                 placeholder="1"
+                 placeholder="Max 5"
                  onChange={(e) => {
                    const val = e.target.value;
                    if (val === "") {
-                     setLessonData({ ...lessonData, numLessons: undefined });
+                     setLessonData((prev: any) => ({ ...prev, numLessons: undefined }));
                    } else if (/^\d*$/.test(val)) {
                      const parsed = parseInt(val);
-                     if (!isNaN(parsed) && parsed <= 5) {
-                       setLessonData({ ...lessonData, numLessons: parsed });
+                     if (!isNaN(parsed)) {
+                        if (parsed <= 5) {
+                            setLessonData((prev: any) => ({ ...prev, numLessons: parsed }));
+                        } else {
+                            toast.error("Maximum 5 lessons allowed");
+                        }
                      }
                    }
                  }}
