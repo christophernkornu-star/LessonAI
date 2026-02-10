@@ -7,6 +7,7 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
+  SheetDescription,
 } from "@/components/ui/sheet";
 import { Menu, X, Sparkles, LayoutDashboard, FileText, Settings, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -100,6 +101,9 @@ export function Navbar() {
               <SheetContent side="right">
                 <SheetHeader>
                   <SheetTitle>Menu</SheetTitle>
+                  <SheetDescription className="sr-only">
+                    Navigation menu for mobile devices
+                  </SheetDescription>
                 </SheetHeader>
                 <div className="flex flex-col gap-4 mt-6">
                   <NavItems />

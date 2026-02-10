@@ -48,6 +48,7 @@ const defaultLessonData: LessonData = {
   duration: "60 mins",
   strand: "",
   subStrand: "",
+  numLessons: 1,
   contentStandard: "",
   indicator: "",
   exemplars: "", // Added required field
@@ -78,7 +79,6 @@ const defaultLessonData: LessonData = {
   weekNumber: "",
   term: "",
   location: "",
-  numLessons: 1,
   detailLevel: "moderate",
   includeDiagrams: false,
 };
@@ -702,6 +702,7 @@ const ImprovedGenerator = () => {
       case 0: // Basic Info
         if (!lessonData.subject) errors.subject = "Subject is required";
         if (!lessonData.level) errors.level = "Class level is required";
+        if (!lessonData.numLessons || lessonData.numLessons < 1) errors.numLessons = "Number of lessons is required";
         break;
       case 1: // Details
         if (!lessonData.strand) errors.strand = "Strand is required";

@@ -184,29 +184,38 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = React.memo(({
         </div>
         <div className="space-y-2">
            <Label htmlFor="numLessons">Number of Lessons</Label>
-           <div className="flex items-center gap-2">
-             <Input
-               id="numLessons"
-               type="number"
-               min={1}
-               max={5}
-               className="w-20"
-               value={lessonData.numLessons || 1}
-               onChange={(e) => {
-                 const val = parseInt(e.target.value);
-                 if (val > 0) setLessonData({ ...lessonData, numLessons: val });
-               }}
-             />
-             <TooltipProvider>
-               <Tooltip>
-                 <TooltipTrigger asChild>
-                   <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                 </TooltipTrigger>
-                 <TooltipContent className="max-w-[300px]">
-                   <p>If you have many exemplars, you can split them across multiple lessons. The AI will generate a lesson plan for each part.</p>
-                 </TooltipContent>
-               </Tooltip>
-             </TooltipProvider>
+           <div className="flex flex-col gap-1">
+             <div className="flex items-center gap-2">
+               <Input
+                 id="numLessons"
+                 type="number"
+                 className="w-20"
+                 value={lessonData.numLessons ?? ""}
+                 placeholder="1"
+                 onChange={(e) => {
+                   const val = e.target.value;
+                   if (val === "") {
+                     setLessonData({ ...lessonData, numLessons: undefined });
+                   } else {
+                     const parsed = parseInt(val);
+                     if (!isNaN(parsed)) setLessonData({ ...lessonData, numLessons: parsed });
+                   }
+                 }}
+               />
+               <TooltipProvider>
+                 <Tooltip>
+                   <TooltipTrigger asChild>
+                     <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                   </TooltipTrigger>
+                   <TooltipContent className="max-w-[300px]">
+                     <p>If you have many exemplars, you can split them across multiple lessons. The AI will generate a lesson plan for each part.</p>
+                   </TooltipContent>
+                 </Tooltip>
+               </TooltipProvider>
+             </div>
+             {validationErrors.numLessons && (
+                <p className="text-sm text-destructive">{validationErrors.numLessons}</p>
+             )}
            </div>
         </div>
       </div>
