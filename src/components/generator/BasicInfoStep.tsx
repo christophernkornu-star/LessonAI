@@ -188,7 +188,9 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = React.memo(({
              <div className="flex items-center gap-2">
                <Input
                  id="numLessons"
-                 type="number"
+                 type="text"
+                 inputMode="numeric"
+                 pattern="[0-9]*"
                  className="w-20"
                  value={lessonData.numLessons ?? ""}
                  placeholder="1"
@@ -196,9 +198,11 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = React.memo(({
                    const val = e.target.value;
                    if (val === "") {
                      setLessonData({ ...lessonData, numLessons: undefined });
-                   } else {
+                   } else if (/^\d*$/.test(val)) {
                      const parsed = parseInt(val);
-                     if (!isNaN(parsed)) setLessonData({ ...lessonData, numLessons: parsed });
+                     if (!isNaN(parsed) && parsed <= 5) {
+                       setLessonData({ ...lessonData, numLessons: parsed });
+                     }
                    }
                  }}
                />
