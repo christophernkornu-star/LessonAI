@@ -202,11 +202,7 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = React.memo(({
                    } else if (/^\d*$/.test(val)) {
                      const parsed = parseInt(val);
                      if (!isNaN(parsed)) {
-                        if (parsed <= 5) {
-                            setLessonData((prev: any) => ({ ...prev, numLessons: parsed }));
-                        } else {
-                            toast.error("Maximum 5 lessons allowed");
-                        }
+                       setLessonData((prev: any) => ({ ...prev, numLessons: parsed }));
                      }
                    }
                  }}
@@ -224,6 +220,9 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = React.memo(({
              </div>
              {validationErrors.numLessons && (
                 <p className="text-sm text-destructive">{validationErrors.numLessons}</p>
+             )}
+             {lessonData.numLessons > 5 && (
+                <p className="text-sm text-destructive">Maximum 5 lessons allowed</p>
              )}
            </div>
         </div>

@@ -702,7 +702,11 @@ const ImprovedGenerator = () => {
       case 0: // Basic Info
         if (!lessonData.subject) errors.subject = "Subject is required";
         if (!lessonData.level) errors.level = "Class level is required";
-        if (!lessonData.numLessons || lessonData.numLessons < 1) errors.numLessons = "Number of lessons is required";
+        if (!lessonData.numLessons || lessonData.numLessons < 1) {
+            errors.numLessons = "At least 1 lesson required";
+        } else if (lessonData.numLessons > 5) {
+            errors.numLessons = "Maximum 5 lessons allowed";
+        }
         break;
       case 1: // Details
         if (!lessonData.strand) errors.strand = "Strand is required";
