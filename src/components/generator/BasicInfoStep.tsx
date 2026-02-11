@@ -197,7 +197,7 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = React.memo(({
                  placeholder="Max 5"
                  onChange={(e) => {
                    const val = e.target.value;
-                   if (val === "") {
+                   if (val === "" || val === null) {
                      setLessonData((prev: any) => ({ ...prev, numLessons: undefined }));
                    } else if (/^\d*$/.test(val)) {
                      const parsed = parseInt(val);

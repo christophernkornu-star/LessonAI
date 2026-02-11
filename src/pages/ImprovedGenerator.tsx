@@ -272,7 +272,7 @@ const ImprovedGenerator = () => {
 
                if (configKey) {
                    const config = timetable.subject_config[configKey];
-                   if (config && config.frequency) {
+                   if (config && config.frequency && !lessonData.numLessons) {
                        updates.numLessons = config.frequency;
                        
                        // Optional: Also set scheduledDays if they exist
@@ -305,7 +305,7 @@ const ImprovedGenerator = () => {
     };
 
     fetchTimetableDetails();
-  }, [lessonData.level, lessonData.subject, lessonData.term, currentUser, userProfile, availableLevels]);
+  }, [lessonData.level, lessonData.subject, lessonData.term, currentUser?.id]);
 
   // Load available levels from database on mount and merge with static levels
   useEffect(() => {
