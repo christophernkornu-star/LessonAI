@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Info, MapPin } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-import { toast } from "sonner"; // Import toast for feedback
+import { toast } from "sonner";
 
 export interface BasicInfoStepProps {
   lessonData: any;
@@ -20,7 +20,7 @@ export interface BasicInfoStepProps {
   handleDetectLocation: () => void;
 }
 
-export const BasicInfoStep: React.FC<BasicInfoStepProps> = React.memo(({
+export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
   lessonData,
   setLessonData,
   availableLevels,
@@ -30,6 +30,39 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = React.memo(({
   setValidationErrors,
   handleDetectLocation,
 }) => {
+  // Local string state for Number of Lessons input so mobile users can freely type/delete
+  const [numLessonsText, setNumLessonsText] = useState<string>(
+    lessonData.numLessons != null ? String(lessonData.numLessons) : ""
+  );
+
+  // Sync from parent → local when parent value changes externally (e.g., timetable auto-fill)
+  useEffect(() => {
+    const parentVal = lessonData.numLessons;
+    const localVal = numLessonsText === "" ? undefined : parseInt(numLessonsText);
+    if (parentVal !== localVal) {
+      setNumLessonsText(parentVal != null ? String(parentVal) : "");
+    }
+  }, [lessonData.numLessons]);
+
+  // Sync from local → parent on blur
+  const handleNumLessonsBlur = () => {
+    if (numLessonsText === "") {
+      setLessonData((prev: any) => ({ ...prev, numLessons: undefined }));
+    } else {
+      const parsed = parseInt(numLessonsText);
+      if (!isNaN(parsed) && parsed >= 1 && parsed <= 5) {
+        setLessonData((prev: any) => ({ ...prev, numLessons: parsed }));
+      } else if (!isNaN(parsed) && parsed > 5) {
+        toast.error("Maximum 5 lessons allowed");
+        setNumLessonsText("5");
+        setLessonData((prev: any) => ({ ...prev, numLessons: 5 }));
+      } else if (!isNaN(parsed) && parsed < 1) {
+        setNumLessonsText("1");
+        setLessonData((prev: any) => ({ ...prev, numLessons: 1 }));
+      }
+    }
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6 animate-in fade-in-50 duration-500">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
@@ -193,19 +226,16 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = React.memo(({
                  type="text"
                  inputMode="numeric"
                  className="w-20"
-                 value={lessonData.numLessons ?? ""}
-                 placeholder="Max 5"
+                 value={numLessonsText}
+                 placeholder="1-5"
                  onChange={(e) => {
                    const val = e.target.value;
-                   if (val === "" || val === null) {
-                     setLessonData((prev: any) => ({ ...prev, numLessons: undefined }));
-                   } else if (/^\d*$/.test(val)) {
-                     const parsed = parseInt(val);
-                     if (!isNaN(parsed)) {
-                       setLessonData((prev: any) => ({ ...prev, numLessons: parsed }));
-                     }
+                   // Allow empty or digits only
+                   if (val === "" || /^\d+$/.test(val)) {
+                     setNumLessonsText(val);
                    }
                  }}
+                 onBlur={handleNumLessonsBlur}
                />
                <TooltipProvider>
                  <Tooltip>
@@ -221,7 +251,7 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = React.memo(({
              {validationErrors.numLessons && (
                 <p className="text-sm text-destructive">{validationErrors.numLessons}</p>
              )}
-             {lessonData.numLessons > 5 && (
+             {parseInt(numLessonsText) > 5 && (
                 <p className="text-sm text-destructive">Maximum 5 lessons allowed</p>
              )}
            </div>
@@ -229,4 +259,4 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = React.memo(({
       </div>
     </div>
   );
-});
+};
