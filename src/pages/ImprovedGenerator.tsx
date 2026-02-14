@@ -127,7 +127,7 @@ const ImprovedGenerator = () => {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [availableStrands, setAvailableStrands] = useState<Array<{ value: string; label: string }>>([]);
   const [availableSubStrands, setAvailableSubStrands] = useState<Array<{ value: string; label: string }>>([]);
-  const [availableContentStandards, setAvailableContentStandards] = useState<Array<{ code: string; description: string; indicators: string[]; exemplars: string[]; mappings?: Array<{ indicators: string[], exemplars: string[] }> }>>([]);
+  const [availableContentStandards, setAvailableContentStandards] = useState<Array<{ code: string; description: string; indicators: string[]; exemplars: string[]; page_reference?: string; mappings?: Array<{ indicators: string[], exemplars: string[] }> }>>([]);
   const [isPasteDialogOpen, setIsPasteDialogOpen] = useState(false);
   const [pastedText, setPastedText] = useState("");
   const [isParsingPaste, setIsParsingPaste] = useState(false);
@@ -1639,7 +1639,13 @@ const ImprovedGenerator = () => {
                         ) : (
                           <>
                         <MultiSelectCombobox
-                          options={availableContentStandards.map(cs => `${cs.code}: ${cs.description}`)}
+                          options={availableContentStandards.map(cs => {
+                            let label = `${cs.code}: ${cs.description}`;
+                            if (cs.page_reference) {
+                              label += ` (${cs.page_reference})`;
+                            }
+                            return label;
+                          })}
                           selected={selectedContentStandards}
                           onChange={(newSelection) => {
                             setSelectedContentStandards(newSelection);
@@ -1647,18 +1653,25 @@ const ImprovedGenerator = () => {
                             // Join with newlines
                             const newStandardString = newSelection.join('\n');
                             
-                            setLessonData({ 
-                              ...lessonData, 
-                              contentStandard: newStandardString,
-                              exemplars: "", 
-                              indicators: "" 
-                            });
-                            
                             // Load related indicators for ALL selected standards
                             let combinedIndicators: string[] = [];
+                            let pageRefs: string[] = [];
+                            
                             newSelection.forEach(val => {
-                                const selected = availableContentStandards.find(cs => `${cs.code}: ${cs.description}` === val);
-                                if (selected && selected.indicators) {
+                                const selected = availableContentStandards.find(cs => {
+                                  let label = `${cs.code}: ${cs.description}`;
+                                  if (cs.page_reference) {
+                                    label += ` (${cs.page_reference})`;
+                                  }
+                                  return label === val;
+                                });
+                                
+                                if (selected) {
+                                    if (selected.page_reference) {
+                                        pageRefs.push(selected.page_reference);
+                                    }
+                                    
+                                    if (selected.indicators) {
                                     // Parse and split indicators if they look like "Performance Indicators" list
                                     const rawIndicators = selected.indicators;
                                     const parsedIndicators: string[] = [];
@@ -1706,10 +1719,35 @@ const ImprovedGenerator = () => {
 
                                     combinedIndicators = [...combinedIndicators, ...parsedIndicators];
                                 }
+                              }
                             });
                             
                             // Deduplicate
                             const uniqueIndicators = Array.from(new Set(combinedIndicators));
+
+                            // Build references string
+                            // Format: "NaCCA [Subject] Curriculum for [Level] pg [Num]"
+                            let referenceText = "";
+                            if (pageRefs.length > 0) {
+                                // De-duplicate pages
+                                const uniquePages = Array.from(new Set(pageRefs)).join(", ");
+                                // Use the currently selected subject and level, defaulting if empty
+                                // Construct string: "NaCCA [Subject] Curriculum for [Level] [Pages]"
+                                // Ensure "pg" prefix is handled if not already in the pageRef
+                                const pagePart = uniquePages.toLowerCase().includes("pg") || uniquePages.toLowerCase().includes("page") 
+                                    ? uniquePages 
+                                    : `pg ${uniquePages}`;
+                                
+                                referenceText = `NaCCA ${lessonData.subject} Curriculum for ${lessonData.level} ${pagePart}`;
+                            }
+
+                            setLessonData({ 
+                              ...lessonData, 
+                              contentStandard: newStandardString,
+                              exemplars: "", 
+                              indicators: "",
+                              references: referenceText // Auto-fill reference
+                            });
 
                             if (uniqueIndicators.length > 0) {
                               setAvailableIndicators(uniqueIndicators);

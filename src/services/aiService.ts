@@ -811,6 +811,7 @@ export async function extractCurriculumFromText(text: string): Promise<any[]> {
     - "content_standards": An array of strings, each representing a content standard code and description (e.g., "B1.1.1.1: Count numbers...").
     - "learning_indicators": An array of strings, each representing a learning indicator.
     - "exemplars": A string containing examples or further details (optional).
+    - "page_reference": A string indicating the page number(s) where this topic is found (e.g., "pg 45", "pp 12-14"). Look for "Page", "Pg", "P." columns or text.
     
     If the text contains multiple strands or sub-strands, create a separate object for each.
     

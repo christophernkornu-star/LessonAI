@@ -402,6 +402,8 @@ export default function CurriculumUpload() {
         
         const hasUserFormat = hasContentStandard && hasIndicators;
 
+        let pageRef = "";
+
         if (hasUserFormat) {
            // User provided format: Class,Strand,Sub-Strand,Content Standard,Indicators & Exemplars,...
            // We try to find indices dynamically
@@ -416,6 +418,7 @@ export default function CurriculumUpload() {
            const fallbackIndIdx = headers.findIndex(h => h.includes("indicator") || h.includes("learning"));
            
            const exIdx = headers.findIndex(h => h.includes("exemplar"));
+           const pageIdx = headers.findIndex(h => h.includes("page") || h.includes("pg") || h.includes("ref"));
 
            // Fallback to fixed indices if dynamic lookup fails (assuming standard order)
            // Standard order assumption: Class, Subject, Strand, Sub-strand, Content Standard, Indicators
@@ -459,6 +462,10 @@ export default function CurriculumUpload() {
               // If no explicit header but we have extra columns, assume 7th index (8th column) might be exemplars
               // Standard template: Class(0), Strand(1), Sub(2), CS Code(3), CS Desc(4), Ind Code(5), Ind Desc(6), Exemplars(7)
               exemplars = row[7];
+           }
+
+           if (pageIdx >= 0) {
+              pageRef = row[pageIdx];
            }
         } else if (row.length >= 7) {
            // Default template format
@@ -526,11 +533,15 @@ export default function CurriculumUpload() {
             content_standards: [contentStandard],
             learning_indicators: indicatorList,
             exemplars: cleanExemplars,
+            page_reference: pageRef, // Add page reference
             is_public: isAdmin, // Only public if admin
           });
         } else {
           const existing = grouped.get(key);
-          // Add unique indicators
+          // If pageRef exists for this row and not on existing, add it
+          if (pageRef && !existing.page_reference) {
+             existing.page_reference = pageRef;
+          }          // Add unique indicators
           indicatorList.forEach(ind => {
              if (!existing.learning_indicators.includes(ind)) {
                 existing.learning_indicators.push(ind);

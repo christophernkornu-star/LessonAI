@@ -63,6 +63,7 @@ export type Database = {
           strand: string | null
           sub_strand: string | null
           subject: string
+          page_reference: string | null
           updated_at: string
           user_id: string | null
         }
@@ -78,6 +79,7 @@ export type Database = {
           strand?: string | null
           sub_strand?: string | null
           subject: string
+          page_reference?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -93,6 +95,7 @@ export type Database = {
           strand?: string | null
           sub_strand?: string | null
           subject?: string
+          page_reference?: string | null
           updated_at?: string
           user_id?: string | null
         }

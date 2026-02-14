@@ -11,6 +11,7 @@ export interface CurriculumData {
   content_standards: string[];
   learning_indicators: string[];
   exemplars?: string;
+  page_reference?: string;
   is_public?: boolean;
 }
 
@@ -298,12 +299,12 @@ export class CurriculumService {
     strand: string,
     subStrand: string,
     userId?: string
-  ): Promise<Array<{ code: string; description: string; indicators: string[]; exemplars: string[]; mappings: Array<{ indicators: string[], exemplars: string[] }> }>> {
+  ): Promise<Array<{ code: string; description: string; indicators: string[]; exemplars: string[]; page_reference?: string; mappings: Array<{ indicators: string[], exemplars: string[] }> }>> {
     try {
       // Use getCurriculumByGradeAndSubject to leverage the robust fallback logic
       const curriculum = await this.getCurriculumByGradeAndSubject(gradeLevel, subject, userId);
       
-      const standards: Array<{ code: string; description: string; indicators: string[]; exemplars: string[]; mappings: Array<{ indicators: string[], exemplars: string[] }> }> = [];
+      const standards: Array<{ code: string; description: string; indicators: string[]; exemplars: string[]; page_reference?: string; mappings: Array<{ indicators: string[], exemplars: string[] }> }> = [];
       
       curriculum.forEach((c) => {
         // Filter by strand and sub-strand in memory
@@ -374,6 +375,7 @@ export class CurriculumService {
                     description: standard,
                     indicators: c.learning_indicators || [],
                     exemplars: exemplarsList,
+                    page_reference: c.page_reference,
                     mappings: [{
                         indicators: c.learning_indicators || [],
                         exemplars: exemplarsList
@@ -416,6 +418,7 @@ export class CurriculumService {
           content_standards: curriculum.content_standards,
           learning_indicators: curriculum.learning_indicators,
           exemplars: curriculum.exemplars || null,
+          page_reference: curriculum.page_reference || null,
           is_public: curriculum.is_public || false,
         })
         .select()
@@ -450,6 +453,7 @@ export class CurriculumService {
         content_standards: c.content_standards,
         learning_indicators: c.learning_indicators,
         exemplars: c.exemplars || null,
+        page_reference: c.page_reference || null,
         is_public: c.is_public || false,
       }));
 

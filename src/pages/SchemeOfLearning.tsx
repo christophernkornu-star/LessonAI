@@ -1304,7 +1304,7 @@ export default function SchemeOfLearning() {
         </div>
 
         {isBatchGenerating && (
-            <Card className="mb-6 p-4 border-primary/20 bg-primary/5">
+            <Card className="mb-6 p-4 border-primary/20 bg-primary/5 sticky top-[70px] z-50 shadow-md backdrop-blur-sm bg-primary/10">
                 <div className="space-y-2">
                     <div className="flex justify-between text-sm font-medium">
                         <span>Generating Batch Compliance...</span>
