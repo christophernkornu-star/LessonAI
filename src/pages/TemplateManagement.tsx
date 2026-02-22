@@ -26,11 +26,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FileText, Upload, Trash2, Download, Heart, Share2, ArrowLeft, Star, Eye } from "lucide-react";
+import { FileText, Upload, Trash2, Download, Heart, Share2, ArrowLeft, Star, Eye, Search, Info } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { customTemplateService, type CustomTemplate } from "@/services/customTemplateService";
 import { Switch } from "@/components/ui/switch";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 import { Navbar } from "@/components/Navbar";
 import { TableSkeleton } from "@/components/LoadingSkeletons";
@@ -50,6 +57,10 @@ const TemplateManagement = () => {
   const [templateCategory, setTemplateCategory] = useState("");
   const [isPublic, setIsPublic] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Search and Drawer state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState<CustomTemplate | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -190,6 +201,18 @@ const TemplateManagement = () => {
     });
   };
 
+  const filteredUserTemplates = userTemplates.filter(t => 
+    t.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (t.category && t.category.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  const filteredPublicTemplates = publicTemplates.filter(t => 
+    t.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (t.category && t.category.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
   const TemplateCard = ({ template, isOwner }: { template: CustomTemplate; isOwner: boolean }) => (
     <Card className="p-4 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-3">
@@ -245,6 +268,15 @@ const TemplateManagement = () => {
       </div>
 
       <div className="flex gap-2">
+        <Button
+          onClick={() => setSelectedTemplate(template)}
+          size="sm"
+          variant="secondary"
+          className="flex-1"
+        >
+          <Info className="mr-1 h-3 w-3" />
+          Details
+        </Button>
         <Button
           onClick={() => handleDownload(template)}
           size="sm"
@@ -373,32 +405,45 @@ const TemplateManagement = () => {
               </Button>
             </div>
           </div>
+
+        <div className="mb-6 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search templates by name, description, or category..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 max-w-md"
+          />
+        </div>
+
         <Tabs defaultValue="my-templates" className="w-full">
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="my-templates">
-              My Templates ({userTemplates.length})
+              My Templates ({filteredUserTemplates.length})
             </TabsTrigger>
             <TabsTrigger value="public">
-              Public Library ({publicTemplates.length})
+              Public Library ({filteredPublicTemplates.length})
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="my-templates" className="mt-6">
-            {userTemplates.length === 0 ? (
+            {filteredUserTemplates.length === 0 ? (
               <Card className="p-12 text-center">
                 <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Templates Yet</h3>
+                <h3 className="text-lg font-semibold mb-2">No Templates Found</h3>
                 <p className="text-muted-foreground mb-4">
-                  Upload your first custom template to get started
+                  {searchQuery ? "Try adjusting your search query" : "Upload your first custom template to get started"}
                 </p>
-                <Button onClick={() => setIsUploadDialogOpen(true)}>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Upload Template
-                </Button>
+                {!searchQuery && (
+                  <Button onClick={() => setIsUploadDialogOpen(true)}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Template
+                  </Button>
+                )}
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {userTemplates.map((template) => (
+                {filteredUserTemplates.map((template) => (
                   <TemplateCard key={template.id} template={template} isOwner={true} />
                 ))}
               </div>
@@ -406,17 +451,17 @@ const TemplateManagement = () => {
           </TabsContent>
 
           <TabsContent value="public" className="mt-6">
-            {publicTemplates.length === 0 ? (
+            {filteredPublicTemplates.length === 0 ? (
               <Card className="p-12 text-center">
                 <Eye className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Public Templates</h3>
+                <h3 className="text-lg font-semibold mb-2">No Public Templates Found</h3>
                 <p className="text-muted-foreground">
-                  Check back later for community-shared templates
+                  {searchQuery ? "Try adjusting your search query" : "Check back later for community-shared templates"}
                 </p>
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {publicTemplates.map((template) => (
+                {filteredPublicTemplates.map((template) => (
                   <TemplateCard key={template.id} template={template} isOwner={false} />
                 ))}
               </div>
@@ -442,6 +487,84 @@ const TemplateManagement = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Template Details Drawer */}
+      <Sheet open={!!selectedTemplate} onOpenChange={(open) => !open && setSelectedTemplate(null)}>
+        <SheetContent className="sm:max-w-md overflow-y-auto">
+          {selectedTemplate && (
+            <>
+              <SheetHeader className="mb-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <FileText className="h-6 w-6 text-primary" />
+                  </div>
+                  <SheetTitle className="text-xl">{selectedTemplate.name}</SheetTitle>
+                </div>
+                <SheetDescription>
+                  Uploaded on {formatDate(selectedTemplate.created_at)}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Description</h4>
+                  <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
+                    {selectedTemplate.description || "No description provided."}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="text-sm font-medium mb-1">Category</h4>
+                    <Badge variant="secondary">{selectedTemplate.category || "None"}</Badge>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium mb-1">Visibility</h4>
+                    <Badge variant="outline" className="gap-1">
+                      {selectedTemplate.is_public ? (
+                        <><Share2 className="h-3 w-3" /> Public</>
+                      ) : (
+                        "Private"
+                      )}
+                    </Badge>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium mb-1">File Size</h4>
+                    <p className="text-sm text-muted-foreground">{formatFileSize(selectedTemplate.file_size)}</p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium mb-1">Downloads</h4>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Download className="h-3 w-3" /> {selectedTemplate.download_count}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t flex flex-col gap-3">
+                  <Button onClick={() => handleDownload(selectedTemplate)} className="w-full">
+                    <Download className="mr-2 h-4 w-4" />
+                    Download Template
+                  </Button>
+                  
+                  {userTemplates.some(t => t.id === selectedTemplate.id) && (
+                    <Button 
+                      variant="destructive" 
+                      onClick={() => {
+                        setDeleteTemplateId(selectedTemplate.id);
+                        setSelectedTemplate(null);
+                      }} 
+                      className="w-full"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete Template
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

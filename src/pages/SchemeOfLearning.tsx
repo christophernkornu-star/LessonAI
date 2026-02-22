@@ -1196,7 +1196,7 @@ export default function SchemeOfLearning() {
     <div className="min-h-screen bg-gradient-subtle">
       <Navbar />
       <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div className="sticky top-[60px] z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 py-4 -mx-4 px-4 border-b mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm">
           <div>
             <h1 className="text-3xl font-bold mb-2">Scheme of Learning</h1>
             <p className="text-muted-foreground">Manage and view your weekly schemes.</p>
@@ -1304,7 +1304,7 @@ export default function SchemeOfLearning() {
         </div>
 
         {isBatchGenerating && (
-            <Card className="mb-6 p-4 border-primary/20 bg-primary/5 sticky top-[70px] z-50 shadow-md backdrop-blur-sm bg-primary/10">
+            <Card className="mb-6 p-4 border-primary/20 bg-primary/5 sticky top-[160px] z-50 shadow-md backdrop-blur-sm bg-primary/10">
                 <div className="space-y-2">
                     <div className="flex justify-between text-sm font-medium">
                         <span>Generating Batch Compliance...</span>

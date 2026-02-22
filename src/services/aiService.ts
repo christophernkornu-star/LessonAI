@@ -500,6 +500,47 @@ export async function generateLessonNote(originalData: LessonData): Promise<stri
     const subjectExamples = getSubjectExamples(data.subject);
     const differentiationStrategies = getDifferentiationStrategy('mixed'); // Default to mixed for now, could be added to LessonData
 
+    const isEnglishGrammar = data.subject.toLowerCase().includes('english') && 
+      (data.strand.toLowerCase().includes('grammar') || 
+       data.subStrand.toLowerCase().includes('grammar') || 
+       (data.indicators && data.indicators.toLowerCase().includes('grammar')) ||
+       (data.exemplars && data.exemplars.toLowerCase().includes('grammar')));
+
+    const englishGrammarPrompt = isEnglishGrammar ? `
+**ENGLISH GRAMMAR SPECIFIC INSTRUCTIONS (CRITICAL):**
+- The lesson MUST focus strictly on the grammatical concepts specified in the Sub-Strand and Indicators (e.g., Nouns, Verbs, Adjectives, Tenses, Subject-Verb Agreement, Conjunctions, etc.).
+- Do NOT generate a literature, reading comprehension, or creative writing lesson unless explicitly stated in the indicators.
+- Provide clear, explicit definitions of the grammar rules being taught.
+- Include at least 5-10 specific sentence examples demonstrating the grammar rule in action.
+- Ensure all grammar examples use Ghanaian context (e.g., "Kofi is eating fufu" instead of "John is eating pizza").
+- Include specific grammar exercises (e.g., "Identify the verb in the sentence", "Fill in the blank with the correct tense") in the New Learning and Reflection activities.
+- Focus on the mechanics of the English language as prescribed by the NaCCA curriculum.
+` : '';
+
+    const isGhanaianLanguage = data.subject.toLowerCase().includes('ghanaian language') || 
+                               data.subject.toLowerCase().includes('twi') || 
+                               data.subject.toLowerCase().includes('fante') || 
+                               data.subject.toLowerCase().includes('ewe') || 
+                               data.subject.toLowerCase().includes('ga') || 
+                               data.subject.toLowerCase().includes('dagbani');
+
+    const languageInstruction = isGhanaianLanguage ? `
+**LANGUAGE INSTRUCTIONS FOR GHANAIAN LANGUAGE SUBJECT (CRITICAL - ZERO TOLERANCE):**
+- You are generating a lesson for a Ghanaian Language class.
+- Write the ENTIRE lesson plan, including all headings, activities, and instructions, in ENGLISH ONLY.
+- ABSOLUTELY NO TWI, FANTE, EWE, GA, DAGBANI, OR ANY OTHER LOCAL LANGUAGE WORDS ARE ALLOWED IN YOUR RESPONSE. ZERO EXCEPTIONS.
+- If you need to refer to a local word, you MUST use a placeholder like [Insert local word] or [Provide local example].
+- Example of what NOT to do: "Write 'nsuo' on the board."
+- Example of what TO do: "Write the local word for 'water' on the board."
+- Focus EXCLUSIVELY on the TEACHING METHODOLOGY and classroom activities.
+- The focus must remain strictly on the provided Strand and Indicator.
+` : `
+**LANGUAGE AND SPELLING INSTRUCTIONS (CRITICAL):**
+- **USE BRITISH ENGLISH SPELLING ONLY.** (e.g., 'colour' not 'color', 'programme' not 'program', 'centre' not 'center', 'behaviour' not 'behavior', 'organise' not 'organize', 'analyse' not 'analyze').
+- This is mandatory for the Ghanaian curriculum context.
+- Lesson activities, instructions, examples, and all text must be in plain British English.
+`;
+
     const ghanaContextPrompt = `
 **GHANAIAN CONTEXT REQUIREMENTS (CRITICAL):**
 1. Use ONLY Ghanaian names (Kwame, Akosua, Kofi, Ama, etc.)
@@ -519,14 +560,7 @@ ${data.location ? `8. **LOCATION SPECIFIC CONTEXT:** The school is located in **
 - Focus on locally available materials (e.g., counters, stones, bottle caps, manila cards, real objects).
 - Avoid requesting expensive or hard-to-find equipment unless absolutely necessary for the subject (like Science lab equipment).
 - Ensure the listed resources directly support the lesson activities.
-
-**LANGUAGE AND SPELLING INSTRUCTIONS (CRITICAL):**
-- **USE BRITISH ENGLISH SPELLING ONLY.** (e.g., 'colour' not 'color', 'programme' not 'program', 'centre' not 'center', 'behaviour' not 'behavior', 'organise' not 'organize', 'analyse' not 'analyze').
-- This is mandatory for the Ghanaian curriculum context.
-- For "Ghanaian Language" subject: ALL content MUST be written in ENGLISH ONLY.
-- DO NOT use any Twi, Fante, Akan, Ewe, Ga, Dagbani, or any other Ghanaian local language words unless explicitly teaching them as vocabulary terms.
-- Lesson activities, instructions, examples, and all text must be in plain British English.
-- This applies regardless of whether the lesson is about teaching a local language - the lesson note itself must be in English.
+${languageInstruction}
 
 **FORMATTING REQUIREMENTS:**
 - Start each new thought, idea, or concept on a NEW LINE.
@@ -539,11 +573,13 @@ ${data.location ? `8. **LOCATION SPECIFIC CONTEXT:** The school is located in **
   - If an equation is long, break it logically *before* an operator, not after.
   - Surround operators with spaces (e.g., "2 + 2 = 4" not "2+2=4").
 
-**GHANAIAN EXAMPLES TO USE:**
+**GHANAIAN EXAMPLES TO USE (BACKGROUND FLAVOR ONLY):**
+The following are examples of Ghanaian context. DO NOT change the core topic of the lesson to match these examples. The topic is STRICTLY defined by the Strand and Indicator. Use these examples ONLY as background flavor (e.g., names in word problems, places in sentences).
 ${subjectExamples.map(ex => `- ${ex}`).join('\n')}
 
 **DIFFERENTIATION STRATEGIES:**
 ${differentiationStrategies}
+${englishGrammarPrompt}
 `;
 
     let prompt = "";
@@ -574,6 +610,9 @@ Your response MUST start with [ and end with ]` : ''}
 ${data.numLessons && data.numLessons > 1 ? '- **Task:** Split these Indicators/Exemplars across ' + data.numLessons + ' lessons.' : ''}
 - Learning Indicators: ${data.indicators || "None provided"}
 - Exemplars: ${data.exemplars || "None provided"}${data.schemeResources ? `\n- Resources from Scheme: ${data.schemeResources}` : ''}${curriculumFilesInfo}${resourceFilesInfo}
+
+**CRITICAL TOPIC ENFORCEMENT:**
+You MUST base 100% of the Starter, Main Activities, and Reflection STRICTLY on the provided Strand, Sub-Strand, and Indicators. DO NOT invent a new topic. DO NOT teach a generic subject lesson. If the Indicator says "Identify vowel sounds", the entire lesson MUST be about vowel sounds.
 
 ${ghanaContextPrompt}
 

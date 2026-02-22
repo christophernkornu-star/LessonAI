@@ -33,7 +33,9 @@ export const GHANA_CONTEXT = {
       "Local proverbs and idioms",
       "Ghanaian authors (Ama Ata Aidoo, Efua Sutherland)",
       "Describing local festivals (Homowo, Hogbetsotso)",
-      "Debates on local social issues"
+      "Debates on local social issues",
+      "Grammar examples using Ghanaian names and places (e.g., 'Kofi is eating fufu', 'We travelled to Kumasi')",
+      "Sentence structure exercises based on daily Ghanaian life"
     ],
     history: [
       "Ashanti Kingdom and Golden Stool",
