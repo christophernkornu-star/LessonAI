@@ -39,15 +39,18 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
   useEffect(() => {
     const parentVal = lessonData.numLessons;
     const localVal = numLessonsText === "" ? undefined : parseInt(numLessonsText);
-    if (parentVal !== localVal) {
-      setNumLessonsText(parentVal != null ? String(parentVal) : "");
+    // Only update local text if parent value is different AND parent value is defined
+    // This prevents the local text from being reset to "1" if the parent state re-renders
+    if (parentVal !== undefined && parentVal !== localVal) {
+      setNumLessonsText(String(parentVal));
     }
   }, [lessonData.numLessons]);
 
   // Sync from local → parent on blur
   const handleNumLessonsBlur = () => {
     if (numLessonsText === "") {
-      setLessonData((prev: any) => ({ ...prev, numLessons: undefined }));
+      setNumLessonsText("1");
+      setLessonData((prev: any) => ({ ...prev, numLessons: 1 }));
     } else {
       const parsed = parseInt(numLessonsText);
       if (!isNaN(parsed) && parsed >= 1 && parsed <= 5) {

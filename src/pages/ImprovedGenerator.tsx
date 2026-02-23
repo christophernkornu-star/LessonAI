@@ -273,7 +273,11 @@ const ImprovedGenerator = () => {
                if (configKey) {
                    const config = timetable.subject_config[configKey];
                    if (config && config.frequency) {
-                       updates.numLessons = config.frequency;
+                       // Only update if the user hasn't manually changed it
+                       // We check if it's currently undefined or 1 (default)
+                       if (lessonData.numLessons === undefined || lessonData.numLessons === 1) {
+                           updates.numLessons = config.frequency;
+                       }
                        
                        // Optional: Also set scheduledDays if they exist
                        if (config.days && config.days.length > 0) {
@@ -899,9 +903,13 @@ const ImprovedGenerator = () => {
       }
 
       // Ensure consistency: If we found specific days, the number of lessons should match
+      // BUT if the user manually typed a number of lessons, we should respect that over the timetable frequency
+      // unless the timetable explicitly has days selected.
+      const userNumLessons = lessonData.numLessons;
+      
       const finalNumLessons = (scheduledDays && scheduledDays.length > 0) 
             ? scheduledDays.length 
-            : (numLessonsFromTimetable || lessonData.numLessons || 1);
+            : (userNumLessons && userNumLessons > 1 ? userNumLessons : (numLessonsFromTimetable || 1));
 
       // Force default days to be the scheduled days if available, to prevent AI hallucination
       // If we have scheduledDays, we pass them. The AI prompt logic will use them.
@@ -1463,7 +1471,8 @@ const ImprovedGenerator = () => {
                 {currentStep === 0 && (
                   <BasicInfoStep
                     lessonData={lessonData}
-                    setLessonData={(data) => setLessonData({ ...lessonData, ...data })}
+                    // Pass the setter directly so functional updates work in child
+                    setLessonData={setLessonData}
                     availableLevels={availableLevels}
                     availableSubjects={availableSubjects}
                     userProfile={userProfile}

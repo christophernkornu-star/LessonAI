@@ -496,35 +496,38 @@ export async function generateGhanaLessonDocx(
     }
 
     const docSections = dataArray.map((lessonData, index) => {
+        // Standardize total width to exactly 10080 DXA (7 inches * 1440 twips)
+
         // Table 1: Header Info (Rows 1-3)
-        // Uses original 6-column grid - Scaled to ~10500 total width for 0.5" margins
+        // Week Ending: 4.7cm (2665 dxa), Day: 3.41cm (1933 dxa), Subject: remaining (10080 - 2665 - 1933 = 5482 dxa)
         const table1 = new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          columnWidths: [1500, 600, 1100, 2600, 2600, 2100],
+          layout: TableLayoutType.FIXED,
+          width: { size: 10080, type: WidthType.DXA },
+          columnWidths: [2665, 1933, 5482],
           rows: [
-            // Row 1: Week Ending | Day (2 cols) | Subject (spanning 3 cols to the right)
+            // Row 1: Week Ending | Day | Subject
             new TableRow({
               children: [
                 createCell(`Week Ending: ${lessonData.weekEnding || ''}`, false, 1, false, true),
-                createCell(`Day: ${lessonData.day || ''}`, false, 2, false, true),
-                createCell(`Subject: ${formatSubject(lessonData.subject || '')}`, false, 3, false, true),
+                createCell(`Day: ${lessonData.day || ''}`, false, 1, false, true),
+                createCell(`Subject: ${formatSubject(lessonData.subject || '')}`, false, 1, false, true),
               ],
             }),
 
-            // Row 2: Duration (spanning Week Ending + Day = 3 cols) | Strand (spanning 3 cols to far right)
+            // Row 2: Duration (spanning Week Ending + Day = 2 cols) | Strand (1 col)
             new TableRow({
               children: [
-                createCell(`Duration: ${lessonData.duration || ''}`, false, 3, false, true),
-                createCell(`Strand: ${cleanStrandOrSubStrand(lessonData.strand || '')}`, false, 3, false, true),
+                createCell(`Duration: ${lessonData.duration || ''}`, false, 2, false, true),
+                createCell(`Strand: ${cleanStrandOrSubStrand(lessonData.strand || '')}`, false, 1, false, true),
               ],
             }),
 
-            // Row 3: Class | Class Size (2 cols) | Sub Strand (spanning 3 cols to the right)
+            // Row 3: Class | Class Size | Sub Strand
             new TableRow({
               children: [
                 createCell(`Class: ${formatClass(lessonData.class || '')}`, false, 1, false, true),
-                createCell(`Class Size: ${lessonData.classSize || ''}`, false, 2, false, true),
-                createCell(`Sub Strand: ${cleanStrandOrSubStrand(lessonData.subStrand || '')}`, false, 3, false, true),
+                createCell(`Class Size: ${lessonData.classSize || ''}`, false, 1, false, true),
+                createCell(`Sub Strand: ${cleanStrandOrSubStrand(lessonData.subStrand || '')}`, false, 1, false, true),
               ],
             }),
           ],
@@ -561,8 +564,10 @@ export async function generateGhanaLessonDocx(
         }
 
         const table2 = new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          columnWidths: [2100, 6300, 2100],
+          layout: TableLayoutType.FIXED,
+          width: { size: 10080, type: WidthType.DXA },
+          // Content Standard: 8.5cm (4820 dxa), Indicator: 7.04cm (3992 dxa), Lesson: remaining (10080 - 4820 - 3992 = 1268 dxa)
+          columnWidths: [4820, 3992, 1268],
           rows: [
             new TableRow({
               children: [
@@ -575,23 +580,21 @@ export async function generateGhanaLessonDocx(
         });
 
         // Table 3: Competencies (Row 5)
-        // Independent grid: 2 columns [8232, 2268] - Core Comp is ~4cm (2268 DXa)
+        // Performance Indicator: 13cm (7371 dxa), Core Competencies: remaining (10080 - 7371 = 2709 dxa)
         const table3 = new Table({
           layout: TableLayoutType.FIXED,
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          columnWidths: [8232, 2268],
+          width: { size: 10080, type: WidthType.DXA },
+          columnWidths: [7371, 2709],
           rows: [
             new TableRow({
               children: [
                 createCell(
                   `Performance Indicator: ${ensurePerformanceIndicatorPrefix(lessonData.performanceIndicator || '')}`, 
-                  false, 1, false, true,
-                  { size: 8232, type: WidthType.DXA }
+                  false, 1, false, true
                 ),
                 createCell(
                   `Core Competencies: ${lessonData.coreCompetencies || ''}`, 
-                  false, 1, false, true,
-                  { size: 2268, type: WidthType.DXA }
+                  false, 1, false, true
                 ),
               ],
             }),
@@ -599,10 +602,11 @@ export async function generateGhanaLessonDocx(
         });
 
         // Table 4: Keywords & References (Rows 6-7)
-        // Independent grid: 2 columns [2000, 8500] - Increased first column for "Keywords"
+        // Keywords: 2.21cm (1253 dxa), Reference: remaining (10080 - 1253 = 8827 dxa)
         const table4 = new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          columnWidths: [2000, 8500],
+          layout: TableLayoutType.FIXED,
+          width: { size: 10080, type: WidthType.DXA },
+          columnWidths: [1253, 8827],
           rows: [
             new TableRow({
               children: [
@@ -621,18 +625,18 @@ export async function generateGhanaLessonDocx(
         });
 
         // Table 5: Phases (Rows 8+)
-        // Independent grid: 3 columns [1701, 6497, 2268]
+        // Phase/Duration: 3.4cm (1928 dxa), Learners Activities: 10.19cm (5778 dxa), Resources: remaining (10080 - 1928 - 5778 = 2374 dxa)
         const table5 = new Table({
           layout: TableLayoutType.FIXED,
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          columnWidths: [1701, 6497, 2268],
+          width: { size: 10080, type: WidthType.DXA },
+          columnWidths: [1928, 5778, 2374],
           rows: [
             // Header
             new TableRow({
               children: [
-                createCell("Phase/Duration", true, 1, true),
-                createCell("Learners Activities", true, 1, true),
-                createCell("Resources", true, 1, true),
+                createCell("Phase/Duration", true, 1, true, false),
+                createCell("Learners Activities", true, 1, true, false),
+                createCell("Resources", true, 1, true, false),
               ],
             }),
 
@@ -640,7 +644,7 @@ export async function generateGhanaLessonDocx(
             new TableRow({
               children: [
                 new TableCell({
-                  width: { size: 1701, type: WidthType.DXA },
+                  width: { size: 1928, type: WidthType.DXA },
                   children: [
                     new Paragraph({
                       children: [
@@ -659,8 +663,8 @@ export async function generateGhanaLessonDocx(
                   verticalAlign: VerticalAlign.TOP,
                   margins: { top: 100, bottom: 100, left: 100, right: 100 },
                 }),
-                createCell(capitalizeWords(lessonData.phases?.phase1_starter?.learnerActivities || ""), false, 1, false),
-                createCell(capitalizeWords(lessonData.phases?.phase1_starter?.resources || ""), false, 1, false),
+                createCell(capitalizeWords(lessonData.phases?.phase1_starter?.learnerActivities || ""), false, 1, false, false),
+                createCell(capitalizeWords(lessonData.phases?.phase1_starter?.resources || ""), false, 1, false, false),
               ],
             }),
 
@@ -668,7 +672,7 @@ export async function generateGhanaLessonDocx(
             new TableRow({
               children: [
                  new TableCell({
-                  width: { size: 1701, type: WidthType.DXA },
+                  width: { size: 1928, type: WidthType.DXA },
                   children: [
                     new Paragraph({
                       children: [
@@ -687,8 +691,8 @@ export async function generateGhanaLessonDocx(
                   verticalAlign: VerticalAlign.TOP,
                   margins: { top: 100, bottom: 100, left: 100, right: 100 },
                 }),
-                createCell(capitalizeWords(lessonData.phases?.phase2_newLearning?.learnerActivities || ""), false, 1, false),
-                createCell(capitalizeWords(lessonData.phases?.phase2_newLearning?.resources || ""), false, 1, false),
+                createCell(capitalizeWords(lessonData.phases?.phase2_newLearning?.learnerActivities || ""), false, 1, false, false),
+                createCell(capitalizeWords(lessonData.phases?.phase2_newLearning?.resources || ""), false, 1, false, false),
               ],
             }),
 
@@ -696,7 +700,7 @@ export async function generateGhanaLessonDocx(
             new TableRow({
               children: [
                  new TableCell({
-                  width: { size: 1701, type: WidthType.DXA },
+                  width: { size: 1928, type: WidthType.DXA },
                   children: [
                     new Paragraph({
                       children: [
@@ -715,8 +719,8 @@ export async function generateGhanaLessonDocx(
                   verticalAlign: VerticalAlign.TOP,
                   margins: { top: 100, bottom: 100, left: 100, right: 100 },
                 }),
-                createCell(capitalizeWords(lessonData.phases?.phase3_reflection?.learnerActivities || ""), false, 1, false),
-                createCell(capitalizeWords(lessonData.phases?.phase3_reflection?.resources || ""), false, 1, false),
+                createCell(capitalizeWords(lessonData.phases?.phase3_reflection?.learnerActivities || ""), false, 1, false, false),
+                createCell(capitalizeWords(lessonData.phases?.phase3_reflection?.resources || ""), false, 1, false, false),
               ],
             }),
           ],
