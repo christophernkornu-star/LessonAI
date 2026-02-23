@@ -134,7 +134,17 @@ export default function AssessmentGenerator() {
 
   const handleExport = async (includeAnswers: boolean) => {
     if (!generatedAssessment) return;
-    await assessmentService.exportToDocx(generatedAssessment, includeAnswers);
+    try {
+      await assessmentService.exportToDocx(generatedAssessment, includeAnswers);
+    } catch (error: any) {
+      console.error("Export error:", error);
+      if (error?.message?.includes('Failed to fetch dynamically imported module') || error?.message?.includes('Importing a module script failed')) {
+        toast.error("Updating application... Please wait.");
+        setTimeout(() => window.location.reload(), 1500);
+        return;
+      }
+      toast.error("Failed to export assessment. Please try again.");
+    }
   };
 
   const handleNewAssessment = () => {

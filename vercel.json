@@ -5,7 +5,7 @@
       "destination": "https://api.deepseek.com/:path*"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!assets/).*)",
       "destination": "/index.html"
     }
   ]

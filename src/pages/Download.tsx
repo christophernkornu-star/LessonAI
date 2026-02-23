@@ -187,8 +187,13 @@ const DownloadPage = () => {
         
         toast.success("Lesson note downloaded successfully!");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Download error:", error);
+      if (error?.message?.includes('Failed to fetch dynamically imported module') || error?.message?.includes('Importing a module script failed')) {
+        toast.error("Updating application... Please wait.");
+        setTimeout(() => window.location.reload(), 1500);
+        return;
+      }
       toast.error("Failed to download lesson note. Please try again.");
     }
   };
@@ -228,8 +233,13 @@ const DownloadPage = () => {
       const { exportToPDF } = await import("@/services/pdfService");
       exportToPDF(content, filename);
       toast.success("PDF export initiated - check your print dialog");
-    } catch (error) {
+    } catch (error: any) {
       console.error("PDF export error:", error);
+      if (error?.message?.includes('Failed to fetch dynamically imported module') || error?.message?.includes('Importing a module script failed')) {
+        toast.error("Updating application... Please wait.");
+        setTimeout(() => window.location.reload(), 1500);
+        return;
+      }
       toast.error("Failed to export PDF. Please try again.");
     }
   };
