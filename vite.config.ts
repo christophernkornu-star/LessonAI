@@ -49,7 +49,9 @@ export default defineConfig(({ mode }) => ({
     })
   ].filter(Boolean),
   esbuild: {
-    drop: mode === 'production' ? ['console', 'debugger'] : [],
+    // In production, strip standard logs but keep errors and warnings for debugging
+    drop: mode === 'production' ? ['debugger'] : [],
+    pure: mode === 'production' ? ['console.log', 'console.info', 'console.debug', 'console.trace'] : [],
   },
   resolve: {
     alias: {

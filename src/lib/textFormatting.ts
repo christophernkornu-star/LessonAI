@@ -47,7 +47,7 @@ export function cleanAndSplitText(text: string): string[] {
   processed = processed.replace(/([^\n\d])(\s+)(\d+\.\s)/g, '$1\n$3');
 
   // Fix jumbled numbered lists with parenthesis (e.g. "text 1) Item 2) Item")
-  processed = processed.replace(/([^\n\d])(\s*)(\d+\)\s)/g, '$1\n$3');
+  processed = processed.replace(/([^\n\d])(\s+)(\d+\)\s)/g, '$1\n$3');
   
   // Fix jumbled lettered lists (e.g. " a) Item b) Item")
   processed = processed.replace(/([^\n])(\s+)([a-zA-Z][\)\.]\s)/g, '$1\n$3');
