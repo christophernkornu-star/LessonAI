@@ -9,8 +9,9 @@ import {
   SheetTrigger,
   SheetDescription,
 } from "@/components/ui/sheet";
-import { Menu, X, Sparkles, LayoutDashboard, FileText, Settings, LogOut } from "lucide-react";
+import { Menu, X, Sparkles, LayoutDashboard, FileText, Settings, LogOut, LifeBuoy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { ContactDeveloperDialog } from "./ContactDeveloperDialog";
 
 export function Navbar() {
   const navigate = useNavigate();
@@ -54,6 +55,14 @@ export function Navbar() {
             <FileText className="mr-2 h-4 w-4" />
             Templates
           </Button>
+
+          <ContactDeveloperDialog>
+            <Button variant="ghost" className="justify-start w-full sm:w-auto" onClick={() => setIsOpen(false)}>
+              <LifeBuoy className="mr-2 h-4 w-4" />
+              Contact
+            </Button>
+          </ContactDeveloperDialog>
+
           <Button variant="ghost" className="justify-start w-full sm:w-auto mobile-only sm:hidden" onClick={handleSignOut}>
             <LogOut className="mr-2 h-4 w-4" />
             Sign Out
@@ -64,6 +73,12 @@ export function Navbar() {
         </>
       ) : (
         <>
+          <ContactDeveloperDialog>
+            <Button variant="ghost" className="justify-start w-full sm:w-auto">
+              Contact
+            </Button>
+          </ContactDeveloperDialog>
+
           <Button variant="ghost" className="justify-start w-full sm:w-auto" onClick={() => { navigate("/login"); setIsOpen(false); }}>
             Sign In
           </Button>

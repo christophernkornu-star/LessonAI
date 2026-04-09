@@ -12,10 +12,7 @@ import { extractTextFromFile } from "./fileParsingService";
 // Enforced to DeepSeek for production
 const AI_PROVIDER = "deepseek";
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY; // Kept for reference but unused
-const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY;
-
 const GROQ_API_URL = "https://api.deepseek.com/chat/completions";
-const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
 
 // Helper functions for teaching philosophy and detail level
 function getPhilosophyGuidance(philosophy: string): string {
@@ -268,39 +265,21 @@ async function callDeepSeekAPI(prompt: string, systemMessage?: string, numLesson
       : Math.min(baseTokens, 8192));
   
   try {
-    const response = await fetch(DEEPSEEK_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "system",
-            content: systemMessage || defaultSystemMessage
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: calculatedMaxTokens,
-        stream: false
-      })
+    const { data, error } = await supabase.functions.invoke('deepseek-proxy', {
+      body: {
+        prompt,
+        systemMessage: systemMessage || defaultSystemMessage,
+        maxTokens: calculatedMaxTokens,
+        numLessons
+      }
     });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error("DeepSeek API Error:", response.status, errorText);
-        throw new Error(`DeepSeek API Error: ${response.status} ${errorText}`);
+    if (error) {
+      console.error("Supabase Edge Function Error:", error);
+      throw new Error(`Edge Function Error: ${error.message}`);
     }
 
-    const data = await response.json();
-    
-    if (!data.choices || !data.choices[0]?.message?.content) {
+    if (!data || !data.choices || !data.choices[0]?.message?.content) {
       console.error("Invalid response structure from Edge Function:", data);
       logAIUsage("deepseek-chat", "text-generation", false, 0, "Invalid response from Edge Function");
       throw new Error("Invalid response from AI Service");
