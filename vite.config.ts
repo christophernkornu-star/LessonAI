@@ -23,6 +23,9 @@ export default defineConfig(({ mode }) => ({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'LessonAi.png', 'robots.txt'],
+      workbox: {
+        maximumFileSizeToCacheInBytes: 4194304 // 4 MB
+      },
       manifest: {
         name: 'LessonAI',
         short_name: 'LessonAI',
