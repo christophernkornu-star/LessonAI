@@ -1,12 +1,23 @@
 // @ts-nocheck
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const allowedOrigins = [
+  'https://lessonai.vercel.app',
+  'http://localhost:8080',
+  'http://localhost:5173',
+  'http://localhost:3000'
+];
 
 serve(async (req: Request) => {
+  const origin = req.headers.get('Origin') || '';
+  const isAllowedOrigin = allowedOrigins.includes(origin);
+  
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': isAllowedOrigin ? origin : 'https://lessonai.vercel.app',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  };
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }

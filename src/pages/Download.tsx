@@ -288,9 +288,27 @@ const DownloadPage = () => {
                     (() => {
                       try {
                         // Try to parse as JSON
-                        const isJson = generatedContent.trim().startsWith('{') && generatedContent.trim().endsWith('}');
-                        if (isJson) {
-                          const data = JSON.parse(generatedContent);
+                        let cleanText = generatedContent.trim();
+                        if (cleanText.startsWith('```json')) {
+                          cleanText = cleanText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+                        } else if (cleanText.startsWith('```')) {
+                          cleanText = cleanText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+                        }
+                        
+                        let data = null;
+                        let isJson = false;
+
+                        if (cleanText.startsWith('{') || cleanText.startsWith('[')) {
+                          try {
+                            const parsed = JSON.parse(cleanText);
+                            data = Array.isArray(parsed) ? parsed[0] : parsed;
+                            isJson = true;
+                          } catch (e) {
+                            console.error("Preview JSON Parsing Error:", e);
+                          }
+                        }
+
+                        if (isJson && data) {
                           return (
                             <div className="space-y-4">
                               <table className="w-full border border-border">

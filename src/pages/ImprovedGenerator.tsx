@@ -1412,7 +1412,7 @@ const ImprovedGenerator = () => {
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen bg-gradient-subtle">
+      <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
         <Navbar />
         
         {/* Payment Wall */}
@@ -1426,7 +1426,7 @@ const ImprovedGenerator = () => {
         
         {/* Status Bar */}
         {( !isOnline || lastSaved ) && (
-          <div className="bg-muted/50 border-b border-border px-4 py-2 text-center text-xs text-muted-foreground flex flex-wrap justify-center gap-x-4 gap-y-1">
+          <div className="bg-accent/10 border-b border-border/40 backdrop-blur-md px-4 py-2 text-center text-xs text-muted-foreground flex flex-wrap justify-center gap-x-4 gap-y-1">
               {!isOnline && (
                   <span className="flex items-center gap-1">
                       <WifiOff className="h-3 w-3" /> Offline
@@ -1440,11 +1440,15 @@ const ImprovedGenerator = () => {
           </div>
         )}
 
-        <main className="container mx-auto px-3 sm:px-4 py-6 sm:py-12">
+        <main className="container mx-auto px-4 py-8 sm:py-12 max-w-[80rem] flex-grow">
           <div className="mx-auto max-w-4xl">
-            <div className="mb-6 sm:mb-8 text-center px-2">
-              <h2 className="mb-2 text-2xl sm:text-3xl font-bold text-foreground">Create Your Lesson Note</h2>
-              <p className="text-sm sm:text-base text-muted-foreground">
+            <div className="mb-10 sm:mb-14 text-center px-4">
+              <div className="mb-4 inline-flex items-center justify-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-semibold text-primary shadow-sm backdrop-blur-md animate-fade-in-up">
+                <Sparkles className="h-4 w-4" />
+                AI Generator
+              </div>
+              <h2 className="mb-3 text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-foreground">Create Your Lesson Note</h2>
+                <p className="text-base sm:text-lg text-muted-foreground font-medium">
                 Follow the steps below to generate a professional lesson note
               </p>
               
@@ -1462,7 +1466,7 @@ const ImprovedGenerator = () => {
 
             {/* Progress Stepper */}
             <div className="mb-6 sm:mb-8 overflow-x-auto px-2">
-              <Stepper steps={STEPS} currentStep={currentStep} />
+              <Stepper className="mb-10" steps={STEPS} currentStep={currentStep} />
             </div>
 
             <Card className="p-4 sm:p-6 lg:p-8 shadow-medium">

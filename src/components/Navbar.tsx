@@ -91,12 +91,15 @@ export function Navbar() {
   );
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto px-4 py-3 sm:py-4">
+    <header className="sticky top-0 z-50 shadow-sm border-b border-primary/10 bg-background/80 backdrop-blur-lg supports-[backdrop-filter]:bg-background/60">
+      <div className="absolute inset-0 -z-10 bg-gradient-to-r from-primary/10 via-blue-500/5 to-secondary/10 pointer-events-none" />
+      <div className="container relative mx-auto px-4 py-3 sm:py-4">
         <div className="flex items-center justify-between">
-            <Link to="/" className="flex items-center gap-2" onClick={() => setIsOpen(false)}>
-                <Sparkles className="h-6 w-6 text-primary" />
-                <h1 className="text-xl sm:text-2xl font-bold text-foreground">LessonAI</h1>
+            <Link to="/" className="flex items-center gap-2 hover:scale-105 transition-transform duration-300" onClick={() => setIsOpen(false)}>
+                <div className="flex bg-primary/10 p-1.5 rounded-lg items-center justify-center">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                </div>
+                <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">LessonAI</h1>
             </Link>
 
           {/* Desktop Navigation */}

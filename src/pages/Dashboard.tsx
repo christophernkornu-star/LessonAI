@@ -417,23 +417,28 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-subtle">
+    <div className="min-h-screen bg-background text-foreground font-sans flex flex-col">
       <Navbar />
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 sm:py-12 max-w-7xl flex-grow">
         {/* Welcome Card */}
-        <Card className="p-4 sm:p-6 mb-6 sm:mb-8 bg-gradient-hero text-white">
-          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+        <Card className="relative overflow-hidden border-0 bg-primary p-6 sm:p-10 mb-8 sm:mb-12 shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-3xl">
+          <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_white_1px,_transparent_1px)] bg-[size:20px_20px] pointer-events-none" />
+          <div className="absolute -right-20 -top-20 h-[300px] w-[300px] rounded-full bg-white/10 blur-[50px] pointer-events-none" />
+          <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold mb-2">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium text-white shadow-sm backdrop-blur-md animate-fade-in-up">
+                <Sparkles className="h-3.5 w-3.5" /> Welcome Back
+              </div>
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight mb-2">
                 {getGreeting()}, {profile?.full_name || "Teacher"}!
               </h2>
-              <p className="opacity-90 text-sm sm:text-base">Ready to create amazing lesson notes?</p>
+              <p className="text-primary-foreground/90 text-lg sm:text-xl font-medium tracking-wide">Ready to create amazing lesson notes?</p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full lg:w-auto mt-4 lg:mt-0">
               <Button
                 onClick={() => navigate("/generator")}
-                className="bg-white text-primary hover:bg-white/90 w-full sm:w-auto"
+                className="bg-white text-primary hover:bg-white/90 hover:scale-105 transition-transform duration-300 shadow-xl w-full font-bold h-12 px-6"
                 size="lg"
               >
                 <Plus className="mr-2 h-5 w-5" />
@@ -441,7 +446,7 @@ const Dashboard = () => {
               </Button>
               <Button
                 onClick={() => navigate("/scheme")}
-                className="bg-white/10 text-white border border-white/20 hover:bg-white/20 w-full sm:w-auto"
+                className="bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:scale-105 transition-transform duration-300 shadow-xl w-full font-medium h-12 px-5"
                 size="lg"
               >
                 <Calendar className="mr-2 h-5 w-5" />
@@ -449,7 +454,7 @@ const Dashboard = () => {
               </Button>
               <Button
                 onClick={() => navigate("/timetable")}
-                className="bg-white/10 text-white border border-white/20 hover:bg-white/20 w-full sm:w-auto"
+                className="bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:scale-105 transition-transform duration-300 shadow-xl w-full font-medium h-12 px-5"
                 size="lg"
               >
                 <Clock className="mr-2 h-5 w-5" />
@@ -457,7 +462,7 @@ const Dashboard = () => {
               </Button>
               <Button
                 onClick={() => navigate("/assessments")}
-                className="bg-white/10 text-white border border-white/20 hover:bg-white/20 w-full sm:w-auto"
+                className="bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:scale-105 transition-transform duration-300 shadow-xl w-full font-medium h-12 px-5"
                 size="lg"
               >
                 <FileText className="mr-2 h-5 w-5" />
@@ -469,7 +474,7 @@ const Dashboard = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          <Card className="p-6">
+          <Card className="p-6 group relative overflow-hidden rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/5">
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-full bg-primary/10">
                 <FileText className="h-6 w-6 text-primary" />
@@ -481,7 +486,7 @@ const Dashboard = () => {
             </div>
           </Card>
 
-          <Card className="p-6">
+          <Card className="p-6 group relative overflow-hidden rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/5">
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-full bg-secondary/10">
                 <Heart className="h-6 w-6 text-secondary" />
@@ -495,7 +500,7 @@ const Dashboard = () => {
             </div>
           </Card>
 
-          <Card className="p-6">
+          <Card className="p-6 group relative overflow-hidden rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/5">
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-full bg-green-500/10">
                 <TrendingUp className="h-6 w-6 text-green-500" />
@@ -509,7 +514,7 @@ const Dashboard = () => {
             </div>
           </Card>
 
-          <Card className="p-6">
+          <Card className="p-6 group relative overflow-hidden rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/5">
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-full bg-orange-500/10">
                 <Award className="h-6 w-6 text-orange-500" />
@@ -542,22 +547,22 @@ const Dashboard = () => {
 
         {/* Analytics Tabs */}
         <Tabs defaultValue="overview" className="mb-6 sm:mb-8">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto">
-            <TabsTrigger value="overview">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Overview</span>
+          <TabsList className="inline-flex h-auto w-full grid grid-cols-4 items-center justify-center gap-1 sm:gap-2 rounded-2xl bg-muted/40 p-1.5 sm:p-2 text-muted-foreground md:flex md:flex-nowrap lg:w-auto border border-border/50 backdrop-blur-sm">
+            <TabsTrigger value="overview" className="flex flex-col sm:flex-row h-auto w-full py-2 px-1 sm:py-2.5 sm:px-4 rounded-xl data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md transition-all">
+              <BarChart3 className="h-5 w-5 sm:h-4 sm:w-4 sm:mr-2 mb-1 sm:mb-0" />
+              <span className="text-[10px] sm:text-sm font-medium">Overview</span>
             </TabsTrigger>
-            <TabsTrigger value="activity">
-              <Calendar className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Activity</span>
+            <TabsTrigger value="activity" className="flex flex-col sm:flex-row h-auto w-full py-2 px-1 sm:py-2.5 sm:px-4 rounded-xl data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md transition-all">
+              <Calendar className="h-5 w-5 sm:h-4 sm:w-4 sm:mr-2 mb-1 sm:mb-0" />
+              <span className="text-[10px] sm:text-sm font-medium">Activity</span>
             </TabsTrigger>
-            <TabsTrigger value="achievements">
-              <Award className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Achievements</span>
+            <TabsTrigger value="achievements" className="flex flex-col sm:flex-row h-auto w-full py-2 px-1 sm:py-2.5 sm:px-4 rounded-xl data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md transition-all">
+              <Award className="h-5 w-5 sm:h-4 sm:w-4 sm:mr-2 mb-1 sm:mb-0" />
+              <span className="text-[10px] sm:text-sm font-medium">Badges</span>
             </TabsTrigger>
-            <TabsTrigger value="lessons">
-              <FileText className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Lessons</span>
+            <TabsTrigger value="lessons" className="flex flex-col sm:flex-row h-auto w-full py-2 px-1 sm:py-2.5 sm:px-4 rounded-xl data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md transition-all">
+              <FileText className="h-5 w-5 sm:h-4 sm:w-4 sm:mr-2 mb-1 sm:mb-0" />
+              <span className="text-[10px] sm:text-sm font-medium">Lessons</span>
             </TabsTrigger>
           </TabsList>
 
@@ -592,19 +597,19 @@ const Dashboard = () => {
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card className="p-4">
+              <Card className="p-5 rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:bg-accent/5">
                 <div className="text-sm text-muted-foreground mb-1">Favorite Rate</div>
                 <div className="text-2xl font-bold">{qualityMetrics?.favorite_rate || 0}%</div>
               </Card>
-              <Card className="p-4">
+              <Card className="p-5 rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:bg-accent/5">
                 <div className="text-sm text-muted-foreground mb-1">Avg Content Length</div>
                 <div className="text-2xl font-bold">{qualityMetrics?.avg_content_length || 0}</div>
               </Card>
-              <Card className="p-4">
+              <Card className="p-5 rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:bg-accent/5">
                 <div className="text-sm text-muted-foreground mb-1">This Month</div>
                 <div className="text-2xl font-bold">{engagementMetrics?.lessons_this_month || 0}</div>
               </Card>
-              <Card className="p-4">
+              <Card className="p-5 rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:bg-accent/5">
                 <div className="text-sm text-muted-foreground mb-1">Longest Streak</div>
                 <div className="text-2xl font-bold">🏆 {engagementMetrics?.longest_streak || 0}</div>
               </Card>
@@ -619,7 +624,7 @@ const Dashboard = () => {
             />
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className="p-6">
+              <Card className="p-6 group relative overflow-hidden rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/5">
                 <h3 className="text-lg font-semibold mb-4">Engagement Stats</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
@@ -649,7 +654,7 @@ const Dashboard = () => {
                 </div>
               </Card>
 
-              <Card className="p-6">
+              <Card className="p-6 group relative overflow-hidden rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/5">
                 <h3 className="text-lg font-semibold mb-4">Quality Metrics</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
@@ -678,13 +683,13 @@ const Dashboard = () => {
           </TabsContent>
 
           <TabsContent value="lessons" className="mt-6">
-            <Card className="p-6">
+            <Card className="p-6 group relative overflow-hidden rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/5">
               <Tabs defaultValue="all">
-            <TabsList>
-              <TabsTrigger value="all">All Lessons</TabsTrigger>
-              <TabsTrigger value="favorites">Favorites</TabsTrigger>
-              <TabsTrigger value="profile">Profile</TabsTrigger>
-            </TabsList>
+            <TabsList className="inline-flex h-12 items-center justify-center rounded-xl bg-muted/40 p-1 text-muted-foreground w-full max-w-md mx-auto mb-6">
+                <TabsTrigger value="all" className="h-full px-6 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">All Lessons</TabsTrigger>
+                <TabsTrigger value="favorites" className="h-full px-6 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">Favorites</TabsTrigger>
+                <TabsTrigger value="profile" className="h-full px-6 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">Profile</TabsTrigger>
+              </TabsList>
 
             <TabsContent value="all" className="mt-6">
               {lessonNotes.length === 0 ? (
@@ -701,7 +706,7 @@ const Dashboard = () => {
               ) : (
                 <div className="space-y-4">
                   {lessonNotes.map((note) => (
-                    <Card key={note.id} className="p-3 sm:p-4 hover:shadow-md transition-shadow">
+                    <Card key={note.id} className="p-4 sm:p-5 group relative overflow-hidden rounded-xl border border-border/50 bg-background/50 hover:bg-accent/5 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
                       <div className="flex flex-col sm:flex-row items-start justify-between gap-3">
                         <div className="flex-1 w-full">
                           <h3 className="font-semibold text-base sm:text-lg mb-1">{note.title}</h3>
@@ -713,7 +718,7 @@ const Dashboard = () => {
                             Created {new Date(note.created_at).toLocaleDateString()}
                           </p>
                         </div>
-                        <div className="flex gap-2 w-full sm:w-auto justify-end">
+                        <div className="flex gap-2 w-full justify-end">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -751,7 +756,7 @@ const Dashboard = () => {
                   {lessonNotes
                     .filter((note) => note.is_favorite)
                     .map((note) => (
-                      <Card key={note.id} className="p-4">
+                      <Card key={note.id} className="p-4 sm:p-5 group relative overflow-hidden rounded-xl border border-border/50 bg-background/50 hover:bg-accent/5 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <h3 className="font-semibold text-lg mb-1">{note.title}</h3>
@@ -787,7 +792,7 @@ const Dashboard = () => {
             </TabsContent>
 
             <TabsContent value="profile" className="mt-6">
-              <Card className="p-6">
+              <Card className="p-6 group relative overflow-hidden rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/5">
                 <div className="space-y-6">
                   <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-semibold">Teacher Profile</h3>
