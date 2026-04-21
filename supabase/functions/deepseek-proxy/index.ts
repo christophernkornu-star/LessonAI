@@ -1,5 +1,5 @@
-// @ts-nocheck
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
 const allowedOrigins = [
   'https://lessonai.vercel.app',
@@ -23,7 +23,30 @@ serve(async (req: Request) => {
   }
 
   try {
-    // SECURITY: Get key from server environment, NOT from the request body
+    // 1. Authenticate the User
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('Missing Authorization header');
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+
+    if (userError || !user) {
+      console.error("Auth error:", userError);
+      return new Response(JSON.stringify({ error: 'Unauthorized user. Token may be expired.' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 2. Validate API Key
     const apiKey = Deno.env.get('DEEPSEEK_API_KEY');
     if (!apiKey) {
       throw new Error('Server configuration error: DEEPSEEK_API_KEY not found in secrets');
@@ -31,12 +54,10 @@ serve(async (req: Request) => {
 
     const { prompt, systemMessage, maxTokens, numLessons } = await req.json();
 
-    // Calculate max_tokens based on number of lessons if not explicitly provided
-    // DeepSeek has a max_tokens limit of 8192
     const baseTokens = 4000;
     const tokensPerLesson = 2500;
     const calculatedMaxTokens = maxTokens 
-      ? Math.min(maxTokens, 8192)  // Cap explicit maxTokens at 8192
+      ? Math.min(maxTokens, 8192)  
       : (numLessons && numLessons > 1 
         ? Math.min(baseTokens + (numLessons * tokensPerLesson), 8192)
         : Math.min(baseTokens, 8192));
@@ -67,6 +88,7 @@ serve(async (req: Request) => {
     const data = await response.json();
 
     return new Response(JSON.stringify(data), {
+      status: response.status,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
