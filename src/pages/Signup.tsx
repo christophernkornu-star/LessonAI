@@ -99,12 +99,16 @@ export default function Signup() {
   return (
     <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-3 sm:p-4">
       <Card className="w-full max-w-md p-6 sm:p-8 shadow-medium">
-        <div className="mb-6 sm:mb-8 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-hero mb-3 sm:mb-4">
-            <GraduationCap className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+        <div className="mb-6 sm:mb-8 text-center space-y-2">
+          <div className="flex justify-center mb-4 sm:mb-6">
+            <div className="flex bg-primary/10 p-3 sm:p-4 rounded-xl items-center justify-center">
+              <GraduationCap className="h-7 w-7 sm:h-9 sm:w-9 text-primary" />
+            </div>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Create Account</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">Join thousands of teachers using LessonAI</p>
+          <h1 className="text-3xl font-bold tracking-tight">Create Account</h1>
+          <p className="text-muted-foreground">
+            Join thousands of teachers using LessonAI
+          </p>
         </div>
 
         {!isSignupsEnabled ? (
