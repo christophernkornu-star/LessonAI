@@ -1,0 +1,28 @@
+﻿commit 86292b0f29ee067af43020248502f5d9af392d30
+Author: chrisfort <christophernkornu@gmail.com>
+Date:   Mon Feb 2 05:26:16 2026 +0000
+
+    fix: Add overflow-x-auto class to CardContent for better table responsiveness
+
+diff --git a/src/pages/AdminDashboard.tsx b/src/pages/AdminDashboard.tsx
+index afdd8d3..6f34f39 100644
+--- a/src/pages/AdminDashboard.tsx
++++ b/src/pages/AdminDashboard.tsx
+@@ -679,7 +679,7 @@ const AdminDashboard = () => {
+                         <CardTitle>Top Contributors</CardTitle>
+                         <CardDescription>Most active users in the last 30 days</CardDescription>
+                       </CardHeader>
+-                      <CardContent>
++                      <CardContent className="overflow-x-auto">
+                         <Table>
+                           <TableHeader>
+                             <TableRow>
+@@ -831,7 +831,7 @@ const AdminDashboard = () => {
+                     <CardTitle>All Users</CardTitle>
+                     <CardDescription>List of all registered users and their lesson generation counts</CardDescription>
+                   </CardHeader>
+-                  <CardContent>
++                  <CardContent className="overflow-x-auto">
+                     <Table>
+                       <TableHeader>
+                         <TableRow>

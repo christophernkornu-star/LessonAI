@@ -574,8 +574,7 @@ export async function setPaymentExemption(
       user_id: targetUserId,
       is_payment_exempt: exempt,
       exemption_reason: reason || null,
-      exemption_granted_by: exempt ? user.id : null,
-      exemption_granted_at: exempt ? new Date().toISOString() : null,
+      exempted_by: exempt ? user.id : null,
     }, {
       onConflict: 'user_id'
     });

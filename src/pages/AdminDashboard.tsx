@@ -450,32 +450,32 @@ const AdminDashboard = () => {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-6 mb-8">
-            <TabsTrigger value="analytics" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
-              <BarChart3 className="w-4 h-4" />
-              <span className="hidden sm:inline">Analytics</span>
-            </TabsTrigger>
-            <TabsTrigger value="users" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
-              <Users className="w-4 h-4" />
-              <span className="hidden sm:inline">Users</span>
-            </TabsTrigger>
-            <TabsTrigger value="payments" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
-              <CreditCard className="w-4 h-4" />
-              <span className="hidden sm:inline">Payments</span>
-            </TabsTrigger>
-            <TabsTrigger value="curriculum" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
-              <BookOpen className="w-4 h-4" />
-              <span className="hidden sm:inline">Curriculum</span>
-            </TabsTrigger>
-            <TabsTrigger value="template" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
-              <FileText className="w-4 h-4" />
-              <span className="hidden sm:inline">Templates</span>
-            </TabsTrigger>
-            <TabsTrigger value="resource" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
-              <FolderOpen className="w-4 h-4" />
-              <span className="hidden sm:inline">Resources</span>
-            </TabsTrigger>
-          </TabsList>
+          <TabsList className="flex h-auto w-full max-w-full items-center justify-between gap-1 sm:gap-2 rounded-2xl bg-[#F8F9FA] p-1.5 sm:p-2 border border-transparent shadow-sm mb-8">
+              <TabsTrigger value="analytics" className="flex flex-col items-center justify-center gap-1 h-auto flex-1 min-w-0 py-2 sm:py-3 px-1 sm:px-2 rounded-xl text-slate-500 data-[state=active]:bg-white data-[state=active]:text-slate-800 data-[state=active]:shadow-sm outline-none transition-all border border-transparent data-[state=active]:border-slate-100 overflow-hidden">
+                <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.5]" />
+                <span className="text-[9px] sm:text-xs font-medium tracking-wide truncate w-full text-center">Overview</span>
+              </TabsTrigger>
+              <TabsTrigger value="users" className="flex flex-col items-center justify-center gap-1 h-auto flex-1 min-w-0 py-2 sm:py-3 px-1 sm:px-2 rounded-xl text-slate-500 data-[state=active]:bg-white data-[state=active]:text-slate-800 data-[state=active]:shadow-sm outline-none transition-all border border-transparent data-[state=active]:border-slate-100 overflow-hidden">
+                <Users className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.5]" />
+                <span className="text-[9px] sm:text-xs font-medium tracking-wide truncate w-full text-center">Users</span>
+              </TabsTrigger>
+              <TabsTrigger value="payments" className="flex flex-col items-center justify-center gap-1 h-auto flex-1 min-w-0 py-2 sm:py-3 px-1 sm:px-2 rounded-xl text-slate-500 data-[state=active]:bg-white data-[state=active]:text-slate-800 data-[state=active]:shadow-sm outline-none transition-all border border-transparent data-[state=active]:border-slate-100 overflow-hidden">
+                <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.5]" />
+                <span className="text-[9px] sm:text-xs font-medium tracking-wide truncate w-full text-center">Payments</span>
+              </TabsTrigger>
+              <TabsTrigger value="curriculum" className="flex flex-col items-center justify-center gap-1 h-auto flex-1 min-w-0 py-2 sm:py-3 px-1 sm:px-2 rounded-xl text-slate-500 data-[state=active]:bg-white data-[state=active]:text-slate-800 data-[state=active]:shadow-sm outline-none transition-all border border-transparent data-[state=active]:border-slate-100 overflow-hidden">
+                <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.5]" />
+                <span className="text-[9px] sm:text-xs font-medium tracking-wide truncate w-full text-center">Curriculum</span>
+              </TabsTrigger>
+              <TabsTrigger value="template" className="flex flex-col items-center justify-center gap-1 h-auto flex-1 min-w-0 py-2 sm:py-3 px-1 sm:px-2 rounded-xl text-slate-500 data-[state=active]:bg-white data-[state=active]:text-slate-800 data-[state=active]:shadow-sm outline-none transition-all border border-transparent data-[state=active]:border-slate-100 overflow-hidden">
+                <FileText className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.5]" />
+                <span className="text-[9px] sm:text-xs font-medium tracking-wide truncate w-full text-center">Templates</span>
+              </TabsTrigger>
+              <TabsTrigger value="resource" className="flex flex-col items-center justify-center gap-1 h-auto flex-1 min-w-0 py-2 sm:py-3 px-1 sm:px-2 rounded-xl text-slate-500 data-[state=active]:bg-white data-[state=active]:text-slate-800 data-[state=active]:shadow-sm outline-none transition-all border border-transparent data-[state=active]:border-slate-100 overflow-hidden">
+                <FolderOpen className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.5]" />
+                <span className="text-[9px] sm:text-xs font-medium tracking-wide truncate w-full text-center">Resources</span>
+              </TabsTrigger>
+            </TabsList>
 
           {/* Payments Tab */}
           <TabsContent value="payments">
@@ -679,42 +679,65 @@ const AdminDashboard = () => {
                         <CardTitle>Top Contributors</CardTitle>
                         <CardDescription>Most active users in the last 30 days</CardDescription>
                       </CardHeader>
-                      <CardContent className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>User</TableHead>
-                              <TableHead>Email</TableHead>
-                              <TableHead className="text-right">Total Lessons</TableHead>
-                              <TableHead className="text-right">This Month</TableHead>
-                              <TableHead>Last Active</TableHead>
-                              <TableHead>Plan</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {userActivity.map((user: any) => (
-                              <TableRow key={user.user_id}>
-                                <TableCell className="font-medium">{user.full_name}</TableCell>
-                                <TableCell className="text-muted-foreground">{user.email}</TableCell>
-                                <TableCell className="text-right">{user.total_lessons}</TableCell>
-                                <TableCell className="text-right">
-                                  <Badge variant="secondary">{user.lessons_this_month}</Badge>
-                                </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">
-                                  {user.last_generated !== 'Never' 
-                                    ? new Date(user.last_generated).toLocaleDateString()
-                                    : 'Never'}
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant={user.subscription_tier === 'free' ? 'outline' : 'default'}>
-                                    {user.subscription_tier}
-                                  </Badge>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </CardContent>
+                      <CardContent>
+                    <div className="flex flex-col gap-4">
+                      {userLessonsData.map((user) => (
+                        <div key={user.userId} className="group overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-sm hover:shadow-md hover:border-primary/30 p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 lg:gap-6">
+                            
+                            {/* User Profile Header Segment */}
+                            <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
+                                  <span className="text-base sm:text-lg font-bold text-primary">
+                                      {(user.fullName || user.email || 'U')[0].toUpperCase()}
+                                  </span>
+                                </div>
+                                <div className="flex-1 min-w-0 space-y-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                      <h3 className="font-semibold text-foreground text-sm sm:text-base truncate max-w-[200px] sm:max-w-xs">
+                                          {user.fullName || 'Unnamed User'}
+                                      </h3>
+                                      <Badge variant={user.role === 'admin' ? 'default' : 'secondary'} className="rounded-md px-1.5 sm:px-2 py-0 sm:py-0.5 text-[10px] sm:text-xs shrink-0">
+                                          {user.role === 'admin' ? 'Admin' : 'User'}
+                                      </Badge>
+                                  </div>
+                                  <p className="text-xs sm:text-sm text-muted-foreground truncate" title={user.email}>{user.email}</p>
+                                </div>
+                            </div>
+                            
+                            {/* Status & Actions Segment */}
+                            <div className="flex items-stretch sm:items-center justify-between lg:justify-end gap-3 sm:gap-4 bg-black/5 dark:bg-white/5 rounded-xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full lg:w-auto">
+                                <div className="flex items-center gap-4 sm:gap-6 flex-1 lg:flex-initial pr-2 sm:pr-4 border-r border-black/10 dark:border-white/10 shrink-0">
+                                    
+                                    <div className="flex flex-col gap-1 items-start sm:items-center min-w-[60px]">
+                                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Lessons</span>
+                                        <span className="font-bold text-base sm:text-lg text-primary leading-none">{user.lessonCount}</span>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1 items-start sm:items-center min-w-[70px]">
+                                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Status</span>
+                                        <Badge variant={user.isSuspended ? "destructive" : "outline"} className="w-fit text-[10px] py-0">
+                                            {user.isSuspended ? "Suspended" : "Active"}
+                                        </Badge>
+                                    </div>
+                                    
+                                </div>
+                                
+                                <div className="flex items-center">
+                                    <Button 
+                                        variant={user.isSuspended ? "default" : "destructive"} 
+                                        size="sm"
+                                        className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-4 shrink-0 transition-transform active:scale-95"
+                                        onClick={() => handleToggleSuspension(user.userId, user.isSuspended, user.fullName)}
+                                    >
+                                        {user.isSuspended ? "Activate" : "Suspend"}
+                                    </Button>
+                                </div>
+                            </div>
+
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
                     </Card>
                   )}
                 </div>
@@ -831,61 +854,64 @@ const AdminDashboard = () => {
                     <CardTitle>All Users</CardTitle>
                     <CardDescription>List of all registered users and their lesson generation counts</CardDescription>
                   </CardHeader>
-                  <CardContent className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>User Name</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Role</TableHead>
-                          <TableHead className="text-right">Lesson Notes</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Payment</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {userLessonsData.map((user) => (
-                          <TableRow key={user.userId}>
-                             <TableCell className="font-medium">{user.fullName}</TableCell>
-                             <TableCell>{user.email}</TableCell>
-                             <TableCell>
-                               <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>{user.role}</Badge>
-                             </TableCell>
-                             <TableCell className="text-right">{user.lessonCount}</TableCell>
-                             <TableCell>
-                                <Badge variant={user.isSuspended ? "destructive" : "outline"}>
-                                    {user.isSuspended ? "Suspended" : "Active"}
-                                </Badge>
-                             </TableCell>
-                             <TableCell>
-                                {user.isPaymentExempt && (
-                                    <Badge className="bg-green-100 text-green-800 border-green-200">Exempt</Badge>
-                                )}
-                             </TableCell>
-                             <TableCell className="text-right">
-                                <div className="flex justify-end gap-2">
-                                    <Button 
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleToggleExemption(user.userId, user.isPaymentExempt, user.fullName)}
-                                        title={user.isPaymentExempt ? "Remove Exemption" : "Exempt Payment"}
-                                    >
-                                        <DollarSign className={`h-4 w-4 ${user.isPaymentExempt ? 'text-green-600' : 'text-gray-400'}`} />
-                                    </Button>
+                  <CardContent>
+                    <div className="flex flex-col gap-4">
+                      {userLessonsData.map((user) => (
+                        <div key={user.userId} className="group overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-sm hover:shadow-md hover:border-primary/30 p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 lg:gap-6">
+                            
+                            {/* User Profile Header Segment */}
+                            <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
+                                  <span className="text-base sm:text-lg font-bold text-primary">
+                                      {(user.fullName || user.email || 'U')[0].toUpperCase()}
+                                  </span>
+                                </div>
+                                <div className="flex-1 min-w-0 space-y-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                      <h3 className="font-semibold text-foreground text-sm sm:text-base truncate max-w-[200px] sm:max-w-xs">
+                                          {user.fullName || 'Unnamed User'}
+                                      </h3>
+                                      <Badge variant={user.role === 'admin' ? 'default' : 'secondary'} className="rounded-md px-1.5 sm:px-2 py-0 sm:py-0.5 text-[10px] sm:text-xs shrink-0">
+                                          {user.role === 'admin' ? 'Admin' : 'User'}
+                                      </Badge>
+                                  </div>
+                                  <p className="text-xs sm:text-sm text-muted-foreground truncate" title={user.email}>{user.email}</p>
+                                </div>
+                            </div>
+                            
+                            {/* Status & Actions Segment */}
+                            <div className="flex items-stretch sm:items-center justify-between lg:justify-end gap-3 sm:gap-4 bg-black/5 dark:bg-white/5 rounded-xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full lg:w-auto">
+                                <div className="flex items-center gap-4 sm:gap-6 flex-1 lg:flex-initial pr-2 sm:pr-4 border-r border-black/10 dark:border-white/10 shrink-0">
+                                    
+                                    <div className="flex flex-col gap-1 items-start sm:items-center min-w-[60px]">
+                                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Lessons</span>
+                                        <span className="font-bold text-base sm:text-lg text-primary leading-none">{user.lessonCount}</span>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1 items-start sm:items-center min-w-[70px]">
+                                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Status</span>
+                                        <Badge variant={user.isSuspended ? "destructive" : "outline"} className="w-fit text-[10px] py-0">
+                                            {user.isSuspended ? "Suspended" : "Active"}
+                                        </Badge>
+                                    </div>
+                                    
+                                </div>
+                                
+                                <div className="flex items-center">
                                     <Button 
                                         variant={user.isSuspended ? "default" : "destructive"} 
                                         size="sm"
+                                        className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-4 shrink-0 transition-transform active:scale-95"
                                         onClick={() => handleToggleSuspension(user.userId, user.isSuspended, user.fullName)}
                                     >
                                         {user.isSuspended ? "Activate" : "Suspend"}
                                     </Button>
                                 </div>
-                             </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                            </div>
+
+                        </div>
+                      ))}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -931,7 +957,7 @@ const AdminDashboard = () => {
             </Card>
           )}
 
-          {activeTab !== 'analytics' && (
+          {!['analytics', 'users', 'payments'].includes(activeTab) && (
           <Card className="mb-8">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -1084,7 +1110,7 @@ const AdminDashboard = () => {
           )}
 
           {/* File List - Dynamic based on tab */}
-          {activeTab !== 'analytics' && (
+          {!['analytics', 'users', 'payments'].includes(activeTab) && (
           <TabsContent value={activeTab} className="mt-0">
             <Card>
               <CardHeader>

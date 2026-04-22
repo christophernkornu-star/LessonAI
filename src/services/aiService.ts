@@ -265,19 +265,15 @@ async function callDeepSeekAPI(prompt: string, systemMessage?: string, numLesson
       : Math.min(baseTokens, 8192));
   
   try {
-    // Acquire the current session from Supabase to manually inject into headers
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session: activeSession } } = await supabase.auth.getSession();
     
-    // Note: Re-acquiring a token immediately here sometimes causes sync conflicts with the active client.
-    // Instead, we just let `supabase.functions.invoke()` handle the Authorization header natively 
-    // using its already-established auth session under the hood.
     const { data, error } = await supabase.functions.invoke('deepseek-proxy', {
       body: {
         prompt,
         systemMessage: systemMessage || defaultSystemMessage,
         maxTokens: calculatedMaxTokens,
         numLessons
-      }
+      },
     });
 
     if (error) {

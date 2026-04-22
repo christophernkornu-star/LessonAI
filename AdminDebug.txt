@@ -1,0 +1,242 @@
+}, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'curriculum') {
+      CurriculumService.getGlobalStats().then(setGlobalStats);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    checkAdminAccess();
+    if (activeTab === 'analytics') {
+      loadAnalytics();
+    } else if (activeTab === 'users') {
+      loadUserLessons();
+    } else {
+      loadFiles();
+    }
+  }, [activeTab]);
+
+  if (loading) {
+      return <DashboardSkeleton />;
+  }
+
+  const handleFileUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!uploadFile) {
+      toast({
+        title: 'Error',
+        description: 'Please select a file to upload',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUploading(true);
+
+    try {
+      const fileType = activeTab as 'curriculum' | 'template' | 'resource';
+      const tagsArray = tags.split(',').map(tag => tag.trim()).filter(Boolean);
+      
+      // Join multiple grade levels with comma
+      const gradeLevelString = gradeLevels.join(', ');
+
+      await uploadResourceFile({
+        file: uploadFile,
+        fileType,
+        title,
+        description,
+        gradeLevel: gradeLevelString,
+        subject,
+        tags: tagsArray,
+        isPublic,
+      });
+
+      toast({
+        title: 'Success',
+        description: 'File uploaded successfully',
+      });
+
+      // Reset form
+      setUploadFile(null);
+      setTitle('');
+      setDescription('');
+      setGradeLevels([]);
+      setSubject('');
+      setTags('');
+      setIsPublic(true);
+
+      // Reload files
+      loadFiles();
+    } catch (error) {
+      toast({
+        title: 'Upload Failed',
+        description: error instanceof Error ? error.message : 'Failed to upload file',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteFile = async (fileId: string) => {
+    if (!confirm('Are you sure you want to delete this file?')) return;
+
+    try {
+      await deleteResourceFile(fileId);
+      toast({
+        title: 'Success',
+        description: 'File deleted successfully',
+      });
+      loadFiles();
+    } catch (error) {
+      toast({
+        title: 'Delete Failed',
+        description: error instanceof Error ? error.message : 'Failed to delete file',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleTogglePublic = async (fileId: string, currentStatus: boolean) => {
+    try {
+      await updateResourceFile(fileId, { is_public: !currentStatus });
+      toast({
+        title: 'Success',
+        description: `File ${!currentStatus ? 'published' : 'unpublished'}`,
+      });
+      loadFiles();
+    } catch (error) {
+      toast({
+        title: 'Update Failed',
+        description: error instanceof Error ? error.message : 'Failed to update file',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/');
+  };
+
+  const getFileIcon = () => {
+    switch (activeTab) {
+      case 'curriculum':
+        return <BookOpen className="w-5 h-5" />;
+      case 'template':
+        return <FileText className="w-5 h-5" />;
+      case 'resource':
+        return <FolderOpen className="w-5 h-5" />;
+      default:
+        return <FileCheck className="w-5 h-5" />;
+    }
+  };
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return 'Unknown';
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(2)} MB`;
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex justify-between items-center">
+            <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+            <Button variant="outline" onClick={handleLogout}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-6 mb-8">
+            <TabsTrigger value="analytics" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <BarChart3 className="w-4 h-4" />
+              <span className="hidden sm:inline">Analytics</span>
+            </TabsTrigger>
+            
+            <TabsTrigger value="users" className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm rounded-xl px-4 py-2.5 transition-all w-full sm:w-auto hover:bg-background/80 data-[state=active]:bg-primary/10 data-[state=active]:shadow-sm data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20">
+              <Users className="w-4 h-4" />
+              <span className="hidden sm:inline">Users</span>
+            </TabsTrigger>
+            <TabsTrigger value="payments" className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm rounded-xl px-4 py-2.5 transition-all w-full sm:w-auto hover:bg-background/80 data-[state=active]:bg-primary/10 data-[state=active]:shadow-sm data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20">
+              <CreditCard className="w-4 h-4" />
+              <span className="hidden sm:inline">Payments</span>
+            </TabsTrigger>
+            <TabsTrigger value="curriculum" className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm rounded-xl px-4 py-2.5 transition-all w-full sm:w-auto hover:bg-background/80 data-[state=active]:bg-primary/10 data-[state=active]:shadow-sm data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20">
+              <BookOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Curriculum Data</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="template" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <FileText className="w-4 h-4" />
+              <span className="hidden sm:inline">Templates</span>
+            </TabsTrigger>
+            <TabsTrigger value="resource" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <FolderOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Resources</span>
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Payments Tab */}
+          <TabsContent value="payments">
+            <AdminPaymentManagement />
+          </TabsContent>
+
+          {/* Analytics Tab */}
+          <TabsContent value="analytics">
+            {loadingAnalytics ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* User Statistics */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    User Statistics
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <Card className="group relative overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-xl hover:shadow-2xl hover:border-primary/20">
+                      <CardHeader className="pb-3">
+                        <CardDescription>Total Users</CardDescription>
+                        <CardTitle className="text-3xl">{userStats?.totalUsers || 0}</CardTitle>
+                      </CardHeader>
+                    </Card>
+                    <Card className="group relative overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-xl hover:shadow-2xl hover:border-primary/20">
+                      <CardHeader className="pb-3">
+                        <CardDescription>Active Users (30d)</CardDescription>
+                        <CardTitle className="text-3xl">{userStats?.activeUsers || 0}</CardTitle>
+                      </CardHeader>
+                    </Card>
+                    <Card className="group relative overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-xl hover:shadow-2xl hover:border-primary/20">
+                      <CardHeader className="pb-3">
+                        <CardDescription>New This Month</CardDescription>
+                        <CardTitle className="text-3xl flex items-center gap-1">
+                          <TrendingUp className="h-5 w-5 text-green-500" />
+                          {userStats?.newUsersThisMonth || 0}
+                        </CardTitle>
+                      </CardHeader>
+                    </Card>
+                    <Card className="group relative overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-xl hover:shadow-2xl hover:border-primary/20">
+                      <CardHeader className="pb-3">
+                        <CardDescription>User Roles</CardDescription>
+                        <div className="space-y-1 mt-2">
+                          {Object.entries(userStats?.usersByRole || {}).map(([role, count]) => (
+                            <div key={role} className="flex justify-between text-sm">
+                              <span className="capitalize">{role}:</span>
+                              <Badge variant="secondary">{count as number}</Badge>
+                            </div>
+                          ))}
+                        </div>
+                    

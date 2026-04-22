@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,16 +12,9 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Dialog,
+
+
+import { Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -205,12 +199,12 @@ export function AdminPaymentManagement() {
       </div>
 
       <Tabs defaultValue="users">
-        <TabsList>
-          <TabsTrigger value="users" className="flex items-center gap-2">
+        <TabsList className="w-full flex justify-start overflow-x-auto pb-4 mb-4 gap-2 bg-transparent p-0 border-b border-border/50 h-auto">
+          <TabsTrigger value="users" className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm rounded-xl px-4 py-2.5 transition-all w-full sm:w-auto hover:bg-background/80 data-[state=active]:bg-primary/10 data-[state=active]:shadow-sm data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20">
             <Users className="h-4 w-4" />
             Users
           </TabsTrigger>
-          <TabsTrigger value="settings" className="flex items-center gap-2">
+          <TabsTrigger value="settings" className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm rounded-xl px-4 py-2.5 transition-all w-full sm:w-auto hover:bg-background/80 data-[state=active]:bg-primary/10 data-[state=active]:shadow-sm data-[state=active]:text-primary border border-transparent data-[state=active]:border-primary/20">
             <Settings className="h-4 w-4" />
             Pricing Settings
           </TabsTrigger>
@@ -232,89 +226,103 @@ export function AdminPaymentManagement() {
           </div>
 
           {/* Users Table */}
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Balance</TableHead>
-                    <TableHead>Total Spent</TableHead>
-                    <TableHead>Tokens Used</TableHead>
-                    <TableHead>Exempt</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{user.profiles?.full_name || 'Unknown'}</p>
-                          <p className="text-sm text-muted-foreground">{user.profiles?.email}</p>
-                          {user.profiles?.role && (
-                            <Badge variant="outline" className="text-xs">
-                              {user.profiles.role}
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono">GHS {parseFloat(user.wallet_balance).toFixed(2)}</span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono">GHS {parseFloat(user.total_spent).toFixed(2)}</span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono">{user.total_tokens_used?.toLocaleString() || 0}</span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={user.is_payment_exempt}
-                            onCheckedChange={() => handleToggleExemption(user)}
-                            disabled={processing}
-                          />
-                          {user.is_payment_exempt && (
-                            <Badge variant="secondary" className="text-xs">
-                              <Shield className="h-3 w-3 mr-1" />
-                              Exempt
-                            </Badge>
-                          )}
-                        </div>
-                        {user.exemption_reason && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {user.exemption_reason}
-                          </p>
+                    {/* Users Cards */}
+          <div className="flex flex-col gap-4">
+            {filteredUsers.length === 0 ? (
+              <div className="p-8 text-center bg-background/50 backdrop-blur-sm border border-secondary/20 shadow-sm rounded-2xl">
+                <p className="text-muted-foreground">No users found.</p>
+              </div>
+            ) : (
+              filteredUsers.map((user) => (
+                <div key={user.id} className="group overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-sm hover:shadow-md hover:border-primary/30 p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
+                  {/* User Info */}
+                  <div className="flex items-center gap-4 flex-1">
+                    <div className="h-12 w-12 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
+                      <span className="text-lg font-bold text-primary">
+                        {(user.profiles?.full_name || user.profiles?.email || 'U')[0].toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="overflow-hidden space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-base sm:text-lg text-foreground tracking-tight truncate">
+                          {user.profiles?.full_name || 'Unknown User'}
+                        </p>
+                        {user.profiles?.role === 'admin' && (
+                          <Badge variant="default" className="text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full">Admin</Badge>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedUser(user);
-                            setFundAmount(10);
-                            setFundReason('');
-                            setFundDialogOpen(true);
-                          }}
-                        >
-                          <Wallet className="h-4 w-4 mr-1" />
-                          Add Funds
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                        {user.is_payment_exempt && (
+                          <Badge className="bg-green-500/15 text-green-700 border-0 text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full">Exempt</Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground truncate w-full" title={user.profiles?.email}>
+                        {user.profiles?.email}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Financial Stats */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 xl:gap-8 flex-1 max-w-full lg:max-w-xl self-start md:self-auto min-w-[200px]">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 font-semibold">Balance</span>
+                      <span className="font-bold text-sm tracking-tight text-foreground bg-primary/10 rounded-md px-2.5 py-1 inline-block w-max border border-primary/10">
+                        GHS {parseFloat(user.wallet_balance).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 font-semibold">Spent</span>
+                      <span className="font-semibold text-sm tracking-tight text-muted-foreground px-2.5 py-1">
+                        GHS {parseFloat(user.total_spent).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="hidden md:flex flex-col">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 font-semibold">Tokens</span>
+                      <span className="font-semibold text-sm tracking-tight text-muted-foreground px-2.5 py-1">
+                        {user.total_tokens_used?.toLocaleString() || 0}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between md:justify-end gap-4 w-full md:w-auto pt-4 md:pt-0 border-t md:border-none border-secondary/20">
+                    <div className="flex items-center justify-between sm:justify-start w-full gap-3">
+                      <div className="flex items-center gap-2 bg-secondary/30 rounded-full px-3 py-1.5 border border-secondary/50">
+                        <Label htmlFor={"exempt-" + user.id} className="text-xs font-semibold cursor-pointer whitespace-nowrap">
+                          {user.is_payment_exempt ? 'Payment Exempt' : 'Require Payment'}
+                        </Label>
+                        <Switch
+                          id={"exempt-" + user.id}
+                          checked={user.is_payment_exempt}
+                          onCheckedChange={() => handleToggleExemption(user)}
+                          disabled={processing}
+                          className="data-[state=checked]:bg-green-600 scale-75 origin-left"
+                        />
+                      </div>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="rounded-full shadow-sm transition-colors text-xs font-semibold h-8"
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setFundAmount(10);
+                          setFundReason('');
+                          setFundDialogOpen(true);
+                        }}
+                      >
+                        <Wallet className="h-3.5 w-3.5 mr-1.5" />
+                        Add Funds
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Pricing Configuration</CardTitle>
+          <Card className="group relative overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-xl hover:shadow-2xl hover:border-primary/20">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-xl font-bold tracking-tight">Pricing Configuration</CardTitle>
               <CardDescription>Configure token pricing and platform fees</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">

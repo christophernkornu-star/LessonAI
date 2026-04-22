@@ -1193,15 +1193,19 @@ export default function SchemeOfLearning() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-subtle">
+    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
       <Navbar />
-      <div className="container mx-auto px-4 py-8">
-        <div className="sticky top-[60px] z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 py-4 -mx-4 px-4 border-b mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Scheme of Learning</h1>
-            <p className="text-muted-foreground">Manage and view your weekly schemes.</p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+      <main className="container mx-auto px-4 py-8 sm:py-12 max-w-7xl flex-grow">
+        <div className="mb-10 sm:mb-12 flex flex-col md:flex-row justify-between items-start lg:items-end gap-8">
+            <div>
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-semibold text-primary shadow-sm backdrop-blur-md animate-fade-in-up">
+                <BookOpen className="h-4 w-4" />
+                Curriculum Integration
+              </div>
+              <h1 className="mb-3 text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-foreground">Scheme of Learning</h1>
+              <p className="text-base sm:text-lg text-muted-foreground font-medium">Elevate your scheduling. Manage and view your weekly schemes seamlessly.</p>
+            </div>
+          <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -1626,58 +1630,37 @@ export default function SchemeOfLearning() {
                                         </Button>
                                     </div>
                                 </div>
-                                <div className="rounded-md border bg-background/50 overflow-x-auto">
-                                    <Table>
-                                        <TableHeader>
-                                        <TableRow>
-                                            <TableHead className="w-[150px]">Subject</TableHead>
-                                            <TableHead>Strand / Sub-Strand</TableHead>
-                                            <TableHead className="hidden md:table-cell">Standard</TableHead>
-                                            <TableHead className="w-[100px]">Action</TableHead>
-                                        </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                        {items.map((item) => (
-                                            <TableRow key={item.id}>
-                                            <TableCell className="font-medium">
-                                                {item.subject}
-                                                {item.weekEnding && <div className="text-xs text-muted-foreground mt-1">Ends: {item.weekEnding}</div>}
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex flex-col gap-1">
-                                                <span className="font-medium text-sm">{item.strand}</span>
-                                                <span className="text-xs text-muted-foreground">{item.subStrand}</span>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="hidden md:table-cell">
-                                                <span className="text-xs line-clamp-2" title={item.contentStandard}>
-                                                    {item.contentStandard}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex gap-1">
-                                                    <Button size="sm" variant="ghost" onClick={() => handleGenerate(item)}>
-                                                        <Play className="h-4 w-4" />
-                                                        <span className="sr-only">Generate</span>
-                                                    </Button>
-                                                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive/90" onClick={() => handleDeleteItem(item.id)}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                        <span className="sr-only">Delete</span>
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                            </TableRow>
-                                        ))}
-                                        </TableBody>
-                                    </Table>
-                                </div>
+                                <div className="flex flex-col gap-3">
+                                      {items.map((item) => (
+                                          <div key={item.id} className="group relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border border-secondary/20 bg-background/40 hover:bg-secondary/10 transition-all shadow-sm">
+                                              <div className="flex flex-col gap-1.5 w-full sm:w-1/4">
+                                                  <div className="font-semibold text-foreground/90">{item.subject}</div>
+                                                  {item.weekEnding && <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground bg-secondary/30 w-fit px-2 py-0.5 rounded-full">Ends {item.weekEnding}</div>}
+                                              </div>
+                                              <div className="flex flex-col gap-1 w-full sm:w-2/4">
+                                                  <span className="font-medium text-sm text-foreground/80">{item.strand}</span>
+                                                  <span className="text-xs text-muted-foreground line-clamp-2">{item.subStrand}</span>
+                                              </div>
+                                              <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-0 border-border/30 justify-end flex-row">
+                                                  <Button size="sm" variant="default" className="shadow-sm rounded-full flex-1 sm:flex-none" onClick={() => handleGenerate(item)}>
+                                                      <Play className="h-4 w-4 mr-1.5" />
+                                                      Generate
+                                                  </Button>
+                                                  <Button size="sm" variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive rounded-full" onClick={() => handleDeleteItem(item.id)}>
+                                                      <Trash2 className="h-4 w-4 mr-0 sm:mr-0" />
+                                                      <span className="sm:hidden ml-1.5">Delete</span>
+                                                  </Button>
+                                              </div>
+                                          </div>
+                                      ))}
+                                  </div>
                             </Card>
                         );
                     })
                 )}
             </div>
         )}
-      </div>
+            </main>
     </div>
   );
 }

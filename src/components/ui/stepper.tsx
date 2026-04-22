@@ -5,11 +5,12 @@ import { cn } from "@/lib/utils"
 interface StepperProps {
   steps: string[]
   currentStep: number
+  className?: string
 }
 
-export function Stepper({ steps, currentStep }: StepperProps) {
+export function Stepper({ steps, currentStep, className }: StepperProps) {
   return (
-    <div className="w-full">
+    <div className={cn("w-full", className)}>
       <div className="flex items-center justify-between">
         {steps.map((step, index) => (
           <React.Fragment key={step}>

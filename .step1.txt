@@ -1,0 +1,489 @@
+{currentStep === 1 && (
+                  <div className="space-y-4 sm:space-y-6 animate-in fade-in-50 duration-500">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg sm:text-xl font-semibold">Lesson Details</h3>
+                      <Dialog open={isPasteDialogOpen} onOpenChange={setIsPasteDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="gap-2">
+                            <ClipboardPaste className="h-4 w-4" />
+                            <span className="hidden sm:inline">Paste Curriculum</span>
+                            <span className="sm:hidden">Paste</span>
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Paste Curriculum Details</DialogTitle>
+                            <DialogDescription>
+                              Paste the Strand, Sub-strand, Content Standard, and Indicators from your document here. AI will try to fill the form for you.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <Textarea 
+                            value={pastedText}
+                            onChange={(e) => setPastedText(e.target.value)}
+                            placeholder="Paste text here..."
+                            className="min-h-[200px]"
+                          />
+                          <DialogFooter>
+                            <Button variant="outline" onClick={() => setIsPasteDialogOpen(false)}>Cancel</Button>
+                            <Button onClick={handlePasteCurriculum} disabled={isParsingPaste}>
+                              {isParsingPaste ? "Parsing..." : "Apply to Form"}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+
+                    <div className="flex items-center space-x-2 bg-muted/30 p-3 rounded-lg border border-border/50">
+                      <Checkbox 
+                        id="manual-mode" 
+                        checked={isManualCurriculum}
+                        onCheckedChange={(checked) => setIsManualCurriculum(checked as boolean)}
+                      />
+                      <Label htmlFor="manual-mode" className="text-sm font-medium cursor-pointer">
+                        Manually enter curriculum standards (Strand, Sub-strand, etc.)
+                      </Label>
+                    </div>
+                    
+                    <div className="grid gap-4 sm:gap-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="strand">Strands *</Label>
+                        {!isManualCurriculum && availableStrands.length === 0 && (
+                           <div className="text-xs text-amber-600 dark:text-amber-400 mb-2 bg-amber-50 dark:bg-amber-950/30 p-2 rounded border border-amber-200 dark:border-amber-800">
+                              No strands found? Please select a valid subject/level combination.
+                           </div>
+                        )}
+                        {isManualCurriculum ? (
+                          <Textarea
+                            id="strand"
+                            placeholder="Enter strands (one per line)..."
+                            value={lessonData.strand}
+                            onChange={(e) => {
+                              setLessonData({ ...lessonData, strand: e.target.value });
+                              setValidationErrors({ ...validationErrors, strand: "" });
+                            }}
+                            rows={3}
+                          />
+                        ) : (
+                          <>
+                            <MultiSelectCombobox
+                              options={availableStrands.map(s => s.label)}
+                              selected={selectedStrands}
+                              onChange={(newSelection) => {
+                                setSelectedStrands(newSelection);
+                                // Join with newlines for backend
+                                const newStrandString = newSelection.join('\n');
+                                
+                                setLessonData({ 
+                                  ...lessonData, 
+                                  strand: newStrandString,
+                                  // Don't necessarily clear sub-strands, but they might be invalid now. 
+                                  // For safety, we keep them, assuming the user is building up a complex lesson.
+                                });
+                                
+                                // Let the downstream effects handle loading sub-strands
+                                setValidationErrors({ ...validationErrors, strand: "" });
+                              }}
+                              placeholder="Select strands..."
+                              searchPlaceholder="Search strands..."
+                              emptyText={!lessonData.subject || !lessonData.level ? "Select subject and level first" : "No strands found."}
+                            />
+                             <p className="text-xs text-muted-foreground">
+                                You can select multiple strands.
+                            </p>
+                          </>
+                        )}
+                        {validationErrors.strand && (
+                          <p className="text-sm text-destructive">{validationErrors.strand}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="subStrand">Sub-Strands *</Label>
+                        {isManualCurriculum ? (
+                          <Textarea
+                            id="subStrand"
+                            placeholder="Enter sub-strands (one per line)..."
+                            value={lessonData.subStrand}
+                            onChange={(e) => {
+                              setLessonData({ ...lessonData, subStrand: e.target.value });
+                              setValidationErrors({ ...validationErrors, subStrand: "" });
+                            }}
+                            rows={3}
+                          />
+                        ) : (
+                          <>
+                            <MultiSelectCombobox
+                              options={availableSubStrands.map(s => s.label)}
+                              selected={selectedSubStrands}
+                              onChange={(newSelection) => {
+                                setSelectedSubStrands(newSelection);
+                                // Join with newlines
+                                const newSubStrandString = newSelection.join('\n');
+                                
+                                setLessonData({ 
+                                  ...lessonData, 
+                                  subStrand: newSubStrandString,
+                                });
+                                
+                                setValidationErrors({ ...validationErrors, subStrand: "" });
+                              }}
+                              placeholder="Select sub-strands..."
+                              searchPlaceholder="Search sub-strands..."
+                              disabled={selectedStrands.length === 0}
+                              emptyText={selectedStrands.length === 0 ? "Select a strand first" : "No sub-strands found."}
+                            />
+                             <p className="text-xs text-muted-foreground">
+                                You can select multiple sub-strands.
+                            </p>
+                          </>
+                        )}
+                        {validationErrors.subStrand && (
+                          <p className="text-sm text-destructive">{validationErrors.subStrand}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label htmlFor="contentStandard" className="text-sm font-medium">
+                        Content Standards *
+                      </Label>
+                      <div className="bg-muted/30 rounded-lg border border-border/50 p-3 sm:p-4">
+                        {isManualCurriculum ? (
+                          <Textarea
+                            id="contentStandard"
+                            placeholder="Enter content standards (one per line)..."
+                            value={lessonData.contentStandard}
+                            onChange={(e) => {
+                              setLessonData({ ...lessonData, contentStandard: e.target.value });
+                              setValidationErrors({ ...validationErrors, contentStandard: "" });
+                            }}
+                            rows={3}
+                          />
+                        ) : (
+                          <>
+                        <MultiSelectCombobox
+                          options={availableContentStandards.map(cs => {
+                            let label = `${cs.code}: ${cs.description}`;
+                            if (cs.page_reference) {
+                              label += ` (${cs.page_reference})`;
+                            }
+                            return label;
+                          })}
+                          selected={selectedContentStandards}
+                          onChange={(newSelection) => {
+                            setSelectedContentStandards(newSelection);
+                            
+                            // Join with newlines
+                            const newStandardString = newSelection.join('\n');
+                            
+                            // Load related indicators for ALL selected standards
+                            let combinedIndicators: string[] = [];
+                            let pageRefs: string[] = [];
+                            
+                            newSelection.forEach(val => {
+                                const selected = availableContentStandards.find(cs => {
+                                  let label = `${cs.code}: ${cs.description}`;
+                                  if (cs.page_reference) {
+                                    label += ` (${cs.page_reference})`;
+                                  }
+                                  return label === val;
+                                });
+                                
+                                if (selected) {
+                                    if (selected.page_reference) {
+                                        pageRefs.push(selected.page_reference);
+                                    }
+                                    
+                                    if (selected.indicators) {
+                                    // Parse and split indicators if they look like "Performance Indicators" list
+                                    const rawIndicators = selected.indicators;
+                                    const parsedIndicators: string[] = [];
+
+                                    rawIndicators.forEach(ind => {
+                                      // Check if it's the "By the end of the lesson..." generic header with numbered items
+                                      // Or just a numbered list inside strict string
+                                      // Regex: Look for digit-dot-space "1. " or "1.0 " occurring multiple times
+                                      const matches = ind.match(/\d+\.\s+/g);
+                                      if (matches && matches.length >= 1) {
+                                           // It's likely a list. Split it.
+                                           // We split by digit-dot-space, but keep the content.
+                                           // Since JS split consumes the separator, we can use a positive lookahead or just standard split and map.
+                                           
+                                           // Method: Replace "1. " with "|SPLIT|1. " then split by |SPLIT|
+                                           // This preserves the numbering which is often useful context
+                                           
+                                           // Remove common header if present
+                                           let cleanInd = ind.replace(/Indicator:?\s*By the end of the lesson.*?able to:?/i, "").trim();
+                                           
+                                           // Normalize newlines to spaces for easier splitting if it's just one line
+                                           // cleanInd = cleanInd.replace(/\n/g, " "); 
+                                           
+                                           // If the string starts with a number, or contains them
+                                           const parts = cleanInd.split(/(\d+\.\s+)/).filter(Boolean);
+                                           
+                                           // Re-assemble "1. " with "Identify..."
+                                           for (let i = 0; i < parts.length; i++) {
+                                               if (parts[i].match(/^\d+\.\s+$/) && parts[i+1]) {
+                                                   parsedIndicators.push(parts[i+1].trim());
+                                                   i++;
+                                               } else if (!parts[i].match(/^\d+\.\s+$/) && parts[i].length > 5) {
+                                                   // Just a loose string part, maybe the header was left over
+                                                   // parsedIndicators.push(parts[i].trim()); 
+                                               }
+                                           }
+
+                                           // Fallback: If parsing failed to extract meaningful parts (e.g. format wasn't exactly 1.), keep original
+                                           if (parsedIndicators.length === 0) parsedIndicators.push(ind);
+
+                                      } else {
+                                          parsedIndicators.push(ind);
+                                      }
+                                    });
+
+                                    combinedIndicators = [...combinedIndicators, ...parsedIndicators];
+                                }
+                              }
+                            });
+                            
+                            // Deduplicate
+                            const uniqueIndicators = Array.from(new Set(combinedIndicators));
+
+                            // Build references string
+                            // Format: "NaCCA [Subject] Curriculum for [Level] pg [Num]"
+                            let referenceText = "";
+                            if (pageRefs.length > 0) {
+                                // De-duplicate pages
+                                const uniquePages = Array.from(new Set(pageRefs)).join(", ");
+                                // Use the currently selected subject and level, defaulting if empty
+                                // Construct string: "NaCCA [Subject] Curriculum for [Level] [Pages]"
+                                // Ensure "pg" prefix is handled if not already in the pageRef
+                                const pagePart = uniquePages.toLowerCase().includes("pg") || uniquePages.toLowerCase().includes("page") 
+                                    ? uniquePages 
+                                    : `pg ${uniquePages}`;
+                                
+                                referenceText = `NaCCA ${lessonData.subject} Curriculum for ${lessonData.level} ${pagePart}`;
+                            }
+
+                            setLessonData({ 
+                              ...lessonData, 
+                              contentStandard: newStandardString,
+                              exemplars: "", 
+                              indicators: "",
+                              references: referenceText // Auto-fill reference
+                            });
+
+                            if (uniqueIndicators.length > 0) {
+                              setAvailableIndicators(uniqueIndicators);
+                              setSelectedIndicators([]);
+                              setAvailableExemplars([]);
+                              setSelectedExemplars([]);
+                            } else {
+                              setAvailableIndicators([]);
+                              setSelectedIndicators([]);
+                              setAvailableExemplars([]);
+                              setSelectedExemplars([]);
+                            }
+                            
+                            setValidationErrors({ ...validationErrors, contentStandard: "" });
+                                                   }}
+                          placeholder="Select content standards..."
+                          searchPlaceholder="Search standards..."
+                          disabled={selectedSubStrands.length === 0}
+                          emptyText={selectedSubStrands.length === 0 ? "Select a sub-strand first" : "No standards found."}
+                        />
+                         <p className="text-xs text-muted-foreground mt-2">
+                            Select multiple content standards if needed.
+                        </p>
+                          </>
+                        )}
+                      </div>
+                      {validationErrors.contentStandard && (
+                        <p className="text-sm text-destructive">{validationErrors.contentStandard}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label htmlFor="indicators" className="text-sm font-medium flex items-center gap-2">
+                        Learning Indicators
+                        {selectedIndicators.length > 0 && (
+                          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                            {selectedIndicators.length} selected
+                          </span>
+                        )}
+                      </Label>
+                      <div className="bg-muted/30 rounded-lg border border-border/50 p-3 sm:p-4">
+                        {availableIndicators.length > 0 && !isManualCurriculum ? (
+                          <MultiSelectCombobox
+                            options={availableIndicators}
+                            selected={selectedIndicators}
+                            onChange={setSelectedIndicators}
+                            placeholder="Select learning indicators..."
+                            searchPlaceholder="Search indicators..."
+                            emptyText="No indicators found."
+                            maxDisplayed={3}
+                          />
+                        ) : (
+                          <Textarea
+                            id="indicators"
+                            placeholder="Enter learning indicators (e.g., B4.1.2.1.1 - Demonstrate understanding of...)"
+                            value={lessonData.indicators}
+                            onChange={(e) => setLessonData({ ...lessonData, indicators: e.target.value })}
+                            rows={3}
+                            className="resize-none text-sm bg-background"
+                          />
+                        )}
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {availableIndicators.length > 0 && !isManualCurriculum
+                            ? "Click to select multiple indicators from your curriculum"
+                            : "No indicators found in curriculum. Enter manually above."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label htmlFor="exemplars" className="text-sm font-medium flex items-center gap-2">
+                        Exemplars
+                        {selectedExemplars.length > 0 && (
+                          <span className="text-xs bg-secondary/50 text-secondary-foreground px-2 py-0.5 rounded-full">
+                            {selectedExemplars.length} selected
+                          </span>
+                        )}
+                      </Label>
+                      <div className="bg-muted/30 rounded-lg border border-border/50 p-3 sm:p-4 space-y-3">
+                        {availableExemplars.length > 0 && !isManualCurriculum && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-2">Select from curriculum:</p>
+                            <MultiSelectCombobox
+                              options={availableExemplars}
+                              selected={selectedExemplars}
+                              onChange={setSelectedExemplars}
+                              placeholder="Select exemplars..."
+                              searchPlaceholder="Search exemplars..."
+                              emptyText="No exemplars found."
+                              maxDisplayed={2}
+                            />
+                          </div>
+                        )}
+                        
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-2">
+                            {availableExemplars.length > 0 && !isManualCurriculum ? "Or add/edit manually:" : "Enter exemplars:"}
+                          </p>
+                          <Textarea
+                            id="exemplars"
+                            placeholder="E.g., Students will demonstrate ability to identify and explain..."
+                            value={lessonData.exemplars}
+                            onChange={(e) => setLessonData({ ...lessonData, exemplars: e.target.value })}
+                            rows={3}
+                            className="resize-none text-sm bg-background"
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {availableExemplars.length > 0 && !isManualCurriculum
+                            ? "Combine selected items with manual edits for comprehensive coverage."
+                            : "Describe what learners will be able to do by the end of the lesson."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-6 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="philosophy">
+                          Teaching Philosophy
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="h-4 w-4 inline ml-1 text-muted-foreground cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Select your preferred teaching approach</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </Label>
+                        <Combobox
+                          options={[
+                            { value: "student-centered", label: "Student-Centered (Active Learning)" },
+                            { value: "teacher-led", label: "Teacher-Led (Direct Instruction)" },
+                            { value: "balanced", label: "Balanced (Mixed Approach)" },
+                            { value: "inquiry-based", label: "Inquiry-Based (Discovery Learning)" },
+                            { value: "collaborative", label: "Collaborative (Group Work)" },
+                          ]}
+                          value={lessonData.philosophy}
+                          onValueChange={(value) => setLessonData({ ...lessonData, philosophy: value })}
+                          placeholder="Select teaching philosophy"
+                          searchPlaceholder="Search philosophies..."
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="detailLevel">
+                          Detail Level
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="h-4 w-4 inline ml-1 text-muted-foreground cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>How detailed should the lesson note be?</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </Label>
+                        <Combobox
+                          options={[
+                            { value: "brief", label: "Brief (Key Points Only)" },
+                            { value: "moderate", label: "Moderate (Standard Detail)" },
+                            { value: "detailed", label: "Detailed (Comprehensive)" },
+                            { value: "very-detailed", label: "Very Detailed (Extensive)" },
+                          ]}
+                          value={lessonData.detailLevel}
+                          onValueChange={(value) => setLessonData({ ...lessonData, detailLevel: value })}
+                          placeholder="Select detail level"
+                          searchPlaceholder="Search detail levels..."
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="includeDiagrams"
+                          checked={lessonData.includeDiagrams}
+                          onCheckedChange={(checked) => 
+                            setLessonData({ ...lessonData, includeDiagrams: checked as boolean })
+                          }
+                        />
+                        <Label
+                          htmlFor="includeDiagrams"
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                          Include Diagram Outlines
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="h-4 w-4 inline ml-1 text-muted-foreground cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Add descriptions of diagrams, charts, or illustrations to include in the lesson</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground ml-6">
+                        When enabled, the lesson note will include outlines and descriptions of diagrams that should be drawn or displayed during the lesson
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="template">Lesson Note Template</Label>
+                      <TemplateSelector
+                        selectedTemplateId={selectedTemplate?.id}
+                        onSelectTemplate={setSelectedTemplate}
+                      />
+                      {selectedTemplate && (
+                        <p className="text-sm text-muted-foreground mt-2">
+                          Selected: <span className="font-medium">{selectedTemplate.name}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 2: Review */}
+                

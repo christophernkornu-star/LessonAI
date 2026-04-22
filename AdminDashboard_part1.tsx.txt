@@ -1,0 +1,162 @@
+ive overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-xl hover:shadow-2xl hover:border-primary/20">
+                      <CardHeader className="pb-3">
+                        <CardDescription>Custom Templates</CardDescription>
+                        <CardTitle className="text-3xl">{contentStats?.totalTemplates || 0}</CardTitle>
+                      </CardHeader>
+                    </Card>
+                    <Card className="group relative overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-xl hover:shadow-2xl hover:border-primary/20">
+                      <CardHeader className="pb-3">
+                        <CardDescription>Resource Library</CardDescription>
+                        <CardTitle className="text-3xl">{contentStats?.totalResources || 0}</CardTitle>
+                      </CardHeader>
+                    </Card>
+                    <Card className="group relative overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-xl hover:shadow-2xl hover:border-primary/20">
+                      <CardHeader className="pb-3">
+                        <CardDescription>Lessons This Month</CardDescription>
+                        <CardTitle className="text-3xl flex items-center gap-1">
+                          <TrendingUp className="h-5 w-5 text-green-500" />
+                          {contentStats?.lessonsThisMonth || 0}
+                        </CardTitle>
+                      </CardHeader>
+                    </Card>
+                  </div>
+                </div>
+
+                {/* AI Usage Statistics */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <DollarSign className="h-5 w-5" />
+                    AI Usage & Costs
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <Card className="group relative overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-xl hover:shadow-2xl hover:border-primary/20">
+                      <CardHeader className="pb-3">
+                        <CardDescription>Total Requests (30d)</CardDescription>
+                        <CardTitle className="text-3xl">{aiStats?.totalRequests || 0}</CardTitle>
+                      </CardHeader>
+                    </Card>
+                    <Card className="group relative overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-xl hover:shadow-2xl hover:border-primary/20">
+                      <CardHeader className="pb-3">
+                        <CardDescription>Success Rate</CardDescription>
+                        <CardTitle className="text-3xl text-green-600">
+                          {aiStats?.totalRequests ? 
+                            ((aiStats.successfulRequests / aiStats.totalRequests) * 100).toFixed(1) 
+                            : 0}%
+                        </CardTitle>
+                      </CardHeader>
+                    </Card>
+                    <Card className="group relative overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-xl hover:shadow-2xl hover:border-primary/20">
+                      <CardHeader className="pb-3">
+                        <CardDescription>Tokens Used</CardDescription>
+                        <CardTitle className="text-3xl">
+                          {(aiStats?.totalTokensUsed || 0).toLocaleString()}
+                        </CardTitle>
+                      </CardHeader>
+                    </Card>
+                    <Card className="group relative overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-xl hover:shadow-2xl hover:border-primary/20">
+                      <CardHeader className="pb-3">
+                        <CardDescription>Estimated Cost</CardDescription>
+                        <CardTitle className="text-3xl">
+                          ${(aiStats?.estimatedCost || 0).toFixed(2)}
+                        </CardTitle>
+                      </CardHeader>
+                    </Card>
+                  </div>
+
+                  {/* Requests by Type */}
+                  {aiStats?.requestsByType && Object.keys(aiStats.requestsByType).length > 0 && (
+                    <Card className="mt-4">
+                      <CardHeader>
+                        <CardTitle>Requests by Type</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          {Object.entries(aiStats.requestsByType).map(([type, count]) => (
+                            <div key={type} className="flex justify-between items-center">
+                              <span className="capitalize">{type}</span>
+                              <Badge>{count as number}</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+
+                {/* Enhanced Visual Analytics */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Platform Analytics
+                  </h3>
+                  
+                  {/* Charts Grid */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    {lessonsBySubject.length > 0 && (
+                      <SimplePieChart
+                        title="Lessons by Subject"
+                        description="Distribution across all subjects"
+                        data={lessonsBySubject}
+                      />
+                    )}
+                    {lessonsByTemplate.length > 0 && (
+                      <SimpleBarChart
+                        title="Most Popular Templates"
+                        description="Template usage count"
+                        data={lessonsByTemplate.slice(0, 10)}
+                        color="#06b6d4"
+                      />
+                    )}
+                  </div>
+
+                  {/* Monthly Trends */}
+                  {monthlyTrends.length > 0 && (
+                    <div className="mb-6">
+                      <TrendLineChart
+                        title="Lesson Creation Trends"
+                        description="Monthly lesson generation over the last year"
+                        data={monthlyTrends}
+                        xAxisKey="month"
+                        yAxisKey="count"
+                        color="#8b5cf6"
+                      />
+                    </div>
+                  )}
+
+                  {/* User Activity Table */}
+                  {userActivity.length > 0 && (
+                    <Card className="group relative overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-xl hover:shadow-2xl hover:border-primary/20">
+                      <CardHeader>
+                        <CardTitle>Top Contributors</CardTitle>
+                        <CardDescription>Most active users in the last 30 days</CardDescription>
+                      </CardHeader>
+                      <CardContent className="overflow-x-auto">
+                        
+                    <div className="flex flex-col gap-4">
+                      {userLessonsData.map((user) => (
+                        <div key={user.userId} className="group overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-sm hover:shadow-md hover:border-primary/30 p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
+                            <div className="flex items-center gap-4 flex-1">
+                                <div className="h-12 w-12 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
+                                  <span className="text-lg font-bold text-primary">
+                                      {(user.fullName || user.email || 'U')[0].toUpperCase()}
+                                  </span>
+                                </div>
+                                <div className="overflow-hidden space-y-1">
+                                  <div className="flex items-center gap-2">
+                                      <p className="font-bold text-base sm:text-lg text-foreground tracking-tight truncate">
+                                          {user.fullName || "Unknown User"}
+                                      </p>
+                                      {user.role === 'admin' && (
+                                        <Badge variant="default" className="text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full">Admin</Badge>
+                                      )}
+                                      {user.isSuspended && (
+                                        <Badge variant="destructive" className="text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full">Suspended</Badge>
+                                      )}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground truncate max-w-[200px] sm:max-w-[250px] md:max-w-xs xl:max-w-md" title={user.email}>
+                                      {user.email}
+                                  </div>
+                                </div>
+                            </div>
+                            
+                            <div className="fle
