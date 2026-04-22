@@ -9,7 +9,7 @@ import {
   SheetTrigger,
   SheetDescription,
 } from "@/components/ui/sheet";
-import { Menu, X, LayoutDashboard, FileText, Settings, LogOut, LifeBuoy } from "lucide-react";
+import { Menu, X, Sparkles, LayoutDashboard, FileText, Settings, LogOut, LifeBuoy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ContactDeveloperDialog } from "./ContactDeveloperDialog";
 
@@ -48,6 +48,7 @@ export function Navbar() {
             Dashboard
           </Button>
           <Button variant="ghost" className="justify-start w-full sm:w-auto" onClick={() => { navigate("/generator"); setIsOpen(false); }}>
+            <Sparkles className="mr-2 h-4 w-4" />
             Generate
           </Button>
            <Button variant="ghost" className="justify-start w-full sm:w-auto" onClick={() => { navigate("/templates"); setIsOpen(false); }}>

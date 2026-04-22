@@ -596,20 +596,32 @@ const Dashboard = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Card className="p-5 rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:bg-accent/5">
-                <div className="text-sm text-muted-foreground mb-1">Favorite Rate</div>
+                <div className="flex items-center text-sm text-muted-foreground mb-2">
+                  <Heart className="h-4 w-4 mr-2 text-rose-500" />
+                  Favorite Rate
+                </div>
                 <div className="text-2xl font-bold">{qualityMetrics?.favorite_rate || 0}%</div>
               </Card>
               <Card className="p-5 rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:bg-accent/5">
-                <div className="text-sm text-muted-foreground mb-1">Avg Content Length</div>
+                <div className="flex items-center text-sm text-muted-foreground mb-2">
+                  <FileText className="h-4 w-4 mr-2 text-blue-500" />
+                  Avg Content Length
+                </div>
                 <div className="text-2xl font-bold">{qualityMetrics?.avg_content_length || 0}</div>
               </Card>
               <Card className="p-5 rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:bg-accent/5">
-                <div className="text-sm text-muted-foreground mb-1">This Month</div>
+                <div className="flex items-center text-sm text-muted-foreground mb-2">
+                  <Calendar className="h-4 w-4 mr-2 text-green-500" />
+                  This Month
+                </div>
                 <div className="text-2xl font-bold">{engagementMetrics?.lessons_this_month || 0}</div>
               </Card>
               <Card className="p-5 rounded-2xl border border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:bg-accent/5">
-                <div className="text-sm text-muted-foreground mb-1">Longest Streak</div>
-                <div className="text-2xl font-bold">🏆 {engagementMetrics?.longest_streak || 0}</div>
+                <div className="flex items-center text-sm text-muted-foreground mb-2">
+                  <Award className="h-4 w-4 mr-2 text-yellow-500" />
+                  Longest Streak
+                </div>
+                <div className="text-2xl font-bold">{engagementMetrics?.longest_streak || 0}</div>
               </Card>
             </div>
           </TabsContent>

@@ -1,6 +1,6 @@
 ﻿import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { BookOpen, Clock, CheckCircle, ArrowRight, Bot, Zap, Filter } from "lucide-react";
+import { BookOpen, Sparkles, Clock, CheckCircle, ArrowRight, Bot, Zap, Filter } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -71,6 +71,7 @@ const Index = () => {
               size="lg"
               className="h-14 px-8 text-base font-semibold shadow-lg shadow-primary/20 hover:scale-105 transition-transform duration-300"
             >
+              <Sparkles className="mr-2 h-5 w-5" />
               Start Generating
             </Button>
             <Button
