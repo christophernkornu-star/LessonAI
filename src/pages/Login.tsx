@@ -118,10 +118,7 @@ export default function Login() {
             </div>
 
             <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
                 <Label htmlFor="password" className="text-sm font-medium">Password</Label>
-                  <Link to="/forgot-password" className="text-xs text-primary hover:underline font-medium">Forgot password?</Link>
-              </div>
               <Input
                 id="password"
                 type="password"
@@ -150,7 +147,13 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="mt-8 text-center">
+          <div className="mt-4 text-center">
+            <Link to="/forgot-password" className="text-sm text-primary hover:underline font-medium transition-colors hover:text-primary/80">
+              Forgot your password?
+            </Link>
+          </div>
+
+          <div className="mt-4 text-center">
             <p className="text-sm text-muted-foreground">
               Don't have an account?{" "}
               <Link to="/signup" className="text-primary hover:underline font-semibold transition-colors hover:text-primary/80">

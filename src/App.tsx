@@ -62,6 +62,8 @@ const PageLoader = () => (
   </div>
 );
 
+const queryClient = new QueryClient();
+
 const App = () => {
   useEffect(() => {
     // Handle Supabase auth errors (like invalid refresh token)

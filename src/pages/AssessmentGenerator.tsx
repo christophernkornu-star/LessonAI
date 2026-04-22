@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Download, FileText, Sparkles, Brain, Target } from "lucide-react";
+import { ArrowLeft, Download, FileText,  Brain, Target } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Combobox } from "@/components/ui/combobox";
@@ -482,7 +482,7 @@ export default function AssessmentGenerator() {
                   <>Generating...</>
                 ) : (
                   <>
-                    <Sparkles className="mr-2 h-5 w-5" />
+                    
                     Generate Assessment
                   </>
                 )}

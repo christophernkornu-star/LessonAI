@@ -9,7 +9,7 @@ import {
   SheetTrigger,
   SheetDescription,
 } from "@/components/ui/sheet";
-import { Menu, X, Sparkles, LayoutDashboard, FileText, Settings, LogOut, LifeBuoy } from "lucide-react";
+import { Menu, X, LayoutDashboard, FileText, Settings, LogOut, LifeBuoy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ContactDeveloperDialog } from "./ContactDeveloperDialog";
 
@@ -48,7 +48,6 @@ export function Navbar() {
             Dashboard
           </Button>
           <Button variant="ghost" className="justify-start w-full sm:w-auto" onClick={() => { navigate("/generator"); setIsOpen(false); }}>
-            <Sparkles className="mr-2 h-4 w-4" />
             Generate
           </Button>
            <Button variant="ghost" className="justify-start w-full sm:w-auto" onClick={() => { navigate("/templates"); setIsOpen(false); }}>
@@ -97,7 +96,7 @@ export function Navbar() {
         <div className="flex items-center justify-between">
             <Link to="/" className="flex items-center gap-2 hover:scale-105 transition-transform duration-300" onClick={() => setIsOpen(false)}>
                 <div className="flex bg-primary/10 p-1.5 rounded-lg items-center justify-center">
-                  <Sparkles className="h-5 w-5 text-primary" />
+                  <img src="/LessonAi.png" alt="LessonAi Logo" className="h-6 w-6 object-contain" />
                 </div>
                 <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">LessonAI</h1>
             </Link>

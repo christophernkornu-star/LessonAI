@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  Sparkles,
+  
   Loader2,
   ChevronLeft,
   ChevronRight,
@@ -1784,7 +1784,7 @@ const ImprovedGenerator = () => {
           <div className="mx-auto max-w-4xl">
             <div className="mb-12 sm:mb-16 text-center px-4 flex flex-col items-center max-w-3xl mx-auto">
               <div className="mb-6 inline-flex items-center justify-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-semibold text-primary shadow-sm backdrop-blur-md animate-fade-in-up">
-                <Sparkles className="h-4 w-4" />
+                
                 AI Generator
               </div>
               <h2 className="mb-4 text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.1]">
@@ -2635,7 +2635,7 @@ const ImprovedGenerator = () => {
                           </>
                         ) : (
                           <>
-                            <Sparkles className="mr-2 h-4 w-4" />
+                            
                             <span className="hidden sm:inline">
                               Generate Lesson Note
                             </span>

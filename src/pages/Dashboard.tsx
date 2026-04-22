@@ -10,10 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import {
   FileText,
   Download,
-  Star,
   Plus,
   LogOut,
-  Sparkles,
   Heart,
   TrendingUp,
   BarChart3,
@@ -427,8 +425,8 @@ const Dashboard = () => {
           <div className="absolute -right-20 -top-20 h-[300px] w-[300px] rounded-full bg-white/10 blur-[50px] pointer-events-none" />
           <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium text-white shadow-sm backdrop-blur-md animate-fade-in-up">
-                <Sparkles className="h-3.5 w-3.5" /> Welcome Back
+              <div className="mb-3 inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium text-white shadow-sm backdrop-blur-md animate-fade-in-up">
+                Welcome Back
               </div>
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight mb-2">
                 {getGreeting()}, {profile?.full_name || "Teacher"}!
@@ -547,7 +545,7 @@ const Dashboard = () => {
 
         {/* Analytics Tabs */}
         <Tabs defaultValue="overview" className="mb-6 sm:mb-8">
-          <TabsList className="inline-flex h-auto w-full grid grid-cols-4 items-center justify-center gap-1 sm:gap-2 rounded-2xl bg-muted/40 p-1.5 sm:p-2 text-muted-foreground md:flex md:flex-nowrap lg:w-auto border border-border/50 backdrop-blur-sm">
+          <TabsList className="sticky top-[72px] sm:top-[80px] z-40 inline-flex h-auto w-full grid grid-cols-4 items-center justify-center gap-1 sm:gap-2 rounded-2xl bg-muted/90 p-1.5 sm:p-2 text-muted-foreground md:flex md:flex-nowrap lg:w-auto border border-border/50 backdrop-blur-xl shadow-sm">
             <TabsTrigger value="overview" className="flex flex-col sm:flex-row h-auto w-full py-2 px-1 sm:py-2.5 sm:px-4 rounded-xl data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md transition-all">
               <BarChart3 className="h-5 w-5 sm:h-4 sm:w-4 sm:mr-2 mb-1 sm:mb-0" />
               <span className="text-[10px] sm:text-sm font-medium">Overview</span>
@@ -694,7 +692,7 @@ const Dashboard = () => {
             <TabsContent value="all" className="mt-6">
               {lessonNotes.length === 0 ? (
                 <div className="text-center py-12">
-                  <Sparkles className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <p className="text-muted-foreground mb-4">
                     No lesson notes yet. Create your first one!
                   </p>

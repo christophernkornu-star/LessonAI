@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Lightbulb, TrendingUp, Target, Sparkles } from "lucide-react";
+import { Lightbulb, TrendingUp, Target,  } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 interface InsightsProps {
@@ -19,7 +19,7 @@ export function InsightsPanel({ insights, quickActions }: InsightsProps) {
   const navigate = useNavigate();
 
   const getIcon = (index: number) => {
-    const icons = [Lightbulb, TrendingUp, Target, Sparkles];
+    const icons = [Lightbulb, TrendingUp, Target, ];
     const Icon = icons[index % icons.length];
     return <Icon className="h-4 w-4" />;
   };
@@ -32,7 +32,7 @@ export function InsightsPanel({ insights, quickActions }: InsightsProps) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5" />
+          
           Insights & Recommendations
         </CardTitle>
         <CardDescription>

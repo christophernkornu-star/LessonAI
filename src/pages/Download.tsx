@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Download, CheckCircle, FileText, FileType, Printer, RotateCw, PlusCircle } from "lucide-react";
+import { Download, CheckCircle, FileText, Printer, RotateCw, PlusCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 // Dynamic imports moved to usage sites
@@ -198,52 +198,6 @@ const DownloadPage = () => {
     }
   };
 
-  const handlePDFExport = async () => {
-    try {
-      // Check if using Ghana template
-      if (lessonData?.templateName?.includes("Ghana") || generatedContent.trim().startsWith('{')) {
-        try {
-          const { parseAIJsonResponse, generateGhanaLessonFileName } = await import("@/services/ghanaLessonDocxService");
-          const { exportGhanaLessonToPDF } = await import("@/services/pdfService");
-          
-          const parsedData = parseAIJsonResponse(generatedContent);
-          const filename = generateGhanaLessonFileName(parsedData).replace('.docx', '.pdf');
-          exportGhanaLessonToPDF(parsedData, filename);
-          toast.success("Ghana lesson plan PDF exported successfully!");
-          return;
-        } catch (e) {
-          console.warn("Failed to parse as Ghana lesson JSON, falling back to standard PDF", e);
-        }
-      }
-
-      const content = generatedContent || "Sample Lesson Note\n\nSubject: Mathematics\nGrade: Basic 4\nStrand: Numbers and Operations\n\n[AI-generated content would be here]";
-      
-      const metadata = lessonData ? {
-        subject: lessonData.subject || "General",
-        level: lessonData.level || "Basic 1",
-        strand: lessonData.strand || "General",
-      } : {
-        subject: "General",
-        level: "Basic 1",
-        strand: "General",
-      };
-
-      const filename = `${metadata.subject}_${metadata.level}_${metadata.strand}_lesson.pdf`.replace(/\s+/g, '_');
-      
-      const { exportToPDF } = await import("@/services/pdfService");
-      exportToPDF(content, filename);
-      toast.success("PDF export initiated - check your print dialog");
-    } catch (error: any) {
-      console.error("PDF export error:", error);
-      if (error?.message?.includes('Failed to fetch dynamically imported module') || error?.message?.includes('Importing a module script failed')) {
-        toast.error("Updating application... Please wait.");
-        setTimeout(() => window.location.reload(), 1500);
-        return;
-      }
-      toast.error("Failed to export PDF. Please try again.");
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-subtle">
       <Navbar />
@@ -310,8 +264,8 @@ const DownloadPage = () => {
 
                         if (isJson && data) {
                           return (
-                            <div className="space-y-4">
-                              <table className="w-full border border-border">
+                              <div className="space-y-0">
+                                <table className="w-full border border-border mt-0">
                                 <tbody>
                                   <tr className="border-b border-border">
                                     <td className="p-2 font-semibold bg-muted">Week Ending:</td>
@@ -429,21 +383,10 @@ const DownloadPage = () => {
                   <Download className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
                   <span className="text-sm sm:text-base">Download Lesson Note (.docx)</span>
                 </Button>
-
-                <Button
-                  onClick={handlePDFExport}
-                  className="w-full"
-                  variant="outline"
-                  size="lg"
-                  aria-label="Export lesson note as PDF"
-                >
-                  <FileType className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-                  <span className="text-sm sm:text-base">Export as PDF</span>
-                </Button>
               </div>
               
               <p className="text-center text-xs sm:text-sm text-muted-foreground">
-                Download as Word document (.docx) or export as PDF
+                Download as Word document (.docx)
               </p>
 
               <div className="flex flex-col gap-3 pt-2">

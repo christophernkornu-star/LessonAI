@@ -11,8 +11,6 @@ import { extractTextFromFile } from "./fileParsingService";
 // AI Provider Configuration
 // Enforced to DeepSeek for production
 const AI_PROVIDER = "deepseek";
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY; // Kept for reference but unused
-const GROQ_API_URL = "https://api.deepseek.com/chat/completions";
 
 // Helper functions for teaching philosophy and detail level
 function getPhilosophyGuidance(philosophy: string): string {
@@ -148,106 +146,6 @@ export async function callAIAPI(prompt: string, systemMessage?: string, numLesso
   // Strictly use DeepSeek API
   return callDeepSeekAPI(prompt, systemMessage, numLessons, maxTokens);
 }
-
-async function callGroqAPI(prompt: string, systemMessage?: string, numLessons?: number): Promise<string> {
-  // Validate API key
-  if (!GROQ_API_KEY || GROQ_API_KEY === "YOUR_GROQ_KEY_HERE") {
-    throw new Error("Groq API key is not configured. Get a FREE key at https://console.groq.com and add VITE_GROQ_API_KEY to your .env file.");
-  }
-
-  console.log("Groq API Key loaded:", GROQ_API_KEY.substring(0, 10) + "...");
-  console.log("Making request to Groq API...");
-
-  const defaultSystemMessage = "You are an expert educational content creator specializing in creating comprehensive, professional lesson plans for Ghanaian teachers following the National Pre-tertiary Curriculum.";
-  
-  // Calculate max_tokens based on number of lessons (each lesson needs ~2500 tokens)
-  const baseTokens = 4000;
-  const tokensPerLesson = 2500;
-  const calculatedMaxTokens = numLessons && numLessons > 1 
-    ? Math.min(baseTokens + (numLessons * tokensPerLesson), 16000) // Cap at 16k for Groq
-    : baseTokens;
-  
-  console.log(`Requesting ${calculatedMaxTokens} max_tokens for ${numLessons || 1} lesson(s)`);
-  
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout for multi-lesson
-
-  try {
-    const response = await fetch(GROQ_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile", // Updated to current model
-        messages: [
-          {
-            role: "system",
-            content: systemMessage || defaultSystemMessage
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: calculatedMaxTokens,
-      }),
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-
-    console.log("Groq API response status:", response.status);
-
-    if (!response.ok) {
-      let errorMessage = "Failed to generate lesson note";
-      try {
-        const error = await response.json();
-        console.error("Groq API error response:", JSON.stringify(error, null, 2));
-        errorMessage = error.error?.message || errorMessage;
-      } catch (e) {
-        // Response wasn't JSON
-        console.error("Groq API error (not JSON):", response.statusText);
-        errorMessage = response.statusText;
-      }
-      logAIUsage("groq", "text-generation", false, 0, errorMessage);
-      throw new Error(`Groq API Error: ${errorMessage}`);
-    }
-
-    const data = await response.json();
-    
-    if (!data.choices || !data.choices[0]?.message?.content) {
-       logAIUsage("groq", "text-generation", false, 0, "Invalid response");
-       throw new Error("Invalid response from Groq API");
-    }
-
-    const content = data.choices[0].message.content;
-    const tokens = data.usage?.total_tokens || 0;
-    logAIUsage("groq", "text-generation", true, tokens);
-    
-    return content;
-  } catch (error) {
-    clearTimeout(timeoutId);
-    console.error("Error calling Groq API:", error);
-    
-    let userMessage = "Failed to generate lesson content. Please try again.";
-    
-    if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-           userMessage = "Request timed out. The AI service is taking too long to respond.";
-           logAIUsage("groq", "text-generation", false, 0, "Timeout > 60s");
-        } else {
-           userMessage = error.message;
-           logAIUsage("groq", "text-generation", false, 0, error.message);
-        }
-    }
-    
-    throw new Error(userMessage);
-  }
-}
-
 
 async function callDeepSeekAPI(prompt: string, systemMessage?: string, numLessons?: number, maxTokens?: number): Promise<string> {
   console.log("Calling DeepSeek via Secure Edge Function...");

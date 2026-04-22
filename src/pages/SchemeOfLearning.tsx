@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Trash2, FileText, Loader2, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, BookOpen, Calendar, Download, Globe, Play, Search, Sparkles, MapPin } from "lucide-react";
+import { Upload, Trash2, FileText, Loader2, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, BookOpen, Calendar, Download, Globe, Play, Search,  MapPin } from "lucide-react";
 import { extractTextFromBrowserFile } from "@/services/fileParsingService";
 import { parseSchemeOfLearning, generateLessonNote, type LessonData } from "@/services/aiService";
 import { Navbar } from "@/components/Navbar";
@@ -1536,7 +1536,7 @@ export default function SchemeOfLearning() {
                                 </Button>
                             ) : (
                                 <Button onClick={handleBatchGenerateConfirm} disabled={selectedBatchItems.length === 0} className="bg-primary text-primary-foreground hover:bg-primary/90 w-full sm:w-auto">
-                                    <Sparkles className="mr-2 h-4 w-4" />
+                                    
                                     Generate ({selectedBatchItems.length})
                                 </Button>
                             )}
@@ -1625,7 +1625,7 @@ export default function SchemeOfLearning() {
                                             onClick={() => handleBatchGenerateClick(items)}
                                             className="w-full sm:w-auto"
                                         >
-                                            <Sparkles className="mr-2 h-4 w-4 text-primary" />
+                                            
                                             Generate Full Week ({items.length})
                                         </Button>
                                     </div>
