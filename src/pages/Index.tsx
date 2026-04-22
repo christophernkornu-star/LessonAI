@@ -1,6 +1,6 @@
 ﻿import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { BookOpen, Sparkles, Clock, CheckCircle, ArrowRight, Bot, Zap, Filter } from "lucide-react";
+import { BookOpen, Clock, CheckCircle, ArrowRight, Bot, Zap, Filter } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,7 +53,6 @@ const Index = () => {
 
         <div className="mx-auto max-w-5xl text-center flex flex-col items-center">
           <div className="mb-6 inline-flex animate-fade-in-up items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm font-medium text-primary shadow-sm backdrop-blur-md">
-            <Sparkles className="h-4 w-4" />
             <span>AI-Powered Lesson Planning for Ghana</span>
           </div>
           <h1 className="mb-8 text-4xl font-extrabold tracking-tight sm:text-6xl md:text-7xl lg:text-8xl leading-tight">
@@ -72,8 +71,7 @@ const Index = () => {
               size="lg"
               className="h-14 px-8 text-base font-semibold shadow-lg shadow-primary/20 hover:scale-105 transition-transform duration-300"
             >
-              <Sparkles className="mr-2 h-5 w-5" />
-              Start Generating Free
+              Start Generating
             </Button>
             <Button
               onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}
@@ -203,7 +201,6 @@ const Index = () => {
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
               <span className="text-lg font-bold">LessonAI</span>
             </div>
             <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} LessonAI. All rights reserved.</p>
