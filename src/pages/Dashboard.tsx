@@ -716,22 +716,24 @@ const Dashboard = () => {
               ) : (
                 <div className="space-y-4">
                   {lessonNotes.map((note) => (
-                    <Card key={note.id} className="p-4 sm:p-5 group relative overflow-hidden rounded-xl border border-border/50 bg-background/50 hover:bg-accent/5 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-                      <div className="flex flex-col sm:flex-row items-start justify-between gap-3">
-                        <div className="flex-1 w-full">
-                          <h3 className="font-semibold text-base sm:text-lg mb-1">{note.title}</h3>
-                          <div className="flex flex-wrap gap-2 mb-2">
-                            <Badge variant="secondary" className="text-xs">{note.subject}</Badge>
-                            <Badge variant="outline" className="text-xs">{note.grade_level}</Badge>
+                    <Card key={note.id} className="p-5 sm:p-6 group relative overflow-hidden rounded-2xl border border-border/50 bg-background/50 hover:bg-accent/5 transition-all duration-300 shadow-sm hover:-translate-y-1 hover:shadow-md">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                        <div className="flex-1 min-w-0 pr-4">
+                          <h3 className="font-semibold text-lg sm:text-xl mb-2 text-foreground/90">{note.title}</h3>
+                          <div className="flex flex-wrap items-center gap-2 mb-3">
+                            <Badge variant="secondary" className="text-xs font-medium px-2.5 py-0.5">{note.subject}</Badge>
+                            <Badge variant="outline" className="text-xs font-medium px-2.5 py-0.5 bg-background">{note.grade_level}</Badge>
                           </div>
-                          <p className="text-xs sm:text-sm text-muted-foreground">
+                          <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary/40 block"></span>
                             Created {new Date(note.created_at).toLocaleDateString()}
                           </p>
                         </div>
-                        <div className="flex gap-2 w-full justify-end">
+                        <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="rounded-full hover:bg-red-50/50 hover:text-red-500 transition-colors"
                             onClick={() => toggleFavorite(note.id, note.is_favorite)}
                           >
                             <Heart
@@ -766,22 +768,24 @@ const Dashboard = () => {
                   {lessonNotes
                     .filter((note) => note.is_favorite)
                     .map((note) => (
-                      <Card key={note.id} className="p-4 sm:p-5 group relative overflow-hidden rounded-xl border border-border/50 bg-background/50 hover:bg-accent/5 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-lg mb-1">{note.title}</h3>
-                            <div className="flex gap-2 mb-2">
-                              <Badge variant="secondary">{note.subject}</Badge>
-                              <Badge variant="outline">{note.grade_level}</Badge>
+                      <Card key={note.id} className="p-5 sm:p-6 group relative overflow-hidden rounded-2xl border border-border/50 bg-background/50 hover:bg-accent/5 transition-all duration-300 shadow-sm hover:-translate-y-1 hover:shadow-md">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                          <div className="flex-1 min-w-0 pr-4">
+                            <h3 className="font-semibold text-lg sm:text-xl mb-2 text-foreground/90">{note.title}</h3>
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
+                              <Badge variant="secondary" className="text-xs font-medium px-2.5 py-0.5">{note.subject}</Badge>
+                              <Badge variant="outline" className="text-xs font-medium px-2.5 py-0.5 bg-background">{note.grade_level}</Badge>
                             </div>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary/40 block"></span>
                               Created {new Date(note.created_at).toLocaleDateString()}
                             </p>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="rounded-full hover:bg-red-50/50"
                               onClick={() => toggleFavorite(note.id, note.is_favorite)}
                             >
                               <Heart className="h-5 w-5 fill-red-500 text-red-500" />

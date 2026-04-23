@@ -51,10 +51,13 @@ export function Navbar() {
             <Sparkles className="mr-2 h-4 w-4" />
             Generate
           </Button>
+
+          {/* Temporarily disabled Templates route
            <Button variant="ghost" className="justify-start w-full sm:w-auto" onClick={() => { navigate("/templates"); setIsOpen(false); }}>
             <FileText className="mr-2 h-4 w-4" />
             Templates
           </Button>
+          */}
 
           <ContactDeveloperDialog>
             <Button variant="ghost" className="justify-start w-full sm:w-auto" onClick={() => setIsOpen(false)}>
