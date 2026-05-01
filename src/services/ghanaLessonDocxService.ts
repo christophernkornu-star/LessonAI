@@ -845,7 +845,7 @@ export async function generateGhanaLessonDocx(
                 bottom: 720,
                 left: 720,
               },
-              borders: coverPageMeta ? {
+              borders: (isFirst && coverPageMeta) ? {
                 pageBorders: {
                   display: "firstPage" as const,
                   offsetFrom: "page" as const,
