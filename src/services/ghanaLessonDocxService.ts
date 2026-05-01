@@ -7,7 +7,8 @@ import {
   TableRow, 
   WidthType, 
   BorderStyle, 
-  AlignmentType, 
+  AlignmentType,
+  PageBreak, 
   VerticalAlign, 
   Packer, 
   HeadingLevel,
@@ -480,7 +481,8 @@ function ensurePerformanceIndicatorPrefix(text: string): string {
 export async function generateGhanaLessonDocx(
   jsonData: string | GhanaLessonData | GhanaLessonData[],
   fileName: string = "ghana-lesson-plan.docx",
-  returnBlob: boolean = false
+  returnBlob: boolean = false,
+  coverPageMeta?: { subject?: string; level?: string; term?: string; week?: string; teacherName?: string; schoolName?: string; }
 ): Promise<Blob | void> {
   try {
     // Normalize input to array
@@ -496,6 +498,105 @@ export async function generateGhanaLessonDocx(
     }
 
     const docSections = dataArray.map((lessonData, index) => {
+        // Optional Cover Page logic per lesson entry or globally on index 0
+        const isFirst = index === 0;
+        const pageBreakIfCover = (isFirst && coverPageMeta) ? [new PageBreak()] : [];
+        
+        let coverParagraphs: Paragraph[] = [];
+        if (isFirst && coverPageMeta) {
+          coverParagraphs = [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 1000, after: 1500 },
+              children: [
+                new TextRun({ 
+                  text: (coverPageMeta.schoolName || "NAME OF SCHOOL").toUpperCase(), 
+                  bold: true, 
+                  font: "Century Gothic", 
+                  size: 40 // 20pt
+                }),
+              ]
+            }),
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 1200 },
+              children: [
+                new TextRun({ 
+                  text: (coverPageMeta.term?.toUpperCase() || "TERM").toUpperCase(), 
+                  bold: true, 
+                  font: "Century Gothic", 
+                  size: 36 // 18pt
+                }),
+              ],
+            }),
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 1200 },
+              children: [
+                new TextRun({ 
+                  text: "WEEKLY LESSON NOTE", 
+                  bold: true, 
+                  font: "Century Gothic", 
+                  size: 36
+                }),
+              ],
+            }),
+            ...(!/basic\s*[1-6]\b/i.test(coverPageMeta.level || "") ? [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 1200 },
+                children: [
+                  new TextRun({ 
+                    text: (coverPageMeta.subject || "SUBJECT").toUpperCase(), 
+                    bold: true, 
+                    font: "Century Gothic", 
+                    size: 36
+                  }),
+                ],
+              })
+            ] : []),
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 1200 },
+              children: [
+                new TextRun({ 
+                  text: `WEEK ${(coverPageMeta.week || "").replace(/[^0-9]/g, '') || "___"}`, 
+                  bold: true, 
+                  font: "Century Gothic", 
+                  size: 36
+                }),
+              ],
+            }),
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 1200 },
+              children: [
+                new TextRun({ 
+                  text: (coverPageMeta.level || "___").toUpperCase().replace(/([a-zA-Z])(\d)/g, '$1 $2'), 
+                  bold: true, 
+                  font: "Century Gothic", 
+                  size: 36
+                }),
+              ],
+            }),
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 2500, after: 800 },
+              children: [
+                new TextRun({ 
+                  text: (coverPageMeta.teacherName || "NAME OF TEACHER").toUpperCase(), 
+                  bold: true, 
+                  font: "Century Gothic", 
+                  size: 36
+                }),
+              ],
+            }),
+            new Paragraph({
+              children: [new PageBreak()],
+            })
+          ];
+        }
+
         // Standardize total width to exactly 10080 DXA (7 inches * 1440 twips)
 
         // Table 1: Header Info (Rows 1-3)
@@ -744,9 +845,20 @@ export async function generateGhanaLessonDocx(
                 bottom: 720,
                 left: 720,
               },
+              borders: coverPageMeta ? {
+                pageBorders: {
+                  display: "firstPage" as const,
+                  offsetFrom: "page" as const,
+                },
+                pageBorderTop: { style: BorderStyle.DOUBLE, size: 24, space: 31, color: "000000" },
+                pageBorderBottom: { style: BorderStyle.DOUBLE, size: 24, space: 31, color: "000000" },
+                pageBorderLeft: { style: BorderStyle.DOUBLE, size: 24, space: 31, color: "000000" },
+                pageBorderRight: { style: BorderStyle.DOUBLE, size: 24, space: 31, color: "000000" },
+              } : undefined,
             },
           },
           children: [
+            ...coverParagraphs,
             new Paragraph({
               alignment: AlignmentType.CENTER,
               spacing: { after: 100 },

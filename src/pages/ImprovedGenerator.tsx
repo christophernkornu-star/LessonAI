@@ -2584,6 +2584,56 @@ const ImprovedGenerator = () => {
                           </div>
                         </div>
                       </div>
+
+                      {/* Cover Page Options */}
+                      <div className="bg-card border rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow duration-200 md:col-span-2">
+                        <div className="flex flex-row gap-2 items-center mb-4 border-b pb-2">
+                          <Checkbox
+                            id="includeCoverPage"
+                            checked={lessonData.includeCoverPage || false}
+                            onCheckedChange={(checked) => setLessonData({ ...lessonData, includeCoverPage: checked as boolean })}
+                          />
+                          <Label htmlFor="includeCoverPage" className="font-semibold text-primary text-sm uppercase tracking-wider cursor-pointer">
+                            Include Cover Page (Optional)
+                          </Label>
+                        </div>
+                        {lessonData.includeCoverPage && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 animate-in fade-in-50 duration-500">
+                            <div className="space-y-2">
+                              <Label htmlFor="schoolName">Name of School</Label>
+                              <Input
+                                id="schoolName"
+                                placeholder="e.g. Cambridge International School"
+                                value={lessonData.schoolName || ""}
+                                onChange={(e) => setLessonData({ ...lessonData, schoolName: e.target.value })}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="teacherName">Name of Teacher</Label>
+                              <Input
+                                id="teacherName"
+                                placeholder="e.g. Mr. John Doe"
+                                value={lessonData.teacherName || ""}
+                                onChange={(e) => setLessonData({ ...lessonData, teacherName: e.target.value })}
+                              />
+                            </div>
+                            {["basic7", "basic8", "basic9"].includes(lessonData.level?.toLowerCase() || "") && (
+                              <div className="space-y-2 sm:col-span-2">
+                                <Label htmlFor="coverPageSubject">Subjects to Display (Optional for Multiple Subjects)</Label>
+                                <Input
+                                  id="coverPageSubject"
+                                  placeholder="e.g. Computing and Creative Arts and Design"
+                                  value={lessonData.coverPageSubject || ""}
+                                  onChange={(e) => setLessonData({ ...lessonData, coverPageSubject: e.target.value })}
+                                />
+                                <p className="text-[11px] text-muted-foreground mt-1">
+                                  Use this if you teach multiple subjects. It will override the default subject on the Cover Page only.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {!isOnline && (

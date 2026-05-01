@@ -1,4 +1,4 @@
-import { Document, Paragraph, TextRun, HeadingLevel, AlignmentType, Packer, Table, TableCell, TableRow, WidthType, BorderStyle } from "docx";
+import { Document, Paragraph, TextRun, HeadingLevel, AlignmentType, Packer, Table, TableCell, TableRow, WidthType, BorderStyle, PageBreak } from "docx";
 import { saveAs } from "file-saver";
 import { cleanAndSplitText, parseMarkdownLine } from "@/lib/textFormatting";
 
@@ -9,6 +9,11 @@ interface LessonMetadata {
   subStrand?: string;
   contentStandard?: string;
   templateName?: string;
+  teacherName?: string;
+  schoolName?: string;
+  term?: string;
+  week?: string;
+  includeCoverPage?: boolean;
 }
 
 /**
@@ -24,6 +29,101 @@ export async function generateLessonNoteDocx(
     const lines = cleanAndSplitText(lessonNoteText);
 
     const docElements: (Paragraph | Table)[] = [];
+
+    // Optional Cover Page
+    if (metadata.includeCoverPage) {
+      docElements.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 1000, after: 1500 },
+          children: [
+            new TextRun({ 
+              text: (metadata.schoolName || "NAME OF SCHOOL").toUpperCase(), 
+              bold: true, 
+              font: "Century Gothic", 
+              size: 40 // 20pt
+            }),
+          ]
+        }),
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 1200 },
+          children: [
+            new TextRun({ 
+              text: (metadata.term?.toUpperCase() || "TERM").toUpperCase(), 
+              bold: true, 
+              font: "Century Gothic", 
+              size: 36 // 18pt
+            }),
+          ],
+        }),
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 1200 },
+          children: [
+            new TextRun({ 
+              text: "WEEKLY LESSON NOTE", 
+              bold: true, 
+              font: "Century Gothic", 
+              size: 36
+            }),
+          ],
+        }),
+        ...(!/basic\s*[1-6]\b/i.test(metadata.level || "") ? [
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 1200 },
+            children: [
+              new TextRun({ 
+                text: (metadata.subject || "SUBJECT").toUpperCase(), 
+                bold: true, 
+                font: "Century Gothic", 
+                size: 36
+              }),
+            ],
+          })
+        ] : []),
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 1200 },
+          children: [
+            new TextRun({ 
+              text: `WEEK ${(metadata.week || "").replace(/[^0-9]/g, '') || "___"}`, 
+              bold: true, 
+              font: "Century Gothic", 
+              size: 36
+            }),
+          ],
+        }),
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 1200 },
+          children: [
+            new TextRun({ 
+              text: (metadata.level || "___").toUpperCase().replace(/([a-zA-Z])(\d)/g, '$1 $2'), 
+              bold: true, 
+              font: "Century Gothic", 
+              size: 36
+            }),
+          ],
+        }),
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 2500, after: 800 },
+          children: [
+            new TextRun({ 
+              text: (metadata.teacherName || "NAME OF TEACHER").toUpperCase(), 
+              bold: true, 
+              font: "Century Gothic", 
+              size: 36
+            }),
+          ],
+        }),
+        new Paragraph({
+          children: [new PageBreak()],
+        })
+      );
+    }
 
     // Add header with metadata
     docElements.push(
@@ -248,6 +348,16 @@ export async function generateLessonNoteDocx(
                 bottom: 1440,
                 left: 1440,
               },
+              borders: metadata.includeCoverPage ? {
+                pageBorders: {
+                  display: "firstPage" as const,
+                  offsetFrom: "page" as const,
+                },
+                pageBorderTop: { style: BorderStyle.DOUBLE, size: 24, space: 31, color: "000000" },
+                pageBorderBottom: { style: BorderStyle.DOUBLE, size: 24, space: 31, color: "000000" },
+                pageBorderLeft: { style: BorderStyle.DOUBLE, size: 24, space: 31, color: "000000" },
+                pageBorderRight: { style: BorderStyle.DOUBLE, size: 24, space: 31, color: "000000" },
+              } : undefined,
             },
           },
           children: docElements,

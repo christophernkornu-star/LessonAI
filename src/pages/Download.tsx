@@ -135,18 +135,28 @@ const DownloadPage = () => {
                 if (data.phases.phase3_reflection) data.phases.phase3_reflection.duration = "10 mins";
             }
           });
+
+          // Common metadata for cover page
+          const coverPageMeta = lessonData && lessonData.includeCoverPage ? {
+            subject: lessonData.coverPageSubject || lessonData.subject,
+            level: lessonData.level,
+            term: lessonData.term,
+            week: lessonData.weekNumber,
+            teacherName: lessonData.teacherName,
+            schoolName: lessonData.schoolName
+          } : undefined;
           
           // Check if a template file URL is available (template-based approach)
           const templateUrl = sessionStorage.getItem("ghanaTemplateUrl");
           
-          if (templateUrl) {
+          if (templateUrl && !(lessonData && lessonData.includeCoverPage)) {
             // Note: generateLessonFromJson typically only handles single object. 
             // If multiple, we might need to loop or warn. 
             // For now, if multiple, we use the programmatic generator which we just updated to handle arrays.
             if (parsedArray.length > 1) {
                 const filename = generateGhanaLessonFileName(parsedArray[0]);
                 // Use the updated programmatic generator which handles arrays
-                await generateGhanaLessonDocx(parsedArray, filename);
+                await generateGhanaLessonDocx(parsedArray, filename, false, coverPageMeta);
             } else {
                 const { generateLessonFromJson } = await import("@/services/templateDocxService");
                 await generateLessonFromJson(parsedArray[0], templateUrl);
@@ -156,7 +166,7 @@ const DownloadPage = () => {
             // Fallback to programmatic table generation
             const filename = generateGhanaLessonFileName(parsedArray[0]);
             // Pass the original result (array or object) - simpler to pass array as our updated service handles it
-            await generateGhanaLessonDocx(parsedArray, filename);
+            await generateGhanaLessonDocx(parsedArray, filename, false, coverPageMeta);
             toast.success("Ghana lesson plan downloaded successfully!");
           }
         } catch (jsonError) {
@@ -172,6 +182,11 @@ const DownloadPage = () => {
           subStrand: lessonData.subStrand,
           contentStandard: lessonData.contentStandard,
           templateName: lessonData.templateName,
+          term: lessonData.term,
+          week: lessonData.weekNumber,
+          teacherName: lessonData.teacherName,
+          schoolName: lessonData.schoolName,
+          includeCoverPage: lessonData.includeCoverPage,
         } : {
           subject: "General",
           level: "Basic 1",
