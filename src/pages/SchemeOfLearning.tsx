@@ -57,6 +57,8 @@ export default function SchemeOfLearning() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loadingStep, setLoadingStep] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [deleteClassDialogOpen, setDeleteClassDialogOpen] = useState(false);
+  const [classToDelete, setClassToDelete] = useState("");
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, successes: 0, failures: 0 });
   const [batchDialogConfig, setBatchDialogConfig] = useState<{ open: boolean; items: SchemeItem[] }>({ open: false, items: [] });
@@ -647,6 +649,8 @@ export default function SchemeOfLearning() {
     const match = weekStr.match(/(\d+)/);
     return match ? parseInt(match[1], 10) : 999;
   };
+
+  const activeClasses = useMemo(() => Array.from(new Set(schemeData.map(item => item.classLevel))), [schemeData]);
 
   const filteredSchemeData = useMemo(() => {
     return schemeData.filter((item) => {
@@ -1297,6 +1301,53 @@ export default function SchemeOfLearning() {
                   <span className="hidden sm:inline">Export CSV</span>
                   <span className="sm:hidden">Export</span>
                 </Button>
+                <Dialog open={deleteClassDialogOpen} onOpenChange={setDeleteClassDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="flex-1 sm:flex-none text-destructive border-destructive hover:bg-destructive/10">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      <span className="hidden sm:inline">Delete Class</span>
+                      <span className="sm:hidden">Class</span>
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Delete Class Scheme</DialogTitle>
+                      <DialogDescription>
+                        Select a class down below to completely remove its scheme of learning. This action cannot be undone.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-4">
+                      <div className="space-y-2">
+                        <Label>Select Class Level</Label>
+                        <Select value={classToDelete} onValueChange={setClassToDelete}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a class..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {activeClasses.map((c) => (
+                              <SelectItem key={c} value={c}>{c}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="ghost" onClick={() => setDeleteClassDialogOpen(false)}>Cancel</Button>
+                      <Button variant="destructive" 
+                        onClick={() => {
+                          if (classToDelete) {
+                            handleDeleteClass(classToDelete);
+                            setDeleteClassDialogOpen(false);
+                            setClassToDelete("");
+                          }
+                        }}
+                        disabled={!classToDelete}
+                      >
+                        Delete Data
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
                 <Button variant="destructive" onClick={handleClear} className="flex-1 sm:flex-none">
                   <Trash2 className="mr-2 h-4 w-4" />
                   <span className="hidden sm:inline">Clear Scheme</span>
@@ -1664,3 +1715,4 @@ export default function SchemeOfLearning() {
     </div>
   );
 }
+

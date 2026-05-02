@@ -1,5 +1,4 @@
-﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 
 const allowedOrigins = [
   'https://lessonai.vercel.app',
@@ -23,25 +22,34 @@ serve(async (req: Request) => {
   }
 
   try {
-    // We safeguard the API using strict CORS validation and Supabase's built-in Gateway
-    // This allows the frontend to call the API natively without failing on strict User Session checks
-    // Default Supabase edge functions require the anon key in the Authorization header.
-
+    // 1. Authenticate the User
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
+      throw new Error('Missing Authorization header');
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+
+    if (userError || !user) {
+      co      return new Response(JSON.stringify({ error: 'Unauthorized user. Token may be expired.', details: userError?.message }), {
+ized user. Token may be expired.' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Validate API Key
+    // 2. Validate API Key
+  // Validate API Key
     const apiKey = Deno.env.get('DEEPSEEK_API_KEY');
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'Server configuration error: DEEPSEEK_API_KEY not found in secrets' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      throw new Error('Server configuration error: DEEPSEEK_API_KEY not found in secrets');
     }
 
     const { prompt, systemMessage, maxTokens, numLessons } = await req.json();
@@ -58,8 +66,9 @@ serve(async (req: Request) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
+        'Authorization': `Bearer ${apiKey        model: "deepseek-chat",
+. Wait, the original code used deepseek-chat
+     },
       body: JSON.stringify({
         model: "deepseek-chat",
         messages: [
@@ -81,6 +90,9 @@ serve(async (req: Request) => {
 
     return new Response(JSON.stringify(data), {
       status: response.status,
+response.json();
+
+    return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {

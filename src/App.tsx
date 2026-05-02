@@ -52,8 +52,8 @@ const AdminDashboard = lazyWithRetry(() => import("./pages/AdminDashboard"));
 const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
 const SchemeOfLearning = lazyWithRetry(() => import("./pages/SchemeOfLearning"));
 const TimetableManagement = lazyWithRetry(() => import("./pages/TimetableManagement"));
-  const ForgotPassword = lazyWithRetry(() => import("./pages/ForgotPassword"));
-  const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
+
+const queryClient = new QueryClient();
 
 // Loading component
 const PageLoader = () => (
@@ -61,8 +61,6 @@ const PageLoader = () => (
     <Loader2 className="h-8 w-8 animate-spin text-primary" />
   </div>
 );
-
-const queryClient = new QueryClient();
 
 const App = () => {
   useEffect(() => {
@@ -142,8 +140,8 @@ const App = () => {
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/" element={<Index />} />
-              <Route path="/login" element={<Login />} />                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/reset-password" element={<ResetPassword />} />              <Route path="/signup" element={<Signup />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/profile/edit" element={<ProfileEdit />} />
               <Route path="/templates" element={<TemplateManagement />} />
