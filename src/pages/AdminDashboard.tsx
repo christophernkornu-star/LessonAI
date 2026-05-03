@@ -728,7 +728,7 @@ const AdminDashboard = () => {
                             </div>
                             
                             {/* Status & Actions Segment */}
-                            <div className="flex items-stretch sm:items-center justify-between lg:justify-end gap-3 sm:gap-4 bg-black/5 dark:bg-white/5 rounded-xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full lg:w-auto">
+                            <div className="flex flex-wrap sm:flex-nowrap items-stretch sm:items-center justify-between lg:justify-end gap-3 sm:gap-4 bg-black/5 dark:bg-white/5 rounded-xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full lg:w-auto">
                                 <div className="flex items-center gap-4 sm:gap-6 flex-1 lg:flex-initial pr-2 sm:pr-4 border-r border-black/10 dark:border-white/10 shrink-0">
                                     
                                     <div className="flex flex-col gap-1 items-start sm:items-center min-w-[60px]">
@@ -745,11 +745,11 @@ const AdminDashboard = () => {
                                     
                                 </div>
                                 
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2 mt-2 sm:mt-0 w-full sm:w-auto basis-full sm:basis-auto">
                                     <Button 
                                         variant={user.isSuspended ? "default" : "destructive"} 
                                         size="sm"
-                                        className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-4 shrink-0 transition-transform active:scale-95"
+                                        className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-4 transition-transform active:scale-95 w-full sm:w-auto"
                                         onClick={() => handleToggleSuspension(user.userId, user.isSuspended, user.fullName)}
                                     >
                                         {user.isSuspended ? "Activate" : "Suspend"}
@@ -757,7 +757,7 @@ const AdminDashboard = () => {
                                     <Button 
                                         variant="destructive" 
                                         size="sm"
-                                        className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-4 shrink-0 transition-transform active:scale-95"
+                                        className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-4 transition-transform active:scale-95 w-full sm:w-auto"
                                         onClick={() => handleDeleteUserAccount(user.userId, user.fullName)}
                                     >
                                         Delete
@@ -911,7 +911,7 @@ const AdminDashboard = () => {
                             </div>
                             
                             {/* Status & Actions Segment */}
-                            <div className="flex items-stretch sm:items-center justify-between lg:justify-end gap-3 sm:gap-4 bg-black/5 dark:bg-white/5 rounded-xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full lg:w-auto">
+                            <div className="flex flex-wrap sm:flex-nowrap items-stretch sm:items-center justify-between lg:justify-end gap-3 sm:gap-4 bg-black/5 dark:bg-white/5 rounded-xl p-3 sm:p-4 border border-black/5 dark:border-white/5 w-full lg:w-auto">
                                 <div className="flex items-center gap-4 sm:gap-6 flex-1 lg:flex-initial pr-2 sm:pr-4 border-r border-black/10 dark:border-white/10 shrink-0">
                                     
                                     <div className="flex flex-col gap-1 items-start sm:items-center min-w-[60px]">
@@ -928,11 +928,11 @@ const AdminDashboard = () => {
                                     
                                 </div>
                                 
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2 mt-2 sm:mt-0 w-full sm:w-auto basis-full sm:basis-auto">
                                     <Button 
                                         variant={user.isSuspended ? "default" : "destructive"} 
                                         size="sm"
-                                        className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-4 shrink-0 transition-transform active:scale-95"
+                                        className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-4 transition-transform active:scale-95 w-full sm:w-auto"
                                         onClick={() => handleToggleSuspension(user.userId, user.isSuspended, user.fullName)}
                                     >
                                         {user.isSuspended ? "Activate" : "Suspend"}
@@ -940,7 +940,7 @@ const AdminDashboard = () => {
                                     <Button 
                                         variant="destructive" 
                                         size="sm"
-                                        className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-4 shrink-0 transition-transform active:scale-95"
+                                        className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-4 transition-transform active:scale-95 w-full sm:w-auto"
                                         onClick={() => handleDeleteUserAccount(user.userId, user.fullName)}
                                     >
                                         Delete
