@@ -214,21 +214,8 @@ const Dashboard = () => {
         .map(([week, count]) => ({ week, count })));
 
 
-      // 4. Engagement Metrics (Simplified)
-      const nowTime = new Date().getTime();
-      const oneWeek = 7 * 24 * 60 * 60 * 1000;
-      const oneMonth = 30 * 24 * 60 * 60 * 1000;
-      
-      const lessonsThisWeek = notesData.filter((n: any) => (nowTime - new Date(n.created_at).getTime()) < oneWeek).length;
-      const lessonsThisMonth = notesData.filter((n: any) => (nowTime - new Date(n.created_at).getTime()) < oneMonth).length;
-      
-      setEngagementMetrics({
-        lessons_this_week: lessonsThisWeek,
-        lessons_this_month: lessonsThisMonth,
-        last_generated: notesData.length > 0 ? notesData[0].created_at : null,
-        current_streak: 0, // Complex to calc, skipping for perf or requires loop
-        longest_streak: 0
-      });
+      // 4. Engagement Metrics (Calculated properly via AnalyticsService)
+      // Removed local simplified calculation to rely on actual data from AnalyticsService below
 
       // 5. Heatmap
       const dateMap: { [key: string]: number } = {};
@@ -239,23 +226,30 @@ const Dashboard = () => {
       setHeatmapData(Object.entries(dateMap).map(([date, count]) => ({ date, count })));
 
       // Load heavy external data separately
-      const [achievementsData, insightsData] = await Promise.all([
+      const [achievementsData, insightsData, qualityData, engagementData] = await Promise.all([
         AnalyticsService.getUserAchievements(user.id),
         AnalyticsService.getInsights(user.id),
+        AnalyticsService.getQualityMetrics(user.id),
+        AnalyticsService.getEngagementMetrics(user.id)
       ]);
       
       setAchievements(achievementsData);
       setInsights(insightsData);
       
-      // Calculate Quality Metrics locally to fix "Total Lessons: 0"
-      const totalLessons = notesData.length;
-      const favoritesCount = notesData.filter((n: any) => n.is_favorite).length;
+      setEngagementMetrics({
+        lessons_this_week: engagementData.lessons_this_week,
+        lessons_this_month: engagementData.lessons_this_month,
+        last_generated: engagementData.last_generated,
+        current_streak: engagementData.current_streak,
+        longest_streak: engagementData.longest_streak
+      });
+      
       setQualityMetrics({
-        total_lessons: totalLessons,
-        favorites_count: favoritesCount,
-        favorite_rate: totalLessons > 0 ? Math.round((favoritesCount / totalLessons) * 100) : 0,
-        avg_content_length: 0, // Not available in lightweight fetch
-        lessons_with_resources: 0 // Not available in lightweight fetch
+        total_lessons: qualityData.total_lessons,
+        favorites_count: qualityData.favorites_count,
+        favorite_rate: qualityData.favorite_rate ? Math.round(qualityData.favorite_rate) : 0,
+        avg_content_length: Math.round(qualityData.avg_content_length || 0),
+        lessons_with_resources: qualityData.lessons_with_resources || 0
       });
       
     } catch (error: any) {

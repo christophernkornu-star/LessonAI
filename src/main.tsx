@@ -2,6 +2,14 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister();
+    }
+  });
+}
+
 // Handle chunk load errors (e.g., after a new deployment)
 window.addEventListener('vite:preloadError', (event) => {
   console.warn('Vite preload error, reloading page...', event);

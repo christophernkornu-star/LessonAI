@@ -497,6 +497,12 @@ export async function generateGhanaLessonDocx(
         dataArray = [jsonData];
     }
 
+    if (dataArray.length === 0 && coverPageMeta) {
+        // If it's empty but we want a cover page, add a dummy entry
+        // so it maps once and produces only the cover.
+        dataArray = [{ _dummyCoverOnly: true } as any];
+    }
+
     const docSections = dataArray.map((lessonData, index) => {
         // Optional Cover Page logic per lesson entry or globally on index 0
         const isFirst = index === 0;
@@ -832,7 +838,7 @@ export async function generateGhanaLessonDocx(
           ],
         });
 
-        return {
+        const propertiesObj = {
           properties: {
             page: {
               size: {
@@ -847,7 +853,7 @@ export async function generateGhanaLessonDocx(
               },
               borders: (isFirst && coverPageMeta) ? {
                 pageBorders: {
-                  display: "firstPage" as const,
+                  display: "allPages" as const,
                   offsetFrom: "page" as const,
                 },
                 pageBorderTop: { style: BorderStyle.DOUBLE, size: 24, space: 31, color: "000000" },
@@ -856,21 +862,31 @@ export async function generateGhanaLessonDocx(
                 pageBorderRight: { style: BorderStyle.DOUBLE, size: 24, space: 31, color: "000000" },
               } : undefined,
             },
-          },
-          children: [
-            ...coverParagraphs,
-            new Paragraph({
-              alignment: AlignmentType.CENTER,
-              spacing: { after: 100 },
-              children: [
-                new TextRun({
-                  text: formatTerm(lessonData.term),
-                  bold: true,
-                  size: 24, // 12pt
-                  font: "Segoe UI",
+          }
+        };
+
+        let childrenContent: any[] = [];
+        if ((lessonData as any)._dummyCoverOnly) {
+            // Remove the PageBreak at the end of coverParagraphs for standalone cover page
+            if (coverParagraphs.length > 0) {
+                coverParagraphs.pop();
+            }
+            childrenContent = [...coverParagraphs];
+        } else {
+            childrenContent = [
+                ...coverParagraphs,
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  spacing: { after: 100 },
+                  children: [
+                    new TextRun({
+                      text: formatTerm(lessonData.term),
+                      bold: true,
+                      size: 24, // 12pt
+                      font: "Segoe UI",
+                    }),
+                  ],
                 }),
-              ],
-            }),
             new Paragraph({
               alignment: AlignmentType.CENTER,
               spacing: { after: 100 },
@@ -925,7 +941,12 @@ export async function generateGhanaLessonDocx(
               text: "",
               spacing: { before: 400 },
             }),
-          ],
+          ];
+        }
+
+        return {
+            ...propertiesObj,
+            children: childrenContent,
         };
     });
 

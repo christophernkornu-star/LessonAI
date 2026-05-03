@@ -72,6 +72,10 @@ export default function SchemeOfLearning() {
     term: "Second Term",
     weekNumber: "", // Added state for editable week number
     classLevel: "", // Added state for editable class level
+    schoolName: "",
+    teacherName: "",
+    coverPageSubject: "", // Added state for JHS Cover Page Subject
+    includeCoverPage: false,
   });
   const [batchResults, setBatchResults] = useState<{data: LessonData, content: string, id: string}[]>([]);
   const [showBatchSuccess, setShowBatchSuccess] = useState(false);
@@ -773,7 +777,8 @@ export default function SchemeOfLearning() {
           weekNumber: first.week || prev.weekNumber || "Week 1",
           classLevel: normalizedClassLevel || prev.classLevel || "",
           classSize: fetchedClassSize || prev.classSize,
-          date: startDateStr
+          date: startDateStr,
+          coverPageSubject: Array.from(new Set(items.map(i => i.subject))).join(" & ")
       }));
       setBatchDialogConfig({ open: true, items });
       setBatchStep('config');
@@ -982,7 +987,8 @@ export default function SchemeOfLearning() {
           const zip = new PizZip();
           
           // Generate all docs
-          for (const result of batchResults) {
+          for (let index = 0; index < batchResults.length; index++) {
+            const result = batchResults[index];
             let finalData: any;
             
             // Try to parse the content as JSON first (high fidelity)
@@ -1066,7 +1072,37 @@ export default function SchemeOfLearning() {
 
             // Generate Blob (pass true for returnBlob)
             // We pass finalData as the first arg. generateGhanaLessonDocx handles object inputs too.
-            const blob = await generateGhanaLessonDocx(finalData, uniqueName, true); 
+            // If it's the first document and cover page is requested, generate the cover page as a completely standalone file
+            if (batchFormData.includeCoverPage && index === 0) {
+                const classLvl = (Array.isArray(finalData) ? finalData[0].class : finalData.class) || "";
+                const isJHS = ['basic7', 'basic8', 'basic9'].includes(batchFormData.classLevel?.toLowerCase());
+                const subjectValue = isJHS && batchFormData.coverPageSubject?.trim() !== "" 
+                    ? batchFormData.coverPageSubject 
+                    : "ALL SUBJECTS";
+                
+                const coverMeta = {
+                    subject: subjectValue, 
+                    level: classLvl,
+                    term: batchFormData.term,
+                    week: batchFormData.weekNumber || result.data.weekNumber?.toString() || "",
+                    teacherName: batchFormData.teacherName,
+                    schoolName: batchFormData.schoolName,
+                };
+                
+                // Create a dummy lesson payload so the generator runs, but the coverPageMeta flags the cover page creation.
+                // We'll rely on the fact that if we pass an empty array of lessons it will just render the cover page (or a very blank first page).
+                // Actually, let's just generate it using the first lesson data but tell the generator it's a cover page? 
+                // Wait, if it generates the lesson too, it's not strictly "standalone".
+                // We have access to PizZip. Let's just render the cover page as a separate document.
+                const coverBlob = await generateGhanaLessonDocx([], "Cover_Page.docx", true, coverMeta);
+                if (coverBlob && coverBlob instanceof Blob) {
+                    const coverArrayBuffer = await coverBlob.arrayBuffer();
+                    zip.file("00_Cover_Page.docx", coverArrayBuffer);
+                }
+            }
+
+            // Normal lesson note generation (without cover pages)
+            const blob = await generateGhanaLessonDocx(finalData, uniqueName, true, undefined); 
             
             if (blob && blob instanceof Blob) {
                 const arrayBuffer = await blob.arrayBuffer();
@@ -1500,6 +1536,51 @@ export default function SchemeOfLearning() {
                                     />
                                 </div>
                             </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-border mt-4">
+                                <div className="col-span-full flex items-center gap-2">
+                                    <Checkbox
+                                      id="includeCoverPage"
+                                      checked={batchFormData.includeCoverPage}
+                                      onCheckedChange={(checked) => setBatchFormData({...batchFormData, includeCoverPage: checked as boolean})}
+                                    />
+                                    <Label htmlFor="includeCoverPage" className="cursor-pointer font-medium">Include Cover Page</Label>
+                                </div>
+                                
+                                {batchFormData.includeCoverPage && (
+                                    <>
+                                        <div className="space-y-2">
+                                            <Label>School Name</Label>
+                                            <Input
+                                                placeholder="e.g. Preset Academy"
+                                                value={batchFormData.schoolName}
+                                                onChange={e => setBatchFormData({...batchFormData, schoolName: e.target.value})}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Teacher Name</Label>
+                                            <Input
+                                                placeholder="e.g. Mr. John Osei"
+                                                value={batchFormData.teacherName}
+                                                onChange={e => setBatchFormData({...batchFormData, teacherName: e.target.value})}
+                                            />
+                                        </div>
+                                        {['basic7', 'basic8', 'basic9'].includes(batchFormData.classLevel?.toLowerCase()) && (
+                                            <div className="space-y-2 col-span-full animate-fade-in-up">
+                                                <Label>Subjects to Display (Optional for Multiple Subjects)</Label>
+                                                <Input
+                                                    placeholder="e.g. Computing and Creative Arts and Design"
+                                                    value={batchFormData.coverPageSubject}
+                                                    onChange={e => setBatchFormData({...batchFormData, coverPageSubject: e.target.value})}
+                                                />
+                                                <p className="text-[11px] text-muted-foreground mt-1">
+                                                    For JHS classes, use this to override and list your specialized subjects on the Cover Page.
+                                                </p>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
                          </div>
                      ) : (
                         <div className="space-y-4 pb-4">
@@ -1715,4 +1796,5 @@ export default function SchemeOfLearning() {
     </div>
   );
 }
+
 

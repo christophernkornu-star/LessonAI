@@ -14,6 +14,7 @@ import {
   getAllUserLessonCounts,
   toggleUserSuspension,
   togglePaymentExemption,
+  deleteUserAccount,
   getSystemSetting,
   updateSystemSetting,
   UserLessonCount,
@@ -275,6 +276,28 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleDeleteUserAccount = async (userId: string, name: string) => {
+    if (!confirm(`WARNING: Are you sure you want to permanently delete the account for ${name}? This action cannot be undone and will erase all their lesson plans and data.`)) return;
+    if (!confirm('FINAL WARNING: This user will be completely purged from the database. Click OK to proceed.')) return;
+    
+    try {
+        await deleteUserAccount(userId);
+        
+        // Update local state
+        setUserLessonsData(prev => prev.filter(u => u.userId !== userId));
+
+        toast({
+            title: "Account Deleted",
+            description: `User ${name} has been permanently removed from the system.`
+        });
+    } catch (error: any) {
+        toast({
+            title: "Error",
+            description: error.message || "Failed to delete user account",
+            variant: "destructive"
+        });
+    }
+  };
   const verifyAdmin = async () => {
     setLoading(true);
     const isAdmin = await checkIsAdmin();
@@ -722,7 +745,7 @@ const AdminDashboard = () => {
                                     
                                 </div>
                                 
-                                <div className="flex items-center">
+                                <div className="flex items-center gap-2">
                                     <Button 
                                         variant={user.isSuspended ? "default" : "destructive"} 
                                         size="sm"
@@ -730,6 +753,14 @@ const AdminDashboard = () => {
                                         onClick={() => handleToggleSuspension(user.userId, user.isSuspended, user.fullName)}
                                     >
                                         {user.isSuspended ? "Activate" : "Suspend"}
+                                    </Button>
+                                    <Button 
+                                        variant="destructive" 
+                                        size="sm"
+                                        className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-4 shrink-0 transition-transform active:scale-95"
+                                        onClick={() => handleDeleteUserAccount(user.userId, user.fullName)}
+                                    >
+                                        Delete
                                     </Button>
                                 </div>
                             </div>
@@ -897,7 +928,7 @@ const AdminDashboard = () => {
                                     
                                 </div>
                                 
-                                <div className="flex items-center">
+                                <div className="flex items-center gap-2">
                                     <Button 
                                         variant={user.isSuspended ? "default" : "destructive"} 
                                         size="sm"
@@ -905,6 +936,14 @@ const AdminDashboard = () => {
                                         onClick={() => handleToggleSuspension(user.userId, user.isSuspended, user.fullName)}
                                     >
                                         {user.isSuspended ? "Activate" : "Suspend"}
+                                    </Button>
+                                    <Button 
+                                        variant="destructive" 
+                                        size="sm"
+                                        className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-4 shrink-0 transition-transform active:scale-95"
+                                        onClick={() => handleDeleteUserAccount(user.userId, user.fullName)}
+                                    >
+                                        Delete
                                     </Button>
                                 </div>
                             </div>
@@ -1203,3 +1242,4 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
+

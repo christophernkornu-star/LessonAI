@@ -602,6 +602,22 @@ export const togglePaymentExemption = async (userId: string, isExempt: boolean):
 };
 
 /**
+ * Delete a user account (Requires admin_delete_user RPC)
+ */
+export const deleteUserAccount = async (userId: string): Promise<void> => {
+  const isAdmin = await checkIsAdmin();
+  if (!isAdmin) {
+    throw new Error('Unauthorized: Admin access required');
+  }
+
+  const { error } = await supabase.rpc('admin_delete_user' as any, { target_user_id: userId } as any);
+
+  if (error) {
+    throw new Error(`Failed to delete user: ${error.message}`);
+  }
+};
+
+/**
  * Get system setting
  */
 export const getSystemSetting = async (key: string): Promise<any> => {
