@@ -459,10 +459,12 @@ ${languageInstruction}
 - Number activities clearly (1), 2), 3) or Activity 1:, Activity 2:) with each on its own line.
 - Avoid long run-on paragraphs - break them into digestible chunks.
 - Use bullet points for lists of items.
-- **MATHEMATICS & EQUATIONS:** 
+- **MATHEMATICS & EQUATIONS:**
   - Ensure math equations stay on ONE line. Do NOT break lines after an equals sign (=), plus sign (+), minus sign (-), or other operator.
   - If an equation is long, break it logically *before* an operator, not after.
   - Surround operators with spaces (e.g., "2 + 2 = 4" not "2+2=4").
+  - **LaTeX Math Mode:** Wrap ALL mathematical expressions, equations, fractions, powers, and formulas in LaTeX inline math delimiters ($...$). This explicitly marks them as mathematics content and prevents text formatting issues.
+  - Examples: $2 + 2 = 4$, $x + 5 = 11$, $\frac{1}{2}$, $x^{2}$, $\sqrt{4}$
 
 **GHANAIAN EXAMPLES TO USE (BACKGROUND FLAVOR ONLY):**
 The following are examples of Ghanaian context. DO NOT change the core topic of the lesson to match these examples. The topic is STRICTLY defined by the Strand and Indicator. Use these examples ONLY as background flavor (e.g., names in word problems, places in sentences).
@@ -907,41 +909,185 @@ export async function parseSchemeOfLearning(text: string): Promise<Array<{
   }
 }
 
+function normalizeMathDelimiters(text: string): string {
+  if (!text) return text;
+
+  return text.replace(/(\${3,})([\s\S]*?)(\${3,})/g, (match, open, body, close) => {
+    if (open.length !== close.length) {
+      return match;
+    }
+    const delimiter = body.includes('\n') ? '$$' : '$';
+    return `${delimiter}${body}${delimiter}`;
+  });
+}
+
+function wrapMathInLatex(text: string): string {
+  if (!text) return text;
+
+  const normalizedText = normalizeMathDelimiters(text);
+
+  const replaceOutsideMath = (
+    input: string,
+    regex: RegExp,
+    replacer: (match: string, ...groups: string[]) => string
+  ): string => {
+    return input
+      .split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+\$)/g)
+      .map((segment) => {
+        if (segment.startsWith('$$') && segment.endsWith('$$')) return segment;
+        if (segment.startsWith('$') && segment.endsWith('$')) return segment;
+        return segment.replace(regex, replacer as any);
+      })
+      .join('');
+  };
+
+  let result = normalizedText;
+
+  // ONLY match these specific patterns that are clearly mathematical:
+
+  // 1. Variable equations: "x = 5", "y = 2x + 3"
+  result = replaceOutsideMath(
+    result,
+    /(?<![a-zA-Z])([a-zA-Z])\s*=\s*(-?[\da-zA-Z+\-*/^.() ]+?)(?=\s*(?:,|\.|;|\n|$))/g,
+    (match, variable, expression) => {
+      if (/[-+*/^\d]/.test(expression)) {
+        return `$${variable} = ${expression.trim()}$`;
+      }
+      return match;
+    }
+  );
+
+  // 2. Pure number equations: "2 + 3 = 5"
+  result = replaceOutsideMath(
+    result,
+    /(\d+(?:\.\d+)?\s*[+\-*/]\s*\d+(?:\.\d+)?\s*=\s*\d+(?:\.\d+)?)/g,
+    (match) => `$${match}$`
+  );
+
+  // 3. Exponents: "x^2"
+  result = replaceOutsideMath(
+    result,
+    /(\d+|[a-zA-Z])\s*\^\s*(\d+|[a-zA-Z])/g,
+    (match) => `$${match}$`
+  );
+
+  // 4. Fractions: "1/2"
+  result = replaceOutsideMath(
+    result,
+    /(?<!\d)(\d+)\/(\d+)(?!\d)/g,
+    (match) => `$${match}$`
+  );
+
+  return normalizeMathDelimiters(result);
+}
+
 function formatGeneratedContent(text: string): string {
   if (!text) return text;
   let formatted = text;
 
-  // 1. Recap Activity: ... (Bold the header line) - case insensitive
+  // 1. Wrap math equations in LaTeX delimiters
+  // Match common math expressions: numbers with operators, variables with operators, etc.
+  // This prevents text formatting from splitting equations
+  formatted = wrapMathInLatex(formatted);
+
+  // 2. Recap Activity: ... (Bold the header line) - case insensitive
   formatted = formatted.replace(/(^|\n)(?!\*\*)(Recap Activity:[^\n]*)/gi, '$1**$2**');
 
-  // 2. Quick oral quiz: (Bold the phrase) - case insensitive
+  // 3. Quick oral quiz: (Bold the phrase) - case insensitive
   formatted = formatted.replace(/(^|\n)(?!\*\*)(Quick oral quiz:)/gi, '$1**$2**');
 
-  // 3. Teacher summarises/summarizes the key steps for ...: (Bold the phrase)
+  // 4. Teacher summarises/summarizes the key steps for ...: (Bold the phrase)
   formatted = formatted.replace(/(^|\n)(?!\*\*)(Teacher summari[sz]es[^:]*:)/gi, '$1**$2**');
 
-  // 4. Sample Class Exercises: (Ensure bold and double newline)
+  // 5. Sample Class Exercises: (Ensure bold and double newline)
   // Be EXTREMELY aggressive to catch variations like "Sample Class Exercises (Concept Application):"
   // Match "Sample Class Exercises" followed by anything up to a colon or end of line
   formatted = formatted.replace(/(\n|^)[ \t]*(\*\*|)[ \t]*Sample Class Exercises.*?:?[ \t]*(\*\*|)[ \t]*(\n|$)/gi, '\n\n**Sample Class Exercises:**\n');
 
-  // 4.5 Ensure "newline text ending with colon" is treated as a header (double newline before, newline after, bolded)
+  // 5.5 Ensure "newline text ending with colon" is treated as a header (double newline before, newline after, bolded)
   // But limit length to avoid bolding long paragraphs ending in colon. (Max 100 chars?)
   // We use lookahead to ensure we don't match things that look like times or ratios inside a sentence (handled by ^|\n anchor)
   formatted = formatted.replace(/(\n|^)(?!Sample Class Exercises)(?!\*\*Sample Class Exercises)(.{3,100}:)[ \t]*(\n|$)/g, '$1**$2**$3');
 
-  // 4.6 Fix Activity Headers Splitting
+  // 5.6 Fix Activity Headers Splitting
   // Ensure "Activity X:" is NOT followed by a newline, but by a space.
   const mergePattern = /(\**(?:Activity|Step|Part|Phase|Group)\s+\d+(?::|.*?:)?\**)\s*[\r\n]+\s*/gi;
   formatted = formatted.replace(mergePattern, '$1 ');
 
-  // 5. Clean up triple+ newlines to double newlines
+  // 6. Clean up triple+ newlines to double newlines
   formatted = formatted.replace(/\n{3,}/g, '\n\n');
 
-  // 6. Clean up potential double bolding from the replacements or AI output
+  // 7. Clean up potential double bolding from the replacements or AI output
   formatted = formatted.replace(/\*{4,}/g, '**');
 
   return formatted;
+}
+
+function sanitizeJsonString(raw: string): string {
+  let normalized = raw.replace(/\r\n?/g, '\n');
+  normalized = normalized.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ' ');
+
+  let result = '';
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < normalized.length; i++) {
+    const char = normalized[i];
+
+    if (!inString) {
+      if (char === '"' && !escaped) {
+        inString = true;
+      }
+      if (char === '\\' && !escaped) {
+        escaped = true;
+      } else {
+        escaped = false;
+      }
+      result += char;
+      continue;
+    }
+
+    if (escaped) {
+      result += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      result += char;
+      escaped = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = false;
+      result += char;
+      continue;
+    }
+
+    if (char === '\n' || char === '\r') {
+      result += '\\n';
+      continue;
+    }
+
+    if (char === '\t') {
+      result += '\\t';
+      continue;
+    }
+
+    if (char < ' ') {
+      result += ' ';
+      continue;
+    }
+
+    result += char;
+  }
+
+  if (inString) {
+    result += '"';
+  }
+
+  return result;
 }
 
 function processJsonLessonContent(jsonStr: string, index: number, totalLessons: number): string {
@@ -962,25 +1108,29 @@ function processJsonLessonContent(jsonStr: string, index: number, totalLessons: 
         cleanStr = cleanStr.slice(0, -1).trim();
     }
 
-    const obj = JSON.parse(cleanStr);
+    const sanitized = sanitizeJsonString(cleanStr);
+    const obj = JSON.parse(sanitized);
 
     // Helper to process formatting in string values
     const formatValue = (val: any): any => {
       if (typeof val === 'string') {
         let formatted = val;
 
-        // 1. Fix Numbering: "Lesson 1 of 1" -> "Lesson {i} of {n}"
+        // 1. Wrap math equations in LaTeX delimiters
+        formatted = wrapMathInLatex(formatted);
+
+        // 2. Fix Numbering: "Lesson 1 of 1" -> "Lesson {i} of {n}"
         // Only replace if we find the specific "1 of 1" pattern to avoid breaking other numbers
         formatted = formatted.replace(/Lesson\s*:?\s*1\s*of\s*1/gi, `Lesson ${index + 1} of ${totalLessons}`);
         
-        // 2. Format Sample Class Exercises
+        // 3. Format Sample Class Exercises
         // Same aggressive regex as the text-mode formatter
         formatted = formatted.replace(/(\n|^)[ \t]*(\*\*|)[ \t]*Sample Class Exercises.*?:?[ \t]*(\*\*|)[ \t]*(\n|$)/gi, '\n\n**Sample Class Exercises:**\n');
         
-        // 3. Clean up triple newlines
+        // 4. Clean up triple newlines
         formatted = formatted.replace(/\n{3,}/g, '\n\n');
 
-        // 4. Activity Headers Joining
+        // 5. Activity Headers Joining
         const mergePattern = /(\**(?:Activity|Step|Part|Phase|Group)\s+\d+(?::|.*?:)?\**)\s*[\r\n]+\s*/gi;
         formatted = formatted.replace(mergePattern, '$1 ');
 
@@ -1022,22 +1172,21 @@ function processJsonLessonContent(jsonStr: string, index: number, totalLessons: 
     return JSON.stringify(processedObj);
   } catch (e) {
     console.warn("Failed first pass JSON parse, attempting auto-repair:", e);
-    // Simple auto-repair for truncated JSON strings (e.g. from reaching max tokens)
     try {
-        let repairedStr = cleanStr;
-        // Try appending a closing brace 
+        let repairedStr = sanitizeJsonString(cleanStr);
+
+        // Try a couple of common repairs for accidentally truncated or malformed JSON
         if (!repairedStr.trim().endsWith('}')) repairedStr += '}';
-        // Try adding closing quotes and brace
-        if (!repairedStr.includes('"}') && !repairedStr.includes('"}')) {
-           try { JSON.parse(repairedStr); return repairedStr; } 
-           catch (err) { repairedStr = cleanStr + '"}'; }
-        }
-        // Force test parse
+        if (!repairedStr.trim().startsWith('{')) repairedStr = repairedStr.trimStart();
+
+        // Remove trailing commas inside objects/arrays
+        repairedStr = repairedStr.replace(/,\s*(?=[}\]])/g, '');
+
         const repairedObj = JSON.parse(repairedStr);
         return JSON.stringify(repairedObj);
     } catch (repairErr) {
-        console.warn("Auto-repair failed, returning corrupted original.");
-        return jsonStr; // Fallback to original so it at least exists (even if it triggers markdown mode)
+        console.warn("Auto-repair failed, returning corrupted original.", repairErr);
+        return jsonStr; // Fallback to original so it at least exists
     }
   }
 }

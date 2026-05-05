@@ -2,6 +2,7 @@ import {
   Document, 
   Paragraph, 
   TextRun, 
+  ParagraphChild,
   Table, 
   TableCell, 
   TableRow, 
@@ -15,9 +16,18 @@ import {
   ShadingType,
   HeightRule,
   Footer,
-  TableLayoutType
+  TableLayoutType,
+  Math as DocxMath,
+  MathRun as DocxMathRun,
+  MathFraction,
+  MathSuperScript,
+  MathSubScript,
+  MathSubSuperScript,
+  MathRadical
 } from "docx";
+import type { MathComponent } from "docx";
 import { saveAs } from "file-saver";
+import { cleanAndSplitText, parseMarkdownLine, splitTextByLatexMath, capitalizeFirstLetter } from "@/lib/textFormatting";
 
 interface GhanaLessonData {
   term?: string;
@@ -56,18 +66,182 @@ interface GhanaLessonData {
   };
 }
 
+const latexSymbolMap: Record<string, string> = {
+  '\\geq': '≥',
+  '\\leq': '≤',
+  '\\neq': '≠',
+  '\\gt': '>',
+  '\\lt': '<',
+  '\\times': '×',
+  '\\div': '÷',
+  '\\pm': '±',
+  '\\approx': '≈',
+  '\\le': '≤',
+  '\\ge': '≥',
+  '\\cdot': '·',
+};
+
+function normalizeLatexMathSymbols(text: string): string {
+  return text.replace(/\\(geq|leq|neq|gt|lt|times|div|pm|approx|le|ge|cdot)/g, (match) => {
+    return latexSymbolMap[match] || match;
+  });
+}
+
+function extractBraceGroup(text: string, startIndex: number): { content: string; endIndex: number } {
+  if (text[startIndex] !== '{') {
+    return { content: text[startIndex] || '', endIndex: startIndex + 1 };
+  }
+
+  let depth = 0;
+  let i = startIndex;
+  let contentStart = startIndex + 1;
+
+  while (i < text.length) {
+    if (text[i] === '{') {
+      depth += 1;
+    } else if (text[i] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return { content: text.slice(contentStart, i), endIndex: i + 1 };
+      }
+    }
+    i += 1;
+  }
+
+  return { content: text.slice(contentStart), endIndex: text.length };
+}
+
+function extractScriptContent(text: string, startIndex: number): { content: string; endIndex: number } {
+  if (text[startIndex] === '{') {
+    return extractBraceGroup(text, startIndex);
+  }
+  return { content: text[startIndex] || '', endIndex: startIndex + 1 };
+}
+
+function parseDocxMathComponents(latex: string): MathComponent[] {
+  const result: MathComponent[] = [];
+  let i = 0;
+
+  while (i < latex.length) {
+    if (latex.startsWith('\\frac', i)) {
+      const numerator = extractBraceGroup(latex, i + 5);
+      const denominator = extractBraceGroup(latex, numerator.endIndex);
+      result.push(
+        new MathFraction({
+          numerator: parseDocxMathComponents(numerator.content),
+          denominator: parseDocxMathComponents(denominator.content),
+        })
+      );
+      i = denominator.endIndex;
+      continue;
+    }
+
+    if (latex.startsWith('\\sqrt', i)) {
+      const radicalArg = extractBraceGroup(latex, i + 5);
+      result.push(new MathRadical({ children: parseDocxMathComponents(radicalArg.content) }));
+      i = radicalArg.endIndex;
+      continue;
+    }
+
+    if (latex[i] === '^' || latex[i] === '_') {
+      const isSuper = latex[i] === '^';
+      const script = extractScriptContent(latex, i + 1);
+      const base = result.pop() || new DocxMathRun('');
+      if (isSuper) {
+        result.push(
+          new MathSuperScript({
+            children: [base],
+            superScript: parseDocxMathComponents(script.content),
+          })
+        );
+      } else {
+        result.push(
+          new MathSubScript({
+            children: [base],
+            subScript: parseDocxMathComponents(script.content),
+          })
+        );
+      }
+      i = script.endIndex;
+      continue;
+    }
+
+    if (latex[i] === '{' || latex[i] === '}') {
+      i += 1;
+      continue;
+    }
+
+    if (latex[i] === '\\') {
+      const match = /^\\[a-zA-Z]+/.exec(latex.slice(i));
+      if (match) {
+        const symbol = normalizeLatexMathSymbols(match[0]);
+        result.push(new DocxMathRun(symbol));
+        i += match[0].length;
+        continue;
+      }
+    }
+
+    let start = i;
+    while (
+      i < latex.length &&
+      latex[i] !== '\\' &&
+      latex[i] !== '^' &&
+      latex[i] !== '_' &&
+      latex[i] !== '{' &&
+      latex[i] !== '}'
+    ) {
+      i += 1;
+    }
+
+    const fragment = normalizeLatexMathSymbols(latex.slice(start, i));
+    if (fragment) {
+      result.push(new DocxMathRun(fragment));
+    }
+  }
+
+  return result.length > 0 ? result : [new DocxMathRun(normalizeLatexMathSymbols(latex))];
+}
+
+function createDocxParagraphChildren(text: string, bold: boolean = false): ParagraphChild[] {
+  const segments = splitTextByLatexMath(text);
+  const children: ParagraphChild[] = [];
+
+  for (const segment of segments) {
+    if (segment.type === 'text') {
+      const tokens = parseMarkdownLine(segment.text);
+      if (tokens.length === 0) {
+        children.push(
+          new TextRun({ text: segment.text || '', bold, size: 20, font: 'Segoe UI' })
+        );
+        continue;
+      }
+
+      for (const token of tokens) {
+        children.push(
+          new TextRun({
+            text: token.text,
+            bold: bold || token.bold,
+            italics: token.italic,
+            size: 20,
+            font: 'Segoe UI',
+          })
+        );
+      }
+      continue;
+    }
+
+    children.push(new DocxMath({ children: parseDocxMathComponents(segment.text) }));
+  }
+
+  return children;
+}
+
 const tableBorders = {
   top: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
   bottom: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
   left: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
   right: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
 };
-
-import { 
-  cleanAndSplitText, 
-  parseMarkdownLine, 
-  capitalizeFirstLetter 
-} from "@/lib/textFormatting";
 
 function createCell(
   text: string, 
@@ -108,7 +282,7 @@ function createCell(
         }));
     } else {
         lines.forEach((line, index) => {
-            const children: TextRun[] = [];
+            const children = [] as ParagraphChild[];
             
             // For the first line, include the Label
             if (index === 0) {
@@ -118,22 +292,15 @@ function createCell(
                   size: 20,
                   font: "Segoe UI",
                 }));
-                // Add first line text, ensure space
                 children.push(new TextRun({ 
-                  text: ' ' + line.trim(), 
+                  text: ' ', 
                   bold: false,
                   size: 20,
                   font: "Segoe UI",
                 }));
-            } else {
-                // Subsequent lines
-                children.push(new TextRun({ 
-                    text: line.trim(), 
-                    bold: false,
-                    size: 20,
-                    font: "Segoe UI",
-                }));
             }
+
+            children.push(...createDocxParagraphChildren(line.trim(), false));
 
             paragraphs.push(new Paragraph({
               children: children,
@@ -184,42 +351,7 @@ function createCell(
         
         // Removed the specific colon check here because we moved it up to be more general
         
-        const children: TextRun[] = [];
-        
-        if (forceBold) {
-             // If we're forcing bold, we use the clean text to avoid printing the stars
-             const textToPrint = trimmedLine.replace(/\*\*/g, '');
-             children.push(new TextRun({ 
-                text: textToPrint, 
-                bold: true,
-                size: 20, 
-                font: "Segoe UI" 
-            }));
-        } else {
-            // Parse for any markdown formatting (bold, italic)
-            // parseMarkdownLine in textFormatting.ts handles **bold**
-            const tokens = parseMarkdownLine(trimmedLine);
-        
-            for (const token of tokens) {
-                children.push(new TextRun({ 
-                    text: token.text, 
-                    bold: bold || token.bold, 
-                    italics: token.italic,
-                    size: 20, 
-                    font: "Segoe UI" 
-                }));
-            }
-            
-            // Fallback if no tokens
-            if (children.length === 0 && trimmedLine) {
-                children.push(new TextRun({ 
-                    text: trimmedLine, 
-                    bold: bold,
-                    size: 20, 
-                    font: "Segoe UI" 
-                }));
-            }
-        }
+        const children = createDocxParagraphChildren(trimmedLine, forceBold);
         
         let spacingBefore = 80;
         // Add extra spacing for specific headers to create a visual break (simulating double newline)

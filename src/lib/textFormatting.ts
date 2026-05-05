@@ -44,7 +44,8 @@ export function cleanAndSplitText(text: string): string[] {
   processed = removeOrphanAsterisks(processed);
 
   // Fix jumbled numbered lists with period (e.g. "1. Item 2. Item")
-  processed = processed.replace(/([^\n\d])(\s+)(\d+\.\s)/g, '$1\n$3');
+  // Avoid splitting math expressions such as "x + 5 = 11." by excluding common operators.
+  processed = processed.replace(/([^\n\d=+\-*/^%])(\s+)(\d+\.\s)/g, '$1\n$3');
 
   // Fix jumbled numbered lists with parenthesis (e.g. "text 1) Item 2) Item")
   processed = processed.replace(/([^\n\d])(\s+)(\d+\)\s)/g, '$1\n$3');
@@ -288,6 +289,69 @@ export function parseMarkdownLine(text: string): TextToken[] {
   }
   
   return tokens;
+}
+
+const latexSymbolMap: Record<string, string> = {
+  '\\geq': '≥',
+  '\\leq': '≤',
+  '\\neq': '≠',
+  '\\gt': '>',
+  '\\lt': '<',
+  '\\times': '×',
+  '\\div': '÷',
+  '\\pm': '±',
+  '\\approx': '≈',
+  '\\le': '≤',
+  '\\ge': '≥',
+  '\\sqrt': '√',
+};
+
+function replaceLatexSymbols(text: string): string {
+  return text.replace(/\\(geq|leq|neq|gt|lt|times|div|pm|approx|le|ge|sqrt)/g, (match) => {
+    return latexSymbolMap[match] || match;
+  });
+}
+
+export type MathTextSegment =
+  | { type: 'text'; text: string }
+  | { type: 'math'; text: string };
+
+export function normalizeLatexMathDelimiters(text: string): string {
+  if (!text) return text;
+  return text.replace(/(\${3,})([\s\S]*?)(\${3,})/g, (match, open, body, close) => {
+    if (open.length !== close.length) return match;
+    const delimiter = body.includes('\n') ? '$$' : '$';
+    return `${delimiter}${body}${delimiter}`;
+  });
+}
+
+export function splitTextByLatexMath(text: string): MathTextSegment[] {
+  if (!text) return [];
+  const normalizedText = normalizeLatexMathDelimiters(text);
+  const parts = normalizedText.split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+\$)/g);
+  return parts.filter(Boolean).map((segment) => {
+    if (segment.startsWith('$$') && segment.endsWith('$$')) {
+      return { type: 'math', text: segment.slice(2, -2).trim() };
+    }
+    if (segment.startsWith('$') && segment.endsWith('$')) {
+      return { type: 'math', text: segment.slice(1, -1).trim() };
+    }
+    return { type: 'text', text: segment };
+  });
+}
+
+function simplifyLatexBody(mathText: string): string {
+  let simplified = mathText;
+  simplified = simplified.replace(/\\frac\s*\{\s*([^}]+)\s*\}\s*\{\s*([^}]+)\s*\}/g, '$1/$2');
+  simplified = replaceLatexSymbols(simplified);
+  simplified = simplified.replace(/[{}]/g, '');
+  simplified = simplified.replace(/\s+/g, ' ').trim();
+  return simplified;
+}
+
+export function stripLatexMathForDocx(text: string): string {
+  if (!text) return text;
+  return normalizeLatexMathDelimiters(text);
 }
 
 /**

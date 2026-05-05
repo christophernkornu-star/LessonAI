@@ -7,8 +7,96 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { cleanAndSplitText, parseMarkdownLine } from "@/lib/textFormatting";
 import { Navbar } from "@/components/Navbar";
+import * as katex from 'katex';
+import 'katex/dist/katex.min.css';
 
-// Simple Markdown Renderer Component
+const normalizeLatexDelimiters = (text: string) => {
+  if (!text) return text;
+  return text.replace(/(\${3,})([\s\S]*?)(\${3,})/g, (match, open, body, close) => {
+    if (open.length !== close.length) return match;
+    const delimiter = body.includes('\n') ? '$$' : '$';
+    return `${delimiter}${body}${delimiter}`;
+  });
+};
+
+// Function to render text with LaTeX support (only inline math)
+const renderTextWithLatex = (text: string) => {
+  const normalizedText = normalizeLatexDelimiters(text);
+  // Split text by inline LaTeX delimiters ($...$) only - block math handled separately
+  const parts = normalizedText.split(/(\$[^$\n]+\$)/g);
+  
+  return parts.map((part, index) => {
+    // Check if this part is inline LaTeX
+    if (part.startsWith('$') && part.endsWith('$') && part.length > 2) {
+      // Inline math
+      const math = part.slice(1, -1);
+      if (katex && katex.renderToString) {
+        try {
+          const html = katex.renderToString(math, { displayMode: false, throwOnError: false });
+          return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
+        } catch (e) {
+          return <span key={index}>{math}</span>;
+        }
+      } else {
+        return <span key={index}>{math}</span>;
+      }
+    } else {
+      // Regular text - apply markdown formatting
+      const tokens = parseMarkdownLine(part);
+      return tokens.map((token, i) => {
+        if (token.bold) return <strong key={i}>{token.text}</strong>;
+        if (token.italic) return <em key={i}>{token.text}</em>;
+        return <span key={i}>{token.text}</span>;
+      });
+    }
+  });
+};
+
+// Function to check if a line contains block math
+const containsBlockMath = (text: string): boolean => {
+  return /\$\$[\s\S]*?\$\$/.test(text);
+};
+
+// Function to render a line that may contain block math
+const renderLineWithBlockMath = (line: string, index: number) => {
+  const normalizedLine = normalizeLatexDelimiters(line);
+
+  // Check if line contains block math
+  if (containsBlockMath(normalizedLine)) {
+    // Split by block math delimiters
+    const parts = normalizedLine.split(/(\$\$[\s\S]*?\$\$)/g);
+    
+    return (
+      <div key={index} className="my-2">
+        {parts.map((part, partIndex) => {
+          if (part.startsWith('$$') && part.endsWith('$$')) {
+            // Block math
+            const math = part.slice(2, -2);
+            if (katex && katex.renderToString) {
+              try {
+                const html = katex.renderToString(math, { displayMode: true, throwOnError: false });
+                return <div key={partIndex} dangerouslySetInnerHTML={{ __html: html }} />;
+              } catch (e) {
+                return <p key={partIndex} className="leading-relaxed whitespace-pre-wrap mb-2">{math}</p>;
+              }
+            } else {
+              return <p key={partIndex} className="leading-relaxed whitespace-pre-wrap mb-2">{math}</p>;
+            }
+          } else if (part.trim()) {
+            // Regular text with inline math
+            return <p key={partIndex} className="leading-relaxed whitespace-pre-wrap mb-2">{renderTextWithLatex(part)}</p>;
+          }
+          return null;
+        })}
+      </div>
+    );
+  } else {
+    // No block math, render normally
+    return <p key={index} className="leading-relaxed whitespace-pre-wrap">{renderTextWithLatex(line)}</p>;
+  }
+};
+
+// Simple Markdown Renderer Component with LaTeX support
 const MarkdownPreview = ({ content }: { content: string }) => {
   if (!content) return null;
 
@@ -34,9 +122,9 @@ const MarkdownPreview = ({ content }: { content: string }) => {
         }
 
         // Headings (Legacy check, kept for compatibility if not caught above)
-        if (trimmed.startsWith('# ')) return <h1 key={index} className="text-2xl font-bold mt-4 mb-2">{trimmed.slice(2)}</h1>;
-        if (trimmed.startsWith('## ')) return <h2 key={index} className="text-xl font-bold mt-3 mb-2">{trimmed.slice(3)}</h2>;
-        if (trimmed.startsWith('### ')) return <h3 key={index} className="text-lg font-bold mt-2 mb-1">{trimmed.slice(4)}</h3>;
+        if (trimmed.startsWith('# ')) return <h1 key={index} className="text-2xl font-bold mt-4 mb-2">{renderTextWithLatex(trimmed.slice(2))}</h1>;
+        if (trimmed.startsWith('## ')) return <h2 key={index} className="text-xl font-bold mt-3 mb-2">{renderTextWithLatex(trimmed.slice(3))}</h2>;
+        if (trimmed.startsWith('### ')) return <h3 key={index} className="text-lg font-bold mt-2 mb-1">{renderTextWithLatex(trimmed.slice(4))}</h3>;
 
         // Lists
         const isBullet = trimmed.match(/^[-*•]\s/);
@@ -46,28 +134,41 @@ const MarkdownPreview = ({ content }: { content: string }) => {
         if (isBullet) content = trimmed.replace(/^[-*•]\s/, '');
         if (isNumbered) content = trimmed.replace(/^\d+\.\s/, '');
 
-        // Inline formatting (Bold & Italic)
-        const tokens = parseMarkdownLine(content);
-        const renderedParts = tokens.map((token, i) => {
-            if (token.bold) return <strong key={i}>{token.text}</strong>;
-            if (token.italic) return <em key={i}>{token.text}</em>;
-            return <span key={i}>{token.text}</span>;
-        });
+        // Check if this line contains block math
+        if (containsBlockMath(content)) {
+          if (isHeaderLine) {
+              return <div key={index} className="font-bold mt-2">{renderLineWithBlockMath(content, index)}</div>;
+          }
+
+          if (isBullet || isNumbered) {
+            return (
+              <div key={index} className="flex gap-2 ml-4">
+                <span className="min-w-[1.5rem] font-medium">{isNumbered ? trimmed.match(/^\d+\./)?.[0] : '•'}</span>
+                <div>{renderLineWithBlockMath(content, index)}</div>
+              </div>
+            );
+          }
+
+          return renderLineWithBlockMath(content, index);
+        }
+
+        // Render content with inline LaTeX support only
+        const renderedContent = renderTextWithLatex(content);
 
         if (isHeaderLine) {
-            return <div key={index} className="font-bold mt-2">{renderedParts}</div>;
+            return <div key={index} className="font-bold mt-2">{renderedContent}</div>;
         }
 
         if (isBullet || isNumbered) {
           return (
             <div key={index} className="flex gap-2 ml-4">
               <span className="min-w-[1.5rem] font-medium">{isNumbered ? trimmed.match(/^\d+\./)?.[0] : '•'}</span>
-              <span>{renderedParts}</span>
+              <span>{renderedContent}</span>
             </div>
           );
         }
 
-        return <p key={index} className="leading-relaxed whitespace-pre-wrap">{renderedParts}</p>;
+        return <p key={index} className="leading-relaxed whitespace-pre-wrap">{renderedContent}</p>;
       })}
     </div>
   );
