@@ -52,8 +52,8 @@ export default function SchemeOfLearning() {
   const [schemeData, setSchemeData] = useState<SchemeItem[]>([]);
   const [isLoading, setIsLoading] = useState(true); // Start as true for initial fetch
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [importLevel, setImportLevel] = useState("");
-  const [importSubject, setImportSubject] = useState("");
+  const [importLevels, setImportLevels] = useState<string[]>([]);
+  const [importSubjects, setImportSubjects] = useState<string[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
   const [loadingStep, setLoadingStep] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -81,7 +81,52 @@ export default function SchemeOfLearning() {
   const [showBatchSuccess, setShowBatchSuccess] = useState(false);
   const [batchStep, setBatchStep] = useState<'config' | 'review'>('config');
   const [selectedBatchItems, setSelectedBatchItems] = useState<string[]>([]);
-  
+
+  const getCoverPageLevelString = (levels: Array<string | undefined | null>) => {
+    const normalizedLevels = levels
+      .filter(Boolean)
+      .map((level) => (level || "").trim())
+      .filter((level) => level !== "")
+      .map((level) => {
+        const matched = CLASS_LEVELS.find(
+          (l) => l.label.toLowerCase() === level.toLowerCase() || l.value.toLowerCase() === level.toLowerCase()
+        );
+        return matched?.label || level;
+      });
+
+    const uniqueLevels = Array.from(new Set(normalizedLevels));
+    if (uniqueLevels.length === 0) return "";
+    if (uniqueLevels.length === 1) return uniqueLevels[0];
+
+    const orderedLevels = CLASS_LEVELS.filter((l) => uniqueLevels.includes(l.label)).map((l) => l.label);
+    const fallbackLevels = uniqueLevels.filter((level) => !orderedLevels.includes(level));
+    const sortedLevels = [...orderedLevels, ...fallbackLevels];
+
+    const numericPrefixGroups = sortedLevels.map((level) => {
+      const match = level.match(/^(.+?)\s+(\d+)$/);
+      return match ? { prefix: match[1], number: match[2] } : null;
+    });
+
+    const allSamePrefix = numericPrefixGroups.every(
+      (item) => item !== null && item?.prefix === numericPrefixGroups[0]?.prefix
+    );
+
+    if (allSamePrefix && numericPrefixGroups.every(Boolean)) {
+      const prefix = numericPrefixGroups[0]!.prefix;
+      const numbers = numericPrefixGroups.map((item) => item!.number);
+      if (numbers.length === 2) {
+        return `${prefix} ${numbers[0]} & ${numbers[1]}`;
+      }
+      return `${prefix} ${numbers.slice(0, -1).join(', ')} & ${numbers[numbers.length - 1]}`;
+    }
+
+    if (sortedLevels.length === 2) {
+      return `${sortedLevels[0]} & ${sortedLevels[1]}`;
+    }
+
+    return `${sortedLevels.slice(0, -1).join(", ")} & ${sortedLevels[sortedLevels.length - 1]}`;
+  };
+
   // Persistence for batch form data
   useEffect(() => {
     const saved = localStorage.getItem(BATCH_FORM_STORAGE_KEY);
@@ -181,48 +226,58 @@ export default function SchemeOfLearning() {
   };
 
   const handleSystemImport = async () => {
-    if (!importLevel || !importSubject) {
-        toast({ title: "Validation Error", description: "Please select both Class Level and Subject", variant: "destructive" });
+    if (importLevels.length === 0 || importSubjects.length === 0) {
+        toast({ title: "Validation Error", description: "Please select at least one Class Level and one Subject", variant: "destructive" });
         return;
     }
 
     setIsLoading(true);
     try {
         const { data: { user } } = await supabase.auth.getUser();
-        const curriculum = await CurriculumService.getCurriculumByGradeAndSubject(importLevel, importSubject, user?.id);
-        
-        if (curriculum.length === 0) {
-            toast({ 
-                title: "No Data Found", 
-                description: `No curriculum data found for ${importSubject} - ${importLevel} in the system database.`, 
-                variant: "destructive" 
-            });
-            setIsLoading(false);
+        const missingPairs: string[] = [];
+        const allNewItems: SchemeItem[] = [];
+
+        for (const level of importLevels) {
+          for (const subject of importSubjects) {
+            const curriculum = await CurriculumService.getCurriculumByGradeAndSubject(level, subject, user?.id);
+            const subjectLabel = SUBJECTS.find(s => s.value === subject)?.label || subject;
+            const levelLabel = CLASS_LEVELS.find(l => l.value === level)?.label || level;
+
+            if (curriculum.length === 0) {
+              missingPairs.push(`${subjectLabel} - ${levelLabel}`);
+              continue;
+            }
+
+            const newItems: SchemeItem[] = curriculum.map((item, index) => ({
+                id: `sys-${level}-${subject}-${Date.now()}-${index}`,
+                week: `Week ${index + 1}`,
+                weekEnding: "",
+                term: "First Term",
+                subject: subjectLabel,
+                classLevel: levelLabel,
+                strand: item.strand || "General",
+                subStrand: item.sub_strand || "",
+                contentStandard: Array.isArray(item.content_standards) ? item.content_standards.join("; ") : (item.content_standards || ""),
+                indicators: Array.isArray(item.learning_indicators) ? item.learning_indicators.join("; ") : (item.learning_indicators || ""),
+                exemplars: item.exemplars || "",
+                resources: ""
+            }));
+
+            allNewItems.push(...newItems);
+          }
+        }
+
+        if (allNewItems.length === 0) {
+            toast({ title: "No Data Found", description: "No curriculum data was found for the selected levels and subjects.", variant: "destructive" });
             return;
         }
 
-        const newItems: SchemeItem[] = curriculum.map((item, index) => ({
-            id: `sys-${Date.now()}-${index}`,
-            week: `Week ${index + 1}`, // Auto assign weeks sequentially
-            weekEnding: "",
-            term: "First Term", // Default
-            subject: importSubject, // Use label if possible, but we stored values. Let's start with what we have.
-            classLevel: importLevel,
-            strand: item.strand || "General",
-            subStrand: item.sub_strand || "",
-            contentStandard: Array.isArray(item.content_standards) ? item.content_standards.join("; ") : (item.content_standards || ""),
-            indicators: Array.isArray(item.learning_indicators) ? item.learning_indicators.join("; ") : (item.learning_indicators || ""),
-            exemplars: item.exemplars || "",
-            resources: ""
-        }));
-
         setSchemeData(prev => {
-            const updated = [...prev, ...newItems];
+            const updated = [...prev, ...allNewItems];
             localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
             
-            // Sync to Database
             if (userId) {
-                const dbRecords = newItems.map(item => ({
+                const dbRecords = allNewItems.map(item => ({
                     user_id: userId,
                     week: item.week,
                     week_ending: item.weekEnding,
@@ -236,16 +291,19 @@ export default function SchemeOfLearning() {
                     exemplars: item.exemplars,
                     resources: item.resources,
                 }));
-                
                 supabase.from('schemes').insert(dbRecords).then(({ error }) => {
                     if (error) console.error("Failed to sync to DB:", error);
                 });
             }
-            
+
             return updated;
         });
 
-        toast({ title: "Import Successful", description: `Loaded ${newItems.length} items from system curriculum.` });
+        const summaryDescription = missingPairs.length > 0
+          ? `Loaded ${allNewItems.length} items. No data found for: ${missingPairs.join(', ')}.`
+          : `Loaded ${allNewItems.length} items from system curriculum.`;
+
+        toast({ title: "Import Successful", description: summaryDescription });
         setImportDialogOpen(false);
 
     } catch (error) {
@@ -548,6 +606,34 @@ export default function SchemeOfLearning() {
         }
       } 
     });
+  };
+
+  const toggleSelection = (itemId: string) => {
+    setSelectedBatchItems((prev) =>
+      prev.includes(itemId) ? prev.filter((id) => id !== itemId) : [...prev, itemId]
+    );
+  };
+
+  const selectGroupItems = (items: SchemeItem[]) => {
+    setSelectedBatchItems((prev) => Array.from(new Set([...prev, ...items.map((item) => item.id)])));
+  };
+
+  const clearGroupSelection = (items: SchemeItem[]) => {
+    setSelectedBatchItems((prev) => prev.filter((id) => !items.some((item) => item.id === id)));
+  };
+
+  const clearBatchSelection = () => {
+    setSelectedBatchItems([]);
+    toast({ title: "Selection cleared", description: "All selected scheme items have been cleared." });
+  };
+
+  const handleGenerateSelected = (items: SchemeItem[]) => {
+    const selectedItems = items.filter((item) => selectedBatchItems.includes(item.id));
+    if (selectedItems.length === 0) {
+      toast({ title: "No Items Selected", description: "Please select at least one item to generate.", variant: "destructive" });
+      return;
+    }
+    handleBatchGenerateClick(selectedItems);
   };
 
   const handleClear = async () => {
@@ -1075,14 +1161,20 @@ export default function SchemeOfLearning() {
             // If it's the first document and cover page is requested, generate the cover page as a completely standalone file
             if (batchFormData.includeCoverPage && index === 0) {
                 const classLvl = (Array.isArray(finalData) ? finalData[0].class : finalData.class) || "";
-                const isJHS = ['basic7', 'basic8', 'basic9'].includes(batchFormData.classLevel?.toLowerCase());
+                const coverPageLevel = getCoverPageLevelString(
+                  batchResults.map((result) => {
+                    const lessonData = result.data as any;
+                    return lessonData.level || lessonData.class || lessonData.classLevel;
+                  })
+                ) || classLvl;
+                const isJHS = /\bbasic\s*[7-9]\b/i.test(coverPageLevel);
                 const subjectValue = isJHS && batchFormData.coverPageSubject?.trim() !== "" 
                     ? batchFormData.coverPageSubject 
                     : "ALL SUBJECTS";
                 
                 const coverMeta = {
-                    subject: subjectValue, 
-                    level: classLvl,
+                    subject: subjectValue,
+                    level: coverPageLevel,
                     term: batchFormData.term,
                     week: batchFormData.weekNumber || result.data.weekNumber?.toString() || "",
                     teacherName: batchFormData.teacherName,
@@ -1236,8 +1328,8 @@ export default function SchemeOfLearning() {
     <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
       <Navbar />
       <main className="container mx-auto px-4 py-8 sm:py-12 max-w-7xl flex-grow">
-        <div className="mb-10 sm:mb-12 flex flex-col md:flex-row justify-between items-start lg:items-end gap-8">
-            <div>
+        <div className="mb-10 sm:mb-12 flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+            <div className="max-w-2xl">
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-semibold text-primary shadow-sm backdrop-blur-md animate-fade-in-up">
                 <BookOpen className="h-4 w-4" />
                 Curriculum Integration
@@ -1245,154 +1337,219 @@ export default function SchemeOfLearning() {
               <h1 className="mb-3 text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-foreground">Scheme of Learning</h1>
               <p className="text-base sm:text-lg text-muted-foreground font-medium">Elevate your scheduling. Manage and view your weekly schemes seamlessly.</p>
             </div>
-          <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search class, subject, strand..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            <Button variant="outline" onClick={() => navigate("/dashboard")} className="flex-1 sm:flex-none">
-              Back to Dashboard
-            </Button>
-            <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="default" className="flex-1 sm:flex-none">
-                  <Upload className="mr-2 h-4 w-4" />
-                  <span className="hidden sm:inline">Import Scheme</span>
-                  <span className="sm:hidden">Import</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Import Scheme of Learning</DialogTitle>
-                  <DialogDescription>
-                    Upload a file or import from the system curriculum.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <Label className="font-semibold">Option A: Upload File</Label>
-                    <p className="text-sm text-muted-foreground">Supports CSV, PDF, DOCX with columns/fields for Week, Strand, Sub-strand, Content Standard, Indicators.</p>
-                     <div className="grid w-full max-w-sm items-center gap-1.5">
-                        <Label htmlFor="scheme-upload">Choose File</Label>
-                        <Input id="scheme-upload" type="file" onChange={handleFileUpload} accept=".csv,.xlsx,.xls,.docx,.pdf,.txt" />
-                     </div>
-                  </div>
-
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-background px-2 text-muted-foreground">Or Import System Data</span>
-                    </div>
-                  </div>
-
-                 <div className="space-y-2">
-                    <Label className="font-semibold">Option B: Generate from Database</Label>
-                     <div className="grid gap-2">
-                        <Select onValueChange={setImportLevel} value={importLevel}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select Class Level" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {CLASS_LEVELS.map(level => (
-                                    <SelectItem key={level.value} value={level.value}>{level.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-
-                        <Select onValueChange={setImportSubject} value={importSubject}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select Subject" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {SUBJECTS
-                                    .filter(s => {
-                                        if (importLevel === 'kg1' || importLevel === 'kg2') return s.value === 'language_literacy' || s.value === 'numeracy' || s.value === 'our_world_our_people' || s.value === 'creative_arts';
-                                        return true;
-                                    })
-                                    .map(subject => (
-                                    <SelectItem key={subject.value} value={subject.label}>{subject.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <Button onClick={handleSystemImport} disabled={isLoading || !importLevel || !importSubject}>
-                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
-                            Load Standard Curriculum
-                        </Button>
-                     </div>
-                 </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-            {schemeData.length > 0 && (
-              <>
-                <Button variant="outline" onClick={handleDownloadCSV} className="flex-1 sm:flex-none">
-                  <Download className="mr-2 h-4 w-4" />
-                  <span className="hidden sm:inline">Export CSV</span>
-                  <span className="sm:hidden">Export</span>
-                </Button>
-                <Dialog open={deleteClassDialogOpen} onOpenChange={setDeleteClassDialogOpen}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center justify-end w-full lg:w-auto">
+              <div className="flex flex-wrap items-center justify-end gap-3 w-full lg:w-auto">
+                <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" className="flex-1 sm:flex-none text-destructive border-destructive hover:bg-destructive/10">
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      <span className="hidden sm:inline">Delete Class</span>
-                      <span className="sm:hidden">Class</span>
+                    <Button variant="default" className="w-full sm:w-auto">
+                      <Upload className="mr-2 h-4 w-4" />
+                      <span className="hidden sm:inline">Import Scheme</span>
+                      <span className="sm:hidden">Import</span>
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
+                  <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
-                      <DialogTitle>Delete Class Scheme</DialogTitle>
+                      <DialogTitle>Import Scheme of Learning</DialogTitle>
                       <DialogDescription>
-                        Select a class down below to completely remove its scheme of learning. This action cannot be undone.
+                        Upload a file or import from the system curriculum.
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="py-4 space-y-4">
+                    <div className="grid gap-4 py-4">
                       <div className="space-y-2">
-                        <Label>Select Class Level</Label>
-                        <Select value={classToDelete} onValueChange={setClassToDelete}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a class..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {activeClasses.map((c) => (
-                              <SelectItem key={c} value={c}>{c}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Label className="font-semibold">Option A: Upload File</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Supports CSV, PDF, DOCX with columns/fields for Week, Strand, Sub-strand, Content Standard, Indicators.
+                        </p>
+                        <div className="grid w-full max-w-sm items-center gap-1.5">
+                          <Label htmlFor="scheme-upload">Choose File</Label>
+                          <Input id="scheme-upload" type="file" onChange={handleFileUpload} accept=".csv,.xlsx,.xls,.docx,.pdf,.txt" />
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="w-full border-t" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                          <span className="bg-background px-2 text-muted-foreground">Or Import System Data</span>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="font-semibold">Option B: Generate from Database</Label>
+                        <div className="grid gap-4">
+                          <div className="grid gap-2">
+                            <Label>Select Class Levels</Label>
+                            <div className="grid max-h-[220px] overflow-y-auto rounded-md border p-3 bg-background gap-2">
+                              {CLASS_LEVELS.map(level => (
+                                <label key={level.value} className="flex items-center gap-2 cursor-pointer">
+                                  <Checkbox
+                                    checked={importLevels.includes(level.value)}
+                                    onCheckedChange={(checked) => {
+                                      setImportLevels((prev) => {
+                                        if (checked) return [...prev, level.value];
+                                        return prev.filter((value) => value !== level.value);
+                                      });
+                                    }}
+                                  />
+                                  <span className="text-sm">{level.label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="grid gap-2">
+                            <Label>Select Subjects</Label>
+                            <div className="grid max-h-[220px] overflow-y-auto rounded-md border p-3 bg-background gap-2">
+                              {SUBJECTS
+                                .filter((subject) => {
+                                  if (importLevels.length > 0 && importLevels.every(level => level === 'kg1' || level === 'kg2')) {
+                                    return ['language_literacy', 'numeracy', 'our_world_our_people', 'creative_arts'].includes(subject.value);
+                                  }
+                                  return true;
+                                })
+                                .map(subject => (
+                                  <label key={subject.value} className="flex items-center gap-2 cursor-pointer">
+                                    <Checkbox
+                                      checked={importSubjects.includes(subject.value)}
+                                      onCheckedChange={(checked) => {
+                                        setImportSubjects((prev) => {
+                                          if (checked) return [...prev, subject.value];
+                                          return prev.filter((value) => value !== subject.value);
+                                        });
+                                      }}
+                                    />
+                                    <span className="text-sm">{subject.label}</span>
+                                  </label>
+                                ))}
+                            </div>
+                          </div>
+                          <Button onClick={handleSystemImport} disabled={isLoading || importLevels.length === 0 || importSubjects.length === 0}>
+                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
+                            Load Standard Curriculum
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                    <DialogFooter>
-                      <Button variant="ghost" onClick={() => setDeleteClassDialogOpen(false)}>Cancel</Button>
-                      <Button variant="destructive" 
-                        onClick={() => {
-                          if (classToDelete) {
-                            handleDeleteClass(classToDelete);
-                            setDeleteClassDialogOpen(false);
-                            setClassToDelete("");
-                          }
-                        }}
-                        disabled={!classToDelete}
-                      >
-                        Delete Data
-                      </Button>
-                    </DialogFooter>
                   </DialogContent>
                 </Dialog>
-                <Button variant="destructive" onClick={handleClear} className="flex-1 sm:flex-none">
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  <span className="hidden sm:inline">Clear Scheme</span>
-                  <span className="sm:hidden">Clear</span>
-                </Button>
-              </>
-            )}
+              </div>
+            </div>
+
+        {isBatchGenerating && (
+            <Card className="mb-6 p-4 border-primary/20 bg-primary/5 sticky top-[160px] z-50 shadow-md backdrop-blur-sm bg-primary/10">
+                <div className="space-y-2">
+                    <div className="flex justify-between text-sm font-medium">
+                        <span>Generating Batch Compliance...</span>
+                        <span>{batchProgress.current} / {batchProgress.total}</span>
+                    </div>
+                    <Progress value={(batchProgress.current / batchProgress.total) * 100} className="h-2" />
+                    <p className="text-xs text-muted-foreground">Please do not close this window. Processing lesson notes sequentially...</p>
+                </div>
+            </Card>
+        )}
+
+            {schemeData.length > 0 && (
+                  <>
+                    <Button variant="outline" onClick={handleDownloadCSV} className="w-full sm:w-auto">
+                      <Download className="mr-2 h-4 w-4" />
+                      <span className="hidden sm:inline">Export CSV</span>
+                      <span className="sm:hidden">Export</span>
+                    </Button>
+                    <Dialog open={deleteClassDialogOpen} onOpenChange={setDeleteClassDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" className="w-full sm:w-auto text-destructive border-destructive hover:bg-destructive/10">
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          <span className="hidden sm:inline">Delete Class</span>
+                          <span className="sm:hidden">Class</span>
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Delete Class Scheme</DialogTitle>
+                          <DialogDescription>
+                            Select a class down below to completely remove its scheme of learning. This action cannot be undone.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="py-4 space-y-4">
+                          <div className="space-y-2">
+                            <Label>Select Class Level</Label>
+                            <Select value={classToDelete} onValueChange={setClassToDelete}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select a class..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {activeClasses.map((c) => (
+                                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="ghost" onClick={() => setDeleteClassDialogOpen(false)}>Cancel</Button>
+                          <Button variant="destructive"
+                            onClick={() => {
+                              if (classToDelete) {
+                                handleDeleteClass(classToDelete);
+                                setDeleteClassDialogOpen(false);
+                                setClassToDelete("");
+                              }
+                            }}
+                            disabled={!classToDelete}
+                          >
+                            Delete Data
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                    <Button variant="destructive" onClick={handleClear} className="w-full sm:w-auto">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      <span className="hidden sm:inline">Clear Scheme</span>
+                      <span className="sm:hidden">Clear</span>
+                    </Button>
+                  </>
+                )}
           </div>
-        </div>
+
+            <div className="sticky top-28 mt-8 mb-8 w-full rounded-full border border-secondary/20 bg-white/95 px-5 py-4 shadow-xl shadow-secondary/20 backdrop-blur-sm ring-1 ring-slate-200/40 z-40">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div className="relative w-full xl:w-[48%]">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search class, subject, strand..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-3 w-full xl:w-auto">
+                  {selectedBatchItems.length > 0 && (
+                    <>
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          const selectedItems = schemeData.filter(item => selectedBatchItems.includes(item.id));
+                          if (selectedItems.length === 0) {
+                            toast({ title: "No Items Selected", description: "Please select at least one item to generate.", variant: "destructive" });
+                            return;
+                          }
+                          handleBatchGenerateClick(selectedItems);
+                        }}
+                        className="w-full sm:w-auto"
+                      >
+                        <Play className="mr-2 h-4 w-4" />
+                        Generate Selected ({selectedBatchItems.length})
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={clearBatchSelection}
+                        className="w-full sm:w-auto"
+                      >
+                        Clear Selection
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
 
         {isBatchGenerating && (
             <Card className="mb-6 p-4 border-primary/20 bg-primary/5 sticky top-[160px] z-50 shadow-md backdrop-blur-sm bg-primary/10">
@@ -1752,12 +1909,19 @@ export default function SchemeOfLearning() {
                                             Delete Week
                                         </Button>
                                         <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            onClick={() => selectGroupItems(items)}
+                                            className="w-full sm:w-auto"
+                                        >
+                                            Select All
+                                        </Button>
+                                        <Button 
                                             variant="secondary" 
                                             size="sm" 
                                             onClick={() => handleBatchGenerateClick(items)}
                                             className="w-full sm:w-auto"
                                         >
-                                            
                                             Generate Full Week ({items.length})
                                         </Button>
                                     </div>
@@ -1765,9 +1929,16 @@ export default function SchemeOfLearning() {
                                 <div className="flex flex-col gap-3">
                                       {items.map((item) => (
                                           <div key={item.id} className="group relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border border-secondary/20 bg-background/40 hover:bg-secondary/10 transition-all shadow-sm">
-                                              <div className="flex flex-col gap-1.5 w-full sm:w-1/4">
-                                                  <div className="font-semibold text-foreground/90">{item.subject}</div>
-                                                  {item.weekEnding && <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground bg-secondary/30 w-fit px-2 py-0.5 rounded-full">Ends {item.weekEnding}</div>}
+                                              <div className="flex items-start gap-3 w-full sm:w-auto">
+                                                  <Checkbox
+                                                    checked={selectedBatchItems.includes(item.id)}
+                                                    onCheckedChange={(checked) => toggleSelection(item.id)}
+                                                    className="mt-1"
+                                                  />
+                                                  <div className="flex flex-col gap-1.5">
+                                                      <div className="font-semibold text-foreground/90">{item.subject}</div>
+                                                      {item.weekEnding && <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground bg-secondary/30 w-fit px-2 py-0.5 rounded-full">Ends {item.weekEnding}</div>}
+                                                  </div>
                                               </div>
                                               <div className="flex flex-col gap-1 w-full sm:w-2/4">
                                                   <span className="font-medium text-sm text-foreground/80">{item.strand}</span>
