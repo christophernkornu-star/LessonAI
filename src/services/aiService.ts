@@ -62,7 +62,9 @@ export interface LessonData {
   includeCoverPage?: boolean;
   schoolName?: string;
   teacherName?: string;
+  subjectTeacher?: string;
   coverPageSubject?: string;
+  coverPageSource?: "profiles" | "manual";
   
   // New field matching the user requirement
   numLessons?: number; // Defaults to 1 if undefined

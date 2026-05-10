@@ -7,8 +7,49 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { cleanAndSplitText, parseMarkdownLine } from "@/lib/textFormatting";
 import { Navbar } from "@/components/Navbar";
+import { CLASS_LEVELS } from "@/data/curriculum";
 import * as katex from 'katex';
 import 'katex/dist/katex.min.css';
+
+const CLASS_PROFILE_STORAGE_KEY = "class_profile_data";
+
+const normalizeClassLevel = (classLevel: string) => {
+  const trimmed = (classLevel || "").trim();
+  if (!trimmed) return "";
+  const matched = CLASS_LEVELS.find(
+    (level) =>
+      level.label.toLowerCase() === trimmed.toLowerCase() ||
+      level.value.toLowerCase() === trimmed.toLowerCase(),
+  );
+  return matched?.label || trimmed;
+};
+
+const getSavedClassProfile = (classLevel: string) => {
+  const normalizedLevel = normalizeClassLevel(classLevel);
+  if (!normalizedLevel) {
+    return { schoolName: "", teacherName: "", subjectTeachers: {} };
+  }
+
+  const saved = localStorage.getItem(CLASS_PROFILE_STORAGE_KEY);
+  if (!saved) {
+    return { schoolName: "", teacherName: "", subjectTeachers: {} };
+  }
+
+  try {
+    const profiles = JSON.parse(saved) as Record<
+      string,
+      { schoolName: string; teacherName: string; subjectTeachers?: Record<string, string> }
+    >;
+    return profiles[normalizedLevel] || {
+      schoolName: "",
+      teacherName: "",
+      subjectTeachers: {},
+    };
+  } catch (error) {
+    console.warn("Failed to parse saved class profiles:", error);
+    return { schoolName: "", teacherName: "", subjectTeachers: {} };
+  }
+};
 
 const normalizeLatexDelimiters = (text: string) => {
   if (!text) return text;
@@ -205,6 +246,10 @@ const DownloadPage = () => {
 
       // Check if the content is JSON (Ghana template)
       const isJsonFormat = cleanContent.startsWith('{') || cleanContent.startsWith('[') || cleanContent.includes('---');
+      const classProfile =
+        lessonData?.coverPageSource === "profiles"
+          ? getSavedClassProfile(lessonData.level || "")
+          : { schoolName: "", teacherName: "", subjectTeachers: {} };
       
       if (isJsonFormat) {
         // Handle Ghana template JSON format
@@ -243,8 +288,12 @@ const DownloadPage = () => {
             level: lessonData.level,
             term: lessonData.term,
             week: lessonData.weekNumber,
-            teacherName: lessonData.teacherName,
-            schoolName: lessonData.schoolName
+            teacherName: classProfile.teacherName || lessonData.teacherName,
+            schoolName: classProfile.schoolName || lessonData.schoolName,
+            subjectTeacher:
+              lessonData.coverPageSource === "profiles"
+                ? classProfile.subjectTeachers?.[lessonData.subject?.trim() || ""] || lessonData.subjectTeacher
+                : lessonData.subjectTeacher,
           } : undefined;
           
           // Check if a template file URL is available (template-based approach)
@@ -285,8 +334,8 @@ const DownloadPage = () => {
           templateName: lessonData.templateName,
           term: lessonData.term,
           week: lessonData.weekNumber,
-          teacherName: lessonData.teacherName,
-          schoolName: lessonData.schoolName,
+          teacherName: classProfile.teacherName || lessonData.teacherName,
+          schoolName: classProfile.schoolName || lessonData.schoolName,
           includeCoverPage: lessonData.includeCoverPage,
         } : {
           subject: "General",

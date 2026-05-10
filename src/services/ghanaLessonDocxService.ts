@@ -614,7 +614,7 @@ export async function generateGhanaLessonDocx(
   jsonData: string | GhanaLessonData | GhanaLessonData[],
   fileName: string = "ghana-lesson-plan.docx",
   returnBlob: boolean = false,
-  coverPageMeta?: { subject?: string; level?: string; term?: string; week?: string; teacherName?: string; schoolName?: string; }
+  coverPageMeta?: { subject?: string; level?: string; term?: string; week?: string; teacherName?: string; schoolName?: string; subjectTeacher?: string }
 ): Promise<Blob | void> {
   try {
     // Normalize input to array
@@ -719,7 +719,7 @@ export async function generateGhanaLessonDocx(
             }),
             new Paragraph({
               alignment: AlignmentType.CENTER,
-              spacing: { before: 2500, after: 800 },
+              spacing: { before: 2500, after: 600 },
               children: [
                 new TextRun({ 
                   text: (coverPageMeta.teacherName || "NAME OF TEACHER").toUpperCase(), 
@@ -729,6 +729,20 @@ export async function generateGhanaLessonDocx(
                 }),
               ],
             }),
+            ...(coverPageMeta.subjectTeacher ? [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 800 },
+                children: [
+                  new TextRun({
+                    text: `SUBJECT TEACHER: ${coverPageMeta.subjectTeacher.toUpperCase()}`,
+                    bold: true,
+                    font: "Century Gothic",
+                    size: 28,
+                  }),
+                ],
+              })
+            ] : []),
             new Paragraph({
               children: [new PageBreak()],
             })
@@ -985,7 +999,7 @@ export async function generateGhanaLessonDocx(
               },
               borders: (isFirst && coverPageMeta) ? {
                 pageBorders: {
-                  display: "allPages" as const,
+                  display: "firstPage" as const,
                   offsetFrom: "page" as const,
                 },
                 pageBorderTop: { style: BorderStyle.DOUBLE, size: 24, space: 31, color: "000000" },

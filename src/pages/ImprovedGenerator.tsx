@@ -120,6 +120,7 @@ const defaultLessonData: LessonData = {
   location: "",
   detailLevel: "moderate",
   includeDiagrams: false,
+  coverPageSource: "profiles",
 };
 
 // Fetches user profile
@@ -218,6 +219,22 @@ const ImprovedGenerator = () => {
   const [schemeSearch, setSchemeSearch] = useState("");
   const [showPaymentWall, setShowPaymentWall] = useState(false);
   const [pendingGeneration, setPendingGeneration] = useState(false);
+  const [coverPageProfile, setCoverPageProfile] = useState<{
+    schoolName: string;
+    teacherName: string;
+    subjectTeachers?: Record<string, string>;
+  }>({ schoolName: "", teacherName: "", subjectTeachers: {} });
+
+  const normalizeClassLevel = (classLevel: string) => {
+    const trimmed = (classLevel || "").trim();
+    if (!trimmed) return "";
+    const matched = CLASS_LEVELS.find(
+      (level) =>
+        level.label.toLowerCase() === trimmed.toLowerCase() ||
+        level.value.toLowerCase() === trimmed.toLowerCase(),
+    );
+    return matched?.label || trimmed;
+  };
 
   // Check authentication
   useEffect(() => {
@@ -260,6 +277,36 @@ const ImprovedGenerator = () => {
   }, [userProfile]);
 
   const isLoading = !currentUser || (!!currentUser && isProfileLoading);
+
+  useEffect(() => {
+    if (lessonData.coverPageSource !== "profiles") {
+      setCoverPageProfile({ schoolName: "", teacherName: "", subjectTeachers: {} });
+      return;
+    }
+
+    const saved = localStorage.getItem("class_profile_data");
+    if (!saved) {
+      setCoverPageProfile({ schoolName: "", teacherName: "", subjectTeachers: {} });
+      return;
+    }
+
+    try {
+      const profiles = JSON.parse(saved) as Record<
+        string,
+        { schoolName: string; teacherName: string; subjectTeachers?: Record<string, string> }
+      >;
+      setCoverPageProfile(
+        profiles[normalizeClassLevel(lessonData.level || "")] || {
+          schoolName: "",
+          teacherName: "",
+          subjectTeachers: {},
+        },
+      );
+    } catch (error) {
+      console.warn("Failed to parse saved class profiles:", error);
+      setCoverPageProfile({ schoolName: "", teacherName: "", subjectTeachers: {} });
+    }
+  }, [lessonData.coverPageSource, lessonData.level]);
 
   // Update class size and lesson details from Timetable when grade level or subject changes
   useEffect(() => {
@@ -2598,27 +2645,84 @@ const ImprovedGenerator = () => {
                           </Label>
                         </div>
                         {lessonData.includeCoverPage && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 animate-in fade-in-50 duration-500">
-                            <div className="space-y-2">
-                              <Label htmlFor="schoolName">Name of School</Label>
-                              <Input
-                                id="schoolName"
-                                placeholder="e.g. Cambridge International School"
-                                value={lessonData.schoolName || ""}
-                                onChange={(e) => setLessonData({ ...lessonData, schoolName: e.target.value })}
-                              />
+                          <div className="space-y-4 mt-4 animate-in fade-in-50 duration-500">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <button
+                                type="button"
+                                className={`rounded-2xl border p-4 text-left ${lessonData.coverPageSource === "profiles" ? "border-primary bg-primary/10" : "border-secondary/10 bg-card"}`}
+                                onClick={() => setLessonData({ ...lessonData, coverPageSource: "profiles" })}
+                              >
+                                <div className="text-sm font-semibold">Class Cover Page Profile</div>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  Use stored profile values for school and teacher name if available.
+                                </p>
+                              </button>
+                              <button
+                                type="button"
+                                className={`rounded-2xl border p-4 text-left ${lessonData.coverPageSource === "manual" ? "border-primary bg-primary/10" : "border-secondary/10 bg-card"}`}
+                                onClick={() => setLessonData({ ...lessonData, coverPageSource: "manual" })}
+                              >
+                                <div className="text-sm font-semibold">Manual Entry</div>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  Enter your own school and teacher details for the Cover Page.
+                                </p>
+                              </button>
                             </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="teacherName">Name of Teacher</Label>
-                              <Input
-                                id="teacherName"
-                                placeholder="e.g. Mr. John Doe"
-                                value={lessonData.teacherName || ""}
-                                onChange={(e) => setLessonData({ ...lessonData, teacherName: e.target.value })}
-                              />
-                            </div>
-                            {["basic7", "basic8", "basic9"].includes(lessonData.level?.toLowerCase() || "") && (
-                              <div className="space-y-2 sm:col-span-2">
+
+                            {lessonData.coverPageSource === "manual" ? (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="schoolName">Name of School</Label>
+                                  <Input
+                                    id="schoolName"
+                                    placeholder="e.g. Cambridge International School"
+                                    value={lessonData.schoolName || ""}
+                                    onChange={(e) => setLessonData({ ...lessonData, schoolName: e.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="teacherName">Name of Teacher</Label>
+                                  <Input
+                                    id="teacherName"
+                                    placeholder="e.g. Mr. John Doe"
+                                    value={lessonData.teacherName || ""}
+                                    onChange={(e) => setLessonData({ ...lessonData, teacherName: e.target.value })}
+                                  />
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="rounded-2xl border border-secondary/20 bg-slate-50 p-4">
+                                <div className="text-sm font-semibold mb-3">Cover Page Profile Preview</div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                  <div className="rounded-2xl bg-white p-3 border border-secondary/10">
+                                    <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">School Name</div>
+                                    <div className="mt-2 text-sm font-medium text-foreground">
+                                      {(lessonData.coverPageSource === "profiles"
+                                        ? coverPageProfile.schoolName || lessonData.schoolName
+                                        : lessonData.schoolName) || "(profile value or manual fallback)"}
+                                    </div>
+                                  </div>
+                                  <div className="rounded-2xl bg-white p-3 border border-secondary/10">
+                                    <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Teacher Name</div>
+                                    <div className="mt-2 text-sm font-medium text-foreground">
+                                      {(lessonData.coverPageSource === "profiles"
+                                        ? coverPageProfile.teacherName || lessonData.teacherName
+                                        : lessonData.teacherName) || "(profile value or manual fallback)"}
+                                    </div>
+                                  </div>
+                                </div>
+                                <p className="mt-3 text-xs text-muted-foreground">
+                                  Profiles are the default source for cover page metadata. Switch to Manual Entry if you want to override them.
+                                </p>
+                              </div>
+                            )}
+
+                            {[
+                              "basic7",
+                              "basic8",
+                              "basic9",
+                            ].includes(lessonData.level?.toLowerCase() || "") && (
+                              <div className="space-y-2">
                                 <Label htmlFor="coverPageSubject">Subjects to Display (Optional for Multiple Subjects)</Label>
                                 <Input
                                   id="coverPageSubject"

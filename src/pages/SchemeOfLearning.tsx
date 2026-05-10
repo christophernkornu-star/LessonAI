@@ -45,11 +45,15 @@ interface SchemeItem {
 
 const STORAGE_KEY = "scheme_of_learning_data";
 const BATCH_FORM_STORAGE_KEY = "batch_form_data";
+const CLASS_PROFILE_STORAGE_KEY = "class_profile_data";
 
 export default function SchemeOfLearning() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [schemeData, setSchemeData] = useState<SchemeItem[]>([]);
+  const [classProfiles, setClassProfiles] = useState<Record<string, { schoolName: string; teacherName: string; subjectTeachers?: Record<string, string> }>>({});
+  const [newProfileClass, setNewProfileClass] = useState("");
+  const [expandedProfileClasses, setExpandedProfileClasses] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true); // Start as true for initial fetch
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importLevels, setImportLevels] = useState<string[]>([]);
@@ -75,6 +79,7 @@ export default function SchemeOfLearning() {
     schoolName: "",
     teacherName: "",
     coverPageSubject: "", // Added state for JHS Cover Page Subject
+    coverPageSource: "profiles" as "profiles" | "manual",
     includeCoverPage: false,
   });
   const [batchResults, setBatchResults] = useState<{data: LessonData, content: string, id: string}[]>([]);
@@ -143,6 +148,107 @@ export default function SchemeOfLearning() {
   useEffect(() => {
       localStorage.setItem(BATCH_FORM_STORAGE_KEY, JSON.stringify(batchFormData));
   }, [batchFormData]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(CLASS_PROFILE_STORAGE_KEY);
+    if (saved) {
+      try {
+        setClassProfiles(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to load class profiles", e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+      localStorage.setItem(CLASS_PROFILE_STORAGE_KEY, JSON.stringify(classProfiles));
+  }, [classProfiles]);
+
+  const normalizeClassLevel = (classLevel: string) => {
+      const trimmed = (classLevel || "").trim();
+      if (!trimmed) return "";
+      const matched = CLASS_LEVELS.find(
+          (level) => level.label.toLowerCase() === trimmed.toLowerCase() || level.value.toLowerCase() === trimmed.toLowerCase()
+      );
+      return matched?.label || trimmed;
+  };
+
+  const profileClassLevels = useMemo(() => {
+      return Array.from(new Set([
+          ...(schemeData.map(item => normalizeClassLevel(item.classLevel))),
+          ...Object.keys(classProfiles).map(normalizeClassLevel)
+      ])).sort();
+  }, [schemeData, classProfiles]);
+
+  const classSubjectsByLevel = useMemo(() => {
+    return schemeData.reduce((acc, item) => {
+      const level = normalizeClassLevel(item.classLevel) || "Unknown";
+      if (!acc[level]) acc[level] = new Set<string>();
+      if (item.subject) acc[level].add(item.subject);
+      return acc;
+    }, {} as Record<string, Set<string>>);
+  }, [schemeData]);
+
+  const getClassProfile = (classLevel: string) => {
+      const normalized = normalizeClassLevel(classLevel);
+      return classProfiles[normalized] || { schoolName: "", teacherName: "", subjectTeachers: {} };
+  };
+
+  const getClassSubjectTeacher = (classLevel: string, subject: string) => {
+      const profile = getClassProfile(classLevel);
+      return profile.subjectTeachers?.[subject.trim()] || "";
+  };
+
+  const toggleProfileExpansion = (classLevel: string) => {
+      setExpandedProfileClasses((prev) =>
+          prev.includes(classLevel)
+            ? prev.filter((level) => level !== classLevel)
+            : [...prev, classLevel]
+      );
+  };
+
+  const updateClassProfile = (classLevel: string, field: "schoolName" | "teacherName", value: string) => {
+      const normalized = normalizeClassLevel(classLevel);
+      setClassProfiles((prev) => ({
+          ...prev,
+          [normalized]: {
+              ...prev[normalized],
+              [field]: value,
+              subjectTeachers: prev[normalized]?.subjectTeachers || {},
+          },
+      }));
+  };
+
+  const updateClassSubjectTeacher = (classLevel: string, subject: string, teacherName: string) => {
+      const normalized = normalizeClassLevel(classLevel);
+      setClassProfiles((prev) => ({
+          ...prev,
+          [normalized]: {
+              ...prev[normalized],
+              subjectTeachers: {
+                  ...prev[normalized]?.subjectTeachers,
+                  [subject.trim()]: teacherName,
+              },
+          },
+      }));
+  };
+
+  const addClassProfile = (classLevel: string) => {
+      const normalized = normalizeClassLevel(classLevel);
+      if (!normalized) return;
+      setClassProfiles((prev) => ({
+          ...prev,
+          [normalized]: prev[normalized] || { schoolName: "", teacherName: "", subjectTeachers: {} },
+      }));
+      setNewProfileClass("");
+  };
+
+  const selectedBatchClassProfile = getClassProfile(batchFormData.classLevel);
+  const useProfileSource = batchFormData.coverPageSource === "profiles";
+  const coverPagePreview = {
+      schoolName: useProfileSource ? selectedBatchClassProfile.schoolName || batchFormData.schoolName : batchFormData.schoolName,
+      teacherName: useProfileSource ? selectedBatchClassProfile.teacherName || batchFormData.teacherName : batchFormData.teacherName,
+  };
 
   useEffect(() => {
     const init = async () => {
@@ -587,6 +693,8 @@ export default function SchemeOfLearning() {
   };
 
   const handleGenerate = (item: SchemeItem) => {
+    const classProfile = getClassProfile(item.classLevel);
+
     // Navigate to generator with state
     navigate("/generator", { 
       state: { 
@@ -602,7 +710,11 @@ export default function SchemeOfLearning() {
           contentStandard: item.contentStandard,
           indicators: item.indicators,
           exemplars: item.exemplars,
-          resources: item.resources
+          resources: item.resources,
+          schoolName: classProfile.schoolName,
+          teacherName: classProfile.teacherName,
+          subjectTeacher: getClassSubjectTeacher(item.classLevel, item.subject),
+          includeCoverPage: Boolean(classProfile.schoolName || classProfile.teacherName),
         }
       } 
     });
@@ -856,6 +968,7 @@ export default function SchemeOfLearning() {
          console.warn("Could not fetch timetable for class size:", err);
       }
 
+      const classProfile = getClassProfile(first.classLevel);
       setBatchFormData(prev => ({
           ...prev,
           weekEnding: weekEndingFormatted || prev.weekEnding,
@@ -864,7 +977,10 @@ export default function SchemeOfLearning() {
           classLevel: normalizedClassLevel || prev.classLevel || "",
           classSize: fetchedClassSize || prev.classSize,
           date: startDateStr,
-          coverPageSubject: Array.from(new Set(items.map(i => i.subject))).join(" & ")
+          coverPageSubject: Array.from(new Set(items.map(i => i.subject))).join(" & "),
+          schoolName: classProfile.schoolName || prev.schoolName,
+          teacherName: classProfile.teacherName || prev.teacherName,
+          includeCoverPage: prev.includeCoverPage || Boolean(classProfile.schoolName || classProfile.teacherName),
       }));
       setBatchDialogConfig({ open: true, items });
       setBatchStep('config');
@@ -982,36 +1098,43 @@ export default function SchemeOfLearning() {
                     ? batchFormData.weekNumber 
                     : item.week;
 
-              const lessonData: LessonData = {
-                  subject: item.subject,
-                  level: item.classLevel,
-                  strand: item.strand,
-                  subStrand: item.subStrand,
-                  contentStandard: item.contentStandard,
-                  indicators: item.indicators, 
-                  exemplars: item.exemplars,
-                  topic: item.subStrand || item.contentStandard || "Lesson",
-                  subTopic: "", 
-                  date: batchFormData.date,
-                  duration: batchFormData.duration,
-                  classSize: batchFormData.classSize || fetchedClassSize || "40",
-                  coreCompetencies: "", 
-                  learningObjectives: "", 
-                  teachingLearningResources: item.resources, 
-                  weekNumber: finalWeekNumber,
-                  weekEnding: batchFormData.weekEnding || item.weekEnding,
-                  term: batchFormData.term || item.term,
-                  numLessons: numLessons, 
-                  scheduledDays: scheduledDays, 
-                  template: template,
-                  detailLevel: "moderate", 
-                  // ... rest unrelated fields
-                  includeDiagrams: false, previousKnowledge: "", references: "", keywords: "",
-                  teacherActivities: "", learnerActivities: "", evaluation: "", assignment: "",
-                  remarks: "", teachingPhilosophy: "balanced", differentiation: "", assessment: "",
-                  reflection: "", gradeLevel: item.classLevel, unit: "", content: "",
-                  methodology: "", materials: "", objectives: "", lesson: 1, 
-                  location: batchFormData.location || "",
+              const itemProfile = getClassProfile(item.classLevel);
+const useProfileSource = batchFormData.coverPageSource === "profiles";
+                  const lessonData: LessonData = {
+                      subject: item.subject,
+                      level: item.classLevel,
+                      strand: item.strand,
+                      subStrand: item.subStrand,
+                      contentStandard: item.contentStandard,
+                      indicators: item.indicators, 
+                      exemplars: item.exemplars,
+                      topic: item.subStrand || item.contentStandard || "Lesson",
+                      subTopic: "", 
+                      date: batchFormData.date,
+                      duration: batchFormData.duration,
+                      classSize: batchFormData.classSize || fetchedClassSize || "40",
+                      coreCompetencies: "", 
+                      learningObjectives: "", 
+                      teachingLearningResources: item.resources, 
+                      weekNumber: finalWeekNumber,
+                      weekEnding: batchFormData.weekEnding || item.weekEnding,
+                      term: batchFormData.term || item.term,
+                      numLessons: numLessons, 
+                      scheduledDays: scheduledDays, 
+                      template: template,
+                      detailLevel: "moderate", 
+                      // ... rest unrelated fields
+                      includeDiagrams: false, previousKnowledge: "", references: "", keywords: "",
+                      teacherActivities: "", learnerActivities: "", evaluation: "", assignment: "",
+                      remarks: "", teachingPhilosophy: "balanced", differentiation: "", assessment: "",
+                      reflection: "", gradeLevel: item.classLevel, unit: "", content: "",
+                      methodology: "", materials: "", objectives: "", lesson: 1, 
+                      location: batchFormData.location || "",
+                      subjectTeacher: getClassSubjectTeacher(item.classLevel, item.subject),
+                      schoolName: useProfileSource ? itemProfile.schoolName || batchFormData.schoolName : batchFormData.schoolName,
+                      teacherName: useProfileSource ? itemProfile.teacherName || batchFormData.teacherName : batchFormData.teacherName,
+                      includeCoverPage: batchFormData.includeCoverPage || (useProfileSource && Boolean(itemProfile.schoolName || itemProfile.teacherName)),
+                  coverPageSubject: batchFormData.coverPageSubject,
               };
 
               // Generate
@@ -1159,8 +1282,9 @@ export default function SchemeOfLearning() {
             // Generate Blob (pass true for returnBlob)
             // We pass finalData as the first arg. generateGhanaLessonDocx handles object inputs too.
             // If it's the first document and cover page is requested, generate the cover page as a completely standalone file
-            if (batchFormData.includeCoverPage && index === 0) {
-                const classLvl = (Array.isArray(finalData) ? finalData[0].class : finalData.class) || "";
+            const shouldIncludeCover = batchFormData.includeCoverPage || Boolean(getClassProfile((Array.isArray(finalData) ? finalData[0].class : finalData.class) || "").schoolName || getClassProfile((Array.isArray(finalData) ? finalData[0].class : finalData.class) || "").teacherName);
+            if (shouldIncludeCover && index === 0) {
+                const classLvl = normalizeClassLevel((Array.isArray(finalData) ? finalData[0].class : finalData.class) || "");
                 const coverPageLevel = getCoverPageLevelString(
                   batchResults.map((result) => {
                     const lessonData = result.data as any;
@@ -1172,13 +1296,18 @@ export default function SchemeOfLearning() {
                     ? batchFormData.coverPageSubject 
                     : "ALL SUBJECTS";
                 
+                const classProfile = getClassProfile(classLvl);
+                const useProfileSource = batchFormData.coverPageSource === "profiles";
                 const coverMeta = {
                     subject: subjectValue,
                     level: coverPageLevel,
                     term: batchFormData.term,
                     week: batchFormData.weekNumber || result.data.weekNumber?.toString() || "",
-                    teacherName: batchFormData.teacherName,
-                    schoolName: batchFormData.schoolName,
+                    teacherName: useProfileSource ? classProfile.teacherName || batchFormData.teacherName : batchFormData.teacherName,
+                    schoolName: useProfileSource ? classProfile.schoolName || batchFormData.schoolName : batchFormData.schoolName,
+                    subjectTeacher: isJHS && subjectValue !== "ALL SUBJECTS"
+                      ? getClassSubjectTeacher(classLvl, subjectValue)
+                      : undefined,
                 };
                 
                 // Create a dummy lesson payload so the generator runs, but the coverPageMeta flags the cover page creation.
@@ -1509,6 +1638,101 @@ export default function SchemeOfLearning() {
                 )}
           </div>
 
+            <div className="mb-6 rounded-3xl border border-secondary/10 bg-muted/80 p-5 shadow-sm">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold">Class Cover Page Profiles</h2>
+                    <p className="text-sm text-muted-foreground">Enter school and teacher names for each class to automatically populate cover page details during generation.</p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center w-full sm:w-auto">
+                    <Input
+                      placeholder="Add class label"
+                      value={newProfileClass}
+                      onChange={(e) => setNewProfileClass(e.target.value)}
+                      className="w-full sm:w-[220px]"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => addClassProfile(newProfileClass)}
+                      disabled={!newProfileClass.trim()}
+                      className="w-full sm:w-auto"
+                    >
+                      Add Class
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {profileClassLevels.length === 0 ? (
+                    <div className="col-span-full rounded-2xl border border-dashed border-secondary/50 bg-background/80 p-6 text-center text-sm text-muted-foreground">
+                      No class profiles yet. Add a class label or import scheme data to start.
+                    </div>
+                  ) : (
+                    profileClassLevels.map((classLevel) => {
+                      const profile = getClassProfile(classLevel);
+                      const subjectSet = classSubjectsByLevel[classLevel] || new Set<string>();
+                      const subjects = Array.from(subjectSet).sort();
+                      const isJHS = /basic\s*(7|8|9)/i.test(classLevel);
+                      const expanded = expandedProfileClasses.includes(classLevel);
+                      return (
+                        <div key={classLevel} className="rounded-2xl border border-secondary/10 bg-white/90 p-4 shadow-sm">
+                          <div className="mb-4 flex items-center justify-between gap-3">
+                            <div className="text-sm font-semibold text-foreground">{classLevel}</div>
+                            {isJHS && subjects.length > 0 ? (
+                              <button
+                                type="button"
+                                className="text-primary text-sm font-medium hover:text-primary/80"
+                                onClick={() => toggleProfileExpansion(classLevel)}
+                              >
+                                {expanded ? "Hide subjects" : `Show ${subjects.length} subject${subjects.length === 1 ? "" : "s"}`}
+                              </button>
+                            ) : null}
+                          </div>
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label className="text-xs uppercase tracking-[0.18em] text-muted-foreground">School Name</Label>
+                              <Input
+                                value={profile.schoolName}
+                                onChange={(e) => updateClassProfile(classLevel, "schoolName", e.target.value)}
+                                placeholder="e.g. St. Theresa's Basic School"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Teacher Name</Label>
+                              <Input
+                                value={profile.teacherName}
+                                onChange={(e) => updateClassProfile(classLevel, "teacherName", e.target.value)}
+                                placeholder="e.g. Ms. Akua Mensah"
+                              />
+                            </div>
+                            {isJHS && expanded && (
+                              <div className="rounded-xl border border-secondary/20 bg-slate-50 p-3">
+                                <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground mb-2">Subjects</div>
+                                <div className="grid gap-3">
+                                  {subjects.map((subject) => (
+                                    <div key={subject} className="rounded-lg border border-secondary/20 bg-white p-3">
+                                      <div className="mb-2 text-sm font-medium text-foreground">{subject}</div>
+                                      <Input
+                                        value={profile.subjectTeachers?.[subject] || ""}
+                                        onChange={(e) => updateClassSubjectTeacher(classLevel, subject, e.target.value)}
+                                        placeholder="Subject teacher name"
+                                        className="w-full"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="sticky top-28 mt-8 mb-8 w-full rounded-full border border-secondary/20 bg-white/95 px-5 py-4 shadow-xl shadow-secondary/20 backdrop-blur-sm ring-1 ring-slate-200/40 z-40">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div className="relative w-full xl:w-[48%]">
@@ -1706,22 +1930,73 @@ export default function SchemeOfLearning() {
                                 
                                 {batchFormData.includeCoverPage && (
                                     <>
-                                        <div className="space-y-2">
-                                            <Label>School Name</Label>
-                                            <Input
-                                                placeholder="e.g. Preset Academy"
-                                                value={batchFormData.schoolName}
-                                                onChange={e => setBatchFormData({...batchFormData, schoolName: e.target.value})}
-                                            />
+                                        <div className="col-span-full grid gap-3 sm:grid-cols-2">
+                                            <button
+                                                type="button"
+                                                className={`rounded-2xl border p-3 text-left ${batchFormData.coverPageSource === "profiles" ? "border-primary bg-primary/10" : "border-secondary/10 bg-white"}`}
+                                                onClick={() => setBatchFormData({...batchFormData, coverPageSource: "profiles"})}
+                                            >
+                                                <div className="text-sm font-semibold">Class Cover Page Profile</div>
+                                                <p className="text-xs text-muted-foreground">Use the selected class's stored school and teacher information.</p>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={`rounded-2xl border p-3 text-left ${batchFormData.coverPageSource === "manual" ? "border-primary bg-primary/10" : "border-secondary/10 bg-white"}`}
+                                                onClick={() => setBatchFormData({...batchFormData, coverPageSource: "manual"})}
+                                            >
+                                                <div className="text-sm font-semibold">Manual Entry</div>
+                                                <p className="text-xs text-muted-foreground">Use the values entered below for the cover page.</p>
+                                            </button>
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label>Teacher Name</Label>
-                                            <Input
-                                                placeholder="e.g. Mr. John Osei"
-                                                value={batchFormData.teacherName}
-                                                onChange={e => setBatchFormData({...batchFormData, teacherName: e.target.value})}
-                                            />
-                                        </div>
+
+                                        {batchFormData.coverPageSource === "manual" ? (
+                                            <>
+                                                <div className="space-y-2">
+                                                    <Label>School Name</Label>
+                                                    <Input
+                                                        placeholder="e.g. Preset Academy"
+                                                        value={batchFormData.schoolName}
+                                                        onChange={e => setBatchFormData({...batchFormData, schoolName: e.target.value})}
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>Teacher Name</Label>
+                                                    <Input
+                                                        placeholder="e.g. Mr. John Osei"
+                                                        value={batchFormData.teacherName}
+                                                        onChange={e => setBatchFormData({...batchFormData, teacherName: e.target.value})}
+                                                    />
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="col-span-full rounded-3xl border border-secondary/20 bg-slate-50 p-4">
+                                                <div className="mb-3 text-sm font-semibold">Cover Page Preview</div>
+                                                <div className="grid gap-3 md:grid-cols-2">
+                                                    <div className="rounded-2xl bg-white p-3 border border-secondary/10">
+                                                        <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">School Name</div>
+                                                        <div className="mt-2 text-sm font-medium text-foreground">
+                                                            {coverPagePreview.schoolName || "(will use school name entered in class profile)"}
+                                                        </div>
+                                                    </div>
+                                                    <div className="rounded-2xl bg-white p-3 border border-secondary/10">
+                                                        <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Teacher Name</div>
+                                                        <div className="mt-2 text-sm font-medium text-foreground">
+                                                            {coverPagePreview.teacherName || "(will use teacher name entered in class profile)"}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {(selectedBatchClassProfile.schoolName || selectedBatchClassProfile.teacherName) ? (
+                                                    <p className="mt-3 text-xs text-muted-foreground">
+                                                        Using class profile values for {normalizeClassLevel(batchFormData.classLevel) || "selected class"}.
+                                                    </p>
+                                                ) : (
+                                                    <p className="mt-3 text-xs text-muted-foreground">
+                                                        No class profile values found for this class; manual values will be used if entered.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+
                                         {['basic7', 'basic8', 'basic9'].includes(batchFormData.classLevel?.toLowerCase()) && (
                                             <div className="space-y-2 col-span-full animate-fade-in-up">
                                                 <Label>Subjects to Display (Optional for Multiple Subjects)</Label>
