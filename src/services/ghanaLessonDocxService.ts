@@ -425,7 +425,8 @@ function formatSubject(subject: string): string {
  */
 function formatTerm(term: string): string {
   if (!term) return 'FIRST TERM';
-  const cleanTerm = term.trim().toUpperCase();
+  const trimmedTerm = term.trim();
+  const cleanTerm = trimmedTerm.toUpperCase();
   
   // If it's just a number (e.g. "1"), return "TERM 1"
   if (/^\d+$/.test(cleanTerm)) return `TERM ${cleanTerm}`;
@@ -433,6 +434,7 @@ function formatTerm(term: string): string {
   // If it's "FIRST", "SECOND", "THIRD", append "TERM"
   if (['FIRST', 'SECOND', 'THIRD'].includes(cleanTerm)) return `${cleanTerm} TERM`;
   
+  // Preserve exact uploaded term text when already specified, but ensure uppercase
   return cleanTerm;
 }
 
@@ -660,7 +662,7 @@ export async function generateGhanaLessonDocx(
               spacing: { after: 1200 },
               children: [
                 new TextRun({ 
-                  text: (coverPageMeta.term?.toUpperCase() || "TERM").toUpperCase(), 
+                  text: formatTerm(coverPageMeta.term || ""), 
                   bold: true, 
                   font: "Century Gothic", 
                   size: 36 // 18pt
@@ -1011,6 +1013,8 @@ export async function generateGhanaLessonDocx(
           }
         };
 
+        const effectiveTerm = lessonData.term || coverPageMeta?.term || "";
+
         let childrenContent: any[] = [];
         if ((lessonData as any)._dummyCoverOnly) {
             // Remove the PageBreak at the end of coverParagraphs for standalone cover page
@@ -1026,7 +1030,7 @@ export async function generateGhanaLessonDocx(
                   spacing: { after: 100 },
                   children: [
                     new TextRun({
-                      text: formatTerm(lessonData.term),
+                      text: formatTerm(effectiveTerm),
                       bold: true,
                       size: 24, // 12pt
                       font: "Segoe UI",

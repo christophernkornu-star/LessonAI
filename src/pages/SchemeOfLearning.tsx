@@ -76,6 +76,8 @@ export default function SchemeOfLearning() {
     term: "Second Term",
     weekNumber: "", // Added state for editable week number
     classLevel: "", // Added state for editable class level
+    philosophy: "balanced",
+    detailLevel: "brief",
     schoolName: "",
     teacherName: "",
     coverPageSubject: "", // Added state for JHS Cover Page Subject
@@ -1122,11 +1124,13 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
                       numLessons: numLessons, 
                       scheduledDays: scheduledDays, 
                       template: template,
-                      detailLevel: "moderate", 
+                      detailLevel: batchFormData.detailLevel,
+                      philosophy: batchFormData.philosophy,
+                      teachingPhilosophy: batchFormData.philosophy,
                       // ... rest unrelated fields
                       includeDiagrams: false, previousKnowledge: "", references: "", keywords: "",
                       teacherActivities: "", learnerActivities: "", evaluation: "", assignment: "",
-                      remarks: "", teachingPhilosophy: "balanced", differentiation: "", assessment: "",
+                      remarks: "", differentiation: "", assessment: "",
                       reflection: "", gradeLevel: item.classLevel, unit: "", content: "",
                       methodology: "", materials: "", objectives: "", lesson: 1, 
                       location: batchFormData.location || "",
@@ -1894,6 +1898,44 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
                                         onChange={(e) => setBatchFormData({...batchFormData, weekNumber: e.target.value})} 
                                         placeholder="Week X"
                                     />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Teaching Philosophy</Label>
+                                     <Select 
+                                        value={batchFormData.philosophy} 
+                                        onValueChange={(val) => setBatchFormData({...batchFormData, philosophy: val})}
+                                     >
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Select teaching philosophy" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="student-centered">Student-Centered (Active Learning)</SelectItem>
+                                            <SelectItem value="teacher-led">Teacher-Led (Direct Instruction)</SelectItem>
+                                            <SelectItem value="balanced">Balanced (Mixed Approach)</SelectItem>
+                                            <SelectItem value="inquiry-based">Inquiry-Based (Discovery Learning)</SelectItem>
+                                            <SelectItem value="collaborative">Collaborative (Group Work)</SelectItem>
+                                        </SelectContent>
+                                     </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Detail Level</Label>
+                                     <Select 
+                                        value={batchFormData.detailLevel} 
+                                        onValueChange={(val) => setBatchFormData({...batchFormData, detailLevel: val})}
+                                     >
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Select detail level" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="brief">Brief (Key Points Only)</SelectItem>
+                                            <SelectItem value="moderate">Moderate (Standard Detail)</SelectItem>
+                                            <SelectItem value="detailed">Detailed (Comprehensive)</SelectItem>
+                                            <SelectItem value="very-detailed">Very Detailed (Extensive)</SelectItem>
+                                        </SelectContent>
+                                     </Select>
                                 </div>
                             </div>
 

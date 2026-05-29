@@ -387,6 +387,14 @@ export async function generateLessonNote(originalData: LessonData): Promise<stri
     // Build teaching approach guidance
     const philosophyGuidance = getPhilosophyGuidance(data.philosophy || 'balanced');
     const detailGuidance = getDetailLevelGuidance(data.detailLevel || 'moderate');
+    const briefDetailOverride = data.detailLevel === 'brief' ? `
+- For BRIEF detail level, keep the entire lesson note extremely concise.
+- Use only the most essential bullet points and key phrases.
+- Limit each section to one or two short sentences or a single concise bullet.
+- Do NOT add unnecessary explanation, examples, or background details.
+- If the template asks for activities, keep them short and focus on the core action only.
+- Use clear, direct wording rather than full paragraphs.
+` : '';
     
     // Get Ghana-specific context
     const curriculumStandard = getCurriculumStandard(data.level);
@@ -515,7 +523,7 @@ ${ghanaContextPrompt}
 ${philosophyGuidance}
 
 **DETAIL LEVEL:**
-${detailGuidance}
+${detailGuidance}${briefDetailOverride}
 
 ${data.includeDiagrams ? `**DIAGRAM OUTLINES:**
 Include descriptions of relevant diagrams, charts, illustrations, or visual aids that should be used during the lesson. For each diagram, provide:
@@ -551,6 +559,8 @@ ${data.template.structure}
 - Replace {EXEMPLARS}, {OBJECTIVES}, or {INDICATOR} with appropriate learning objectives based on: ${data.indicators ? "Indicators: " + data.indicators : ""} ${data.exemplars ? "Exemplars: " + data.exemplars : ""}
 - Replace {LESSON_TITLE} with a descriptive title for this lesson
 - Replace {TERM} with the academic term (e.g., "First Term", "Second Term", "Third Term")
+- Use the exact value provided for TERM: "${data.term || 'TERM'}". Do not infer or alter the term based on lesson numbering, the number of lessons, or any other field.
+- If multiple lessons are generated, keep the same TERM for every lesson unless the task explicitly specifies otherwise.
 - Replace {WEEK_ENDING} with: ${data.weekEnding || ""} (Leave empty if not provided)
 - Replace {DAY} with: ${data.scheduledDays && data.scheduledDays.length > 0 ? `the scheduled day (use "${data.scheduledDays[0]}" for Lesson 1${data.scheduledDays.length > 1 ? `, "${data.scheduledDays[1]}" for Lesson 2` : ''}${data.scheduledDays.length > 2 ? `, "${data.scheduledDays[2]}" for Lesson 3` : ''})` : "the day of the week"}
 - Replace {DURATION} with appropriate lesson duration (e.g., 60 minutes, 1 hour)

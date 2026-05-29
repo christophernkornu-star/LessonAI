@@ -221,7 +221,7 @@ export async function generateLessonNoteDocx(
           spacing: { after: 1200 },
           children: [
             new TextRun({ 
-              text: (metadata.term?.toUpperCase() || "TERM").toUpperCase(), 
+              text: (metadata.term || "TERM").toUpperCase(), 
               bold: true, 
               font: "Century Gothic", 
               size: 36 // 18pt
@@ -416,42 +416,47 @@ export async function generateLessonNoteDocx(
 
       // Detect markdown table
       const isTableRow = line.match(/^\|.*\|$/);
-      const isTableSeparator = line.match(/^\|[\s:-]+\|$/);
+      const isTableSeparator = line.match(/^\|(?:\s*[:\-]+\s*\|)+\s*$/);
 
       if (isTableRow && !isTableSeparator) {
-        // Parse table row
-        const cells = line.split('|').map(cell => cell.trim()).filter(cell => cell);
+        // Parse table row while preserving empty cells
+        const rowContent = line.startsWith("|") && line.endsWith("|") ? line.slice(1, -1) : line;
+        const cells = rowContent.split('|').map(cell => cell.trim());
         tableRows.push(cells);
         inTable = true;
       } else if (isTableSeparator) {
-        // Skip separator
+        // Skip separator rows
         continue;
       } else {
         // If we were in a table and now we're not, render the table
         if (inTable) {
+          const maxCols = Math.max(...tableRows.map((row) => row.length));
           const table = new Table({
-            rows: tableRows.map((rowCells) => 
-              new TableRow({
-                children: rowCells.map(cellText => {
+            rows: tableRows.map((rowCells) => {
+              const normalizedRow = [...rowCells];
+              while (normalizedRow.length < maxCols) normalizedRow.push("");
+
+              return new TableRow({
+                children: normalizedRow.map(cellText => {
                   const tokens = parseMarkdownLine(cellText);
                   const isBold = tokens.some(t => t.bold);
                   const cleanText = tokens.map(t => t.text).join('');
-                  
+
                   return new TableCell({
                     children: [new Paragraph({ 
                       children: createDocxParagraphChildren(cleanText, isBold)
                     })],
-                    width: { size: 100 / rowCells.length, type: WidthType.PERCENTAGE },
+                    width: { size: 100 / maxCols, type: WidthType.PERCENTAGE },
                     borders: {
-                        top: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
-                        bottom: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
-                        left: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
-                        right: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                      top: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                      bottom: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                      left: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                      right: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
                     }
                   });
                 }),
-              })
-            ),
+              });
+            }),
             width: { size: 100, type: WidthType.PERCENTAGE },
           });
           docElements.push(table);
