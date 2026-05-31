@@ -284,6 +284,7 @@ const ImprovedGenerator = () => {
       return;
     }
 
+    const profileKey = normalizeClassLevel(lessonData.level || "");
     const saved = localStorage.getItem("class_profile_data");
     if (!saved) {
       setCoverPageProfile({ schoolName: "", teacherName: "", subjectTeachers: {} });
@@ -296,7 +297,7 @@ const ImprovedGenerator = () => {
         { schoolName: string; teacherName: string; subjectTeachers?: Record<string, string> }
       >;
       setCoverPageProfile(
-        profiles[normalizeClassLevel(lessonData.level || "")] || {
+        profiles[profileKey] || {
           schoolName: "",
           teacherName: "",
           subjectTeachers: {},
@@ -307,6 +308,7 @@ const ImprovedGenerator = () => {
       setCoverPageProfile({ schoolName: "", teacherName: "", subjectTeachers: {} });
     }
   }, [lessonData.coverPageSource, lessonData.level]);
+
 
   // Update class size and lesson details from Timetable when grade level or subject changes
   useEffect(() => {

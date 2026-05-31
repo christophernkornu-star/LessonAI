@@ -1,0 +1,1724 @@
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Stepper } from "@/components/ui/stepper";
+import { Combobox } from "@/components/ui/combobox";
+import { MultiSelectCombobox } from "@/components/ui/multi-select-combobox";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, } from "@/components/ui/tooltip";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, ChevronLeft, ChevronRight, Save, WifiOff, Info, ClipboardPaste, BookOpen, } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { generateLessonNote, parseCurriculumPaste, } from "@/services/aiService";
+import { LessonNotesService } from "@/services/lessonNotesService";
+import { ClassProfileService } from "@/services/classProfileService";
+import { TimetableService } from "@/services/timetableService";
+import { useToast } from "@/hooks/use-toast";
+import { useDraft } from "@/hooks/use-draft";
+import { useOnlineStatus } from "@/hooks/use-online-status";
+import { TemplateSelector } from "@/components/TemplateSelector";
+import { PaymentWall } from "@/components/PaymentWall";
+import { checkPaymentRequired, deductPayment, } from "@/services/paymentService";
+import { lessonTemplates } from "@/data/lessonTemplates";
+import { supabase } from "@/integrations/supabase/client";
+import { SUBJECTS, CLASS_LEVELS } from "@/data/curriculum";
+import { CurriculumService } from "@/services/curriculumService";
+import { GeneratorSkeleton } from "@/components/LoadingSkeletons";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, } from "@/components/ui/dialog";
+import { useQuery } from "@tanstack/react-query";
+import { Navbar } from "@/components/Navbar";
+import { BasicInfoStep } from "@/components/generator/BasicInfoStep";
+// Removed problematic react-window import
+// import { FixedSizeList as List } from 'react-window';
+const STEPS = ["Basic Info", "Details", "Review"];
+const defaultLessonData = {
+    subject: "",
+    level: "",
+    topic: "",
+    subTopic: "",
+    date: new Date().toISOString().split("T")[0],
+    duration: "60 mins",
+    strand: "",
+    subStrand: "",
+    numLessons: 1,
+    contentStandard: "",
+    indicator: "",
+    exemplars: "", // Added required field
+    coreCompetencies: "",
+    previousKnowledge: "",
+    references: "",
+    keywords: "",
+    learningObjectives: "",
+    teachingLearningResources: "",
+    teacherActivities: "",
+    learnerActivities: "",
+    evaluation: "",
+    assignment: "",
+    remarks: "",
+    teachingPhilosophy: "",
+    differentiation: "",
+    assessment: "",
+    reflection: "",
+    gradeLevel: "",
+    unit: "",
+    content: "",
+    methodology: "",
+    materials: "",
+    objectives: "",
+    classSize: "",
+    lesson: 1,
+    weekEnding: "",
+    weekNumber: "",
+    term: "",
+    location: "",
+    detailLevel: "moderate",
+    includeDiagrams: false,
+    coverPageSource: "profiles",
+};
+// Fetches user profile
+const fetchUserProfile = async (userId) => {
+    const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+    if (error)
+        throw error;
+    return data;
+};
+const ImprovedGenerator = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const { toast } = useToast();
+    const isOnline = useOnlineStatus();
+    const { data: lessonData, setData: setLessonData, clearDraft, lastSaved, isSaving, saveDraft: forceSaveDraft, } = useDraft(defaultLessonData, {
+        key: "lesson-generator",
+        autosaveDelay: 3000,
+    });
+    const [currentStep, setCurrentStep] = useState(0);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [selectedTemplate, setSelectedTemplate] = useState(lessonTemplates.find((t) => t.id === "ghana-standard") || null);
+    const [selectedCurriculumFiles, setSelectedCurriculumFiles] = useState([]);
+    const [selectedResourceFiles, setSelectedResourceFiles] = useState([]);
+    // lessonData managed by useDraft above
+    const [currentUser, setCurrentUser] = useState(null); // Kept for auth check
+    const [retryCount, setRetryCount] = useState(0);
+    const [validationErrors, setValidationErrors] = useState({});
+    const [availableStrands, setAvailableStrands] = useState([]);
+    const [availableSubStrands, setAvailableSubStrands] = useState([]);
+    const [availableContentStandards, setAvailableContentStandards] = useState([]);
+    const [isPasteDialogOpen, setIsPasteDialogOpen] = useState(false);
+    const [pastedText, setPastedText] = useState("");
+    const [isParsingPaste, setIsParsingPaste] = useState(false);
+    const [availableSubjects, setAvailableSubjects] = useState([]);
+    const [availableLevels, setAvailableLevels] = useState(CLASS_LEVELS);
+    const [availableIndicators, setAvailableIndicators] = useState([]);
+    const [selectedIndicators, setSelectedIndicators] = useState([]);
+    const [availableExemplars, setAvailableExemplars] = useState([]);
+    const [selectedExemplars, setSelectedExemplars] = useState([]);
+    // NEW: State for multi-select strands/sub-strands
+    const [selectedStrands, setSelectedStrands] = useState([]);
+    const [selectedSubStrands, setSelectedSubStrands] = useState([]);
+    // NEW: State for multi-select content standards
+    const [selectedContentStandards, setSelectedContentStandards] = useState([]);
+    const [isManualCurriculum, setIsManualCurriculum] = useState(false);
+    // Track if lesson is being generated from Scheme of Learning context
+    const [isFromScheme, setIsFromScheme] = useState(false);
+    const [schemeItems, setSchemeItems] = useState([]);
+    const [isSchemeDialogOpen, setIsSchemeDialogOpen] = useState(false);
+    const [schemeSearch, setSchemeSearch] = useState("");
+    const [showPaymentWall, setShowPaymentWall] = useState(false);
+    const [pendingGeneration, setPendingGeneration] = useState(false);
+    const [coverPageProfile, setCoverPageProfile] = useState({ schoolName: "", teacherName: "", subjectTeachers: {} });
+    const [dbClassProfiles, setDbClassProfiles] = useState({});
+    const normalizeClassLevel = (classLevel) => {
+        const trimmed = (classLevel || "").trim();
+        if (!trimmed)
+            return "";
+        const matched = CLASS_LEVELS.find((level) => level.label.toLowerCase() === trimmed.toLowerCase() ||
+            level.value.toLowerCase() === trimmed.toLowerCase());
+        return matched?.label || trimmed;
+    };
+    // Check authentication
+    useEffect(() => {
+        const checkAuth = async () => {
+            const { data: { session }, } = await supabase.auth.getSession();
+            if (!session) {
+                toast({
+                    title: "Authentication Required",
+                    description: "Please sign in to generate lesson notes.",
+                    variant: "destructive",
+                });
+                navigate("/login");
+                return;
+            }
+            setCurrentUser(session.user);
+        };
+        checkAuth();
+    }, [navigate]);
+    // Use React Query for profile
+    const { data: userProfile, isLoading: isProfileLoading } = useQuery({
+        queryKey: ["profile", currentUser?.id],
+        queryFn: () => fetchUserProfile(currentUser.id),
+        enabled: !!currentUser?.id,
+        staleTime: 1000 * 60 * 5, // 5 minutes
+    });
+    // Effect to sync profile data to form defaults
+    useEffect(() => {
+        if (userProfile) {
+            if (userProfile.default_class_size && !lessonData.classSize) {
+                setLessonData((prev) => ({
+                    ...prev,
+                    classSize: userProfile.default_class_size.toString(),
+                }));
+            }
+        }
+    }, [userProfile]);
+    const isLoading = !currentUser || (!!currentUser && isProfileLoading);
+    useEffect(() => {
+        if (lessonData.coverPageSource !== "profiles") {
+            setCoverPageProfile({ schoolName: "", teacherName: "", subjectTeachers: {} });
+            return;
+        }
+        const profileKey = normalizeClassLevel(lessonData.level || "");
+        const dbProfile = dbClassProfiles[profileKey];
+        if (dbProfile) {
+            setCoverPageProfile(dbProfile);
+            return;
+        }
+        const saved = localStorage.getItem("class_profile_data");
+        if (!saved) {
+            setCoverPageProfile({ schoolName: "", teacherName: "", subjectTeachers: {} });
+            return;
+        }
+        try {
+            const profiles = JSON.parse(saved);
+            setCoverPageProfile(profiles[profileKey] || {
+                schoolName: "",
+                teacherName: "",
+                subjectTeachers: {},
+            });
+        }
+        catch (error) {
+            console.warn("Failed to parse saved class profiles:", error);
+            setCoverPageProfile({ schoolName: "", teacherName: "", subjectTeachers: {} });
+        }
+    }, [lessonData.coverPageSource, lessonData.level, dbClassProfiles]);
+    useEffect(() => {
+        const loadClassProfiles = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user)
+                return;
+            try {
+                const profiles = await ClassProfileService.getClassProfiles(session.user.id);
+                const normalizedProfiles = profiles.reduce((acc, profile) => {
+                    const normalizedLevel = normalizeClassLevel(profile.class_level);
+                    if (!normalizedLevel)
+                        return acc;
+                    acc[normalizedLevel] = {
+                        schoolName: profile.school_name || "",
+                        teacherName: profile.teacher_name || "",
+                        subjectTeachers: profile.subject_teachers || {},
+                    };
+                    return acc;
+                }, {});
+                setDbClassProfiles(normalizedProfiles);
+            }
+            catch (error) {
+                console.error("Failed to load class profiles from database", error);
+            }
+        };
+        loadClassProfiles();
+    }, [currentUser?.id]);
+    // Update class size and lesson details from Timetable when grade level or subject changes
+    useEffect(() => {
+        const fetchTimetableDetails = async () => {
+            // Don't run if we don't have a level
+            if (!lessonData.level)
+                return;
+            if (!currentUser?.id)
+                return;
+            try {
+                // Fetch ALL timetables for this user to avoid query mismatch issues
+                // We use getAllTimetables instead of stricter getTimetable to be more robust
+                const allTimetables = await TimetableService.getAllTimetables(currentUser.id);
+                if (!allTimetables || allTimetables.length === 0) {
+                    console.log("No timetables found for user.");
+                    // Fallback to legacy userProfile.class_sizes
+                    const selectedLevelObj = availableLevels.find((l) => l.value === lessonData.level || l.label === lessonData.level);
+                    const selectedLevelLabel = selectedLevelObj?.label || lessonData.level;
+                    if (userProfile?.class_sizes) {
+                        const specificSize = userProfile.class_sizes[lessonData.level] ||
+                            userProfile.class_sizes[selectedLevelLabel];
+                        if (specificSize) {
+                            setLessonData((prev) => ({
+                                ...prev,
+                                classSize: specificSize.toString(),
+                            }));
+                        }
+                    }
+                    return;
+                }
+                // Resolve the level label (e.g. "Basic 4") from the selected value (e.g. "basic4")
+                const selectedLevelObj = availableLevels.find((l) => l.value === lessonData.level || l.label === lessonData.level);
+                const selectedLevelLabel = selectedLevelObj?.label || lessonData.level;
+                const selectedLevelValue = selectedLevelObj?.value || lessonData.level;
+                console.log("Searching for timetable matching:", {
+                    selectedLevelLabel,
+                    selectedLevelValue,
+                });
+                // Find matching timetable (relaxed search in memory)
+                const timetable = allTimetables.find((t) => t.class_level === selectedLevelLabel ||
+                    t.class_level === selectedLevelValue ||
+                    t.class_level.toLowerCase() === selectedLevelLabel.toLowerCase());
+                if (timetable) {
+                    console.log("Found matching timetable:", timetable);
+                    const updates = {};
+                    // 1. Update Class Size
+                    const newSize = timetable.class_size
+                        ? timetable.class_size.toString()
+                        : "";
+                    if (newSize) {
+                        updates.classSize = newSize;
+                    }
+                    // 2. Update Number of Lessons (Frequency)
+                    if (lessonData.subject && timetable.subject_config) {
+                        // Find subject config (case insensitive key search)
+                        const targetSubject = lessonData.subject.toLowerCase();
+                        // Try exact match first
+                        let configKey = Object.keys(timetable.subject_config).find((k) => k.toLowerCase() === targetSubject);
+                        // If not found, try fuzzy match (e.g. "History" matches "History of Ghana")
+                        if (!configKey) {
+                            configKey = Object.keys(timetable.subject_config).find((k) => {
+                                const keyLower = k.toLowerCase();
+                                // Check if the Selected Subject includes the Configured Subject (User's case: "History of Ghana" includes "History")
+                                if (targetSubject.includes(keyLower))
+                                    return true;
+                                // Check if the Configured Subject includes the Selected Subject
+                                if (keyLower.includes(targetSubject))
+                                    return true;
+                                // Special case handling for "Language" vs "English", "Maths" vs "Mathematics"
+                                if ((keyLower === "maths" && targetSubject === "mathematics") ||
+                                    (keyLower === "mathematics" && targetSubject === "maths"))
+                                    return true;
+                                return false;
+                            });
+                        }
+                        if (configKey) {
+                            const config = timetable.subject_config[configKey];
+                            if (config && config.frequency) {
+                                // Only update if the user hasn't manually changed it
+                                // We check if it's currently undefined or 1 (default)
+                                if (lessonData.numLessons === undefined ||
+                                    lessonData.numLessons === 1) {
+                                    updates.numLessons = config.frequency;
+                                }
+                                // Optional: Also set scheduledDays if they exist
+                                if (config.days && config.days.length > 0) {
+                                    updates.scheduledDays = config.days;
+                                }
+                            }
+                        }
+                    }
+                    // Apply updates
+                    if (Object.keys(updates).length > 0) {
+                        setLessonData((prev) => ({ ...prev, ...updates }));
+                        console.log("Applied timetable updates:", updates);
+                    }
+                }
+                else {
+                    console.log("No matching timetable found in list of", allTimetables.length);
+                    // Fallback to legacy profile again
+                    if (userProfile?.class_sizes) {
+                        const specificSize = userProfile.class_sizes[lessonData.level] ||
+                            userProfile.class_sizes[selectedLevelLabel];
+                        if (specificSize) {
+                            setLessonData((prev) => ({
+                                ...prev,
+                                classSize: specificSize.toString(),
+                            }));
+                        }
+                    }
+                }
+            }
+            catch (err) {
+                console.error("Error fetching timetable details:", err);
+            }
+        };
+        fetchTimetableDetails();
+    }, [
+        lessonData.level,
+        lessonData.subject,
+        lessonData.term,
+        currentUser,
+        userProfile,
+        availableLevels,
+    ]);
+    // Load available levels from database on mount and merge with static levels
+    useEffect(() => {
+        const loadMetadata = async () => {
+            // Start with static levels
+            // Use a map to handle duplicates and value/label normalization
+            const levelMap = new Map();
+            CLASS_LEVELS.forEach((l) => levelMap.set(l.label, l));
+            // Add levels from Scheme of Learning (localStorage)
+            try {
+                const savedScheme = localStorage.getItem("scheme_of_learning_data");
+                if (savedScheme) {
+                    const schemeData = JSON.parse(savedScheme);
+                    if (Array.isArray(schemeData)) {
+                        schemeData.forEach((item) => {
+                            if (item.classLevel && !levelMap.has(item.classLevel)) {
+                                levelMap.set(item.classLevel, {
+                                    value: item.classLevel,
+                                    label: item.classLevel,
+                                });
+                            }
+                        });
+                    }
+                }
+            }
+            catch (e) {
+                console.error("Error reading scheme data for levels", e);
+            }
+            // Load Levels from DB (Global + Personal)
+            if (currentUser) {
+                try {
+                    // Changed: Now loads ALL globally public levels + user's own levels
+                    // We wrap this in a try/catch specifically for the DB call so it doesn't block the rest
+                    try {
+                        const dbLevels = await CurriculumService.getUniqueGradeLevels(currentUser.id);
+                        dbLevels.forEach((dbLevel) => {
+                            const staticMatch = CLASS_LEVELS.find((l) => l.label === dbLevel);
+                            if (staticMatch) {
+                                levelMap.set(dbLevel, staticMatch);
+                            }
+                            else if (!levelMap.has(dbLevel)) {
+                                levelMap.set(dbLevel, { value: dbLevel, label: dbLevel });
+                            }
+                        });
+                    }
+                    catch (dbError) {
+                        console.warn("Could not load levels from CurriculumService", dbError);
+                    }
+                    // Also load levels from Timetables
+                    try {
+                        const timetables = await TimetableService.getAllTimetables(currentUser.id);
+                        if (timetables && timetables.length > 0) {
+                            timetables.forEach((tt) => {
+                                const ttLevel = tt.class_level;
+                                const staticMatch = CLASS_LEVELS.find((l) => l.label === ttLevel || l.value === ttLevel);
+                                if (staticMatch) {
+                                    levelMap.set(staticMatch.label, staticMatch);
+                                    // Ensure the stored level string also maps to the static match
+                                    if (ttLevel !== staticMatch.label)
+                                        levelMap.set(ttLevel, staticMatch);
+                                }
+                                else if (!levelMap.has(ttLevel)) {
+                                    levelMap.set(ttLevel, { value: ttLevel, label: ttLevel });
+                                }
+                            });
+                        }
+                    }
+                    catch (ttError) {
+                        console.warn("Could not load levels from TimetableService", ttError);
+                    }
+                    // Also load levels from Schemes (DB)
+                    try {
+                        const { data: schemes } = await supabase
+                            .from("schemes")
+                            .select("class_level")
+                            .eq("user_id", currentUser.id);
+                        if (schemes && schemes.length > 0) {
+                            schemes.forEach((s) => {
+                                const sLevel = s.class_level;
+                                if (sLevel) {
+                                    const staticMatch = CLASS_LEVELS.find((l) => l.label === sLevel || l.value === sLevel);
+                                    if (staticMatch) {
+                                        levelMap.set(staticMatch.label, staticMatch);
+                                    }
+                                    else if (!levelMap.has(sLevel)) {
+                                        levelMap.set(sLevel, { value: sLevel, label: sLevel });
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    catch (schemeError) {
+                        console.warn("Could not load levels from Schemes", schemeError);
+                    }
+                }
+                catch (error) {
+                    console.error("Error in fetching levels block", error);
+                }
+            }
+            // Ensure specific sorting
+            const finalLevels = Array.from(levelMap.values()).sort((a, b) => {
+                // Custom sort: Basic 1 -> Basic 10, then JHS, SHS, etc.
+                const getNum = (str) => {
+                    const m = str.match(/\d+/);
+                    return m ? parseInt(m[0]) : 999;
+                };
+                const isBasicA = a.label.includes("Basic");
+                const isBasicB = b.label.includes("Basic");
+                if (isBasicA && !isBasicB)
+                    return -1;
+                if (!isBasicA && isBasicB)
+                    return 1;
+                return getNum(a.label) - getNum(b.label);
+            });
+            setAvailableLevels(finalLevels);
+            // Fix potential draft data mismatch (Label stored instead of Value)
+            // If current lessonData.level matches a LABEL in our list, swap it to VALUE
+            if (lessonData.level) {
+                const matchLabel = finalLevels.find((l) => l.label === lessonData.level);
+                const matchValue = finalLevels.find((l) => l.value === lessonData.level);
+                if (matchLabel && !matchValue) {
+                    console.log("Fixing mismatch: converting Label to Value", lessonData.level, "->", matchLabel.value);
+                    setLessonData((prev) => ({ ...prev, level: matchLabel.value }));
+                }
+            }
+        };
+        loadMetadata();
+    }, [currentUser, lessonData.level]); // Added lessonData.level dependency only for the fix logic check, checking it safely inside
+    // Load subjects when level changes
+    useEffect(() => {
+        const loadSubjects = async () => {
+            if (lessonData.level) {
+                // Resolve the level label (e.g. "Basic 4") from the selected value (e.g. "basic4")
+                const selectedLevelObj = availableLevels.find((l) => l.value === lessonData.level || l.label === lessonData.level);
+                const selectedLevelLabel = selectedLevelObj?.label || lessonData.level;
+                const selectedLevelValue = selectedLevelObj?.value || lessonData.level;
+                // Check if DB subjects are available for this level
+                // If the user has custom curriculum for this level, we should prioritize/restrict to it
+                // OR we just mix them. The user requested strict validation.
+                // Let's refine the subject list.
+                const subjects = [];
+                const addedSubjects = new Set();
+                // Helper to add subject securely
+                const addSubject = (val, lbl) => {
+                    const key = val.toLowerCase();
+                    if (!addedSubjects.has(key)) {
+                        addedSubjects.add(key);
+                        subjects.push({ value: val, label: lbl });
+                    }
+                };
+                // 1. Load from DB (Primary Source of Truth if available)
+                if (currentUser) {
+                    try {
+                        const dbSubjects = await CurriculumService.getSubjectsByGradeLevel(selectedLevelLabel, currentUser.id);
+                        if (dbSubjects.length > 0) {
+                            // If we found DB subjects for this specific level, add them first
+                            dbSubjects.forEach((s) => addSubject(s, s));
+                        }
+                    }
+                    catch (error) {
+                        console.error("Error fetching subjects", error);
+                    }
+                }
+                // 3. Load from Scheme of Learning (Secondary Source - still useful for scheme-specific subjects)
+                try {
+                    const savedScheme = localStorage.getItem("scheme_of_learning_data");
+                    if (savedScheme) {
+                        const schemeData = JSON.parse(savedScheme);
+                        if (Array.isArray(schemeData)) {
+                            schemeData.forEach((item) => {
+                                const itemLevel = item.classLevel;
+                                const isMatch = itemLevel === selectedLevelValue ||
+                                    itemLevel === selectedLevelLabel;
+                                if (isMatch && item.subject) {
+                                    addSubject(item.subject, item.subject);
+                                }
+                            });
+                        }
+                    }
+                }
+                catch (e) {
+                    console.error("Error reading scheme data", e);
+                }
+                // 3. Load from Static Data
+                // MODIFIED: User requested to strictly load from dynamic sources (CSV/DB) and NOT static data.
+                // Therefore, we do not fall back to SUBJECTS if no content is found.
+                // Sort subjects alphabetically
+                subjects.sort((a, b) => a.label.localeCompare(b.label));
+                setAvailableSubjects(subjects);
+                // Show helpful message if no subjects found for this level
+                if (subjects.length === 0 && currentUser) {
+                    toast({
+                        title: "No Subjects Found",
+                        description: `No curriculum data found for ${selectedLevelLabel}. Please upload a curriculum CSV for this class level.`,
+                        variant: "destructive",
+                        duration: 5000,
+                    });
+                }
+                // Auto-select if only one subject
+                if (subjects.length === 1 && !lessonData.subject) {
+                    setLessonData((prev) => ({ ...prev, subject: subjects[0].value }));
+                }
+                // Clear subject if it's not in the new list
+                if (lessonData.subject &&
+                    subjects.length > 0 &&
+                    !subjects.some((s) => s.value === lessonData.subject || s.label === lessonData.subject)) {
+                    setLessonData((prev) => ({
+                        ...prev,
+                        subject: "",
+                        strand: "",
+                        subStrand: "",
+                        contentStandard: "",
+                        indicators: "",
+                        exemplars: "",
+                    }));
+                }
+            }
+            else {
+                setAvailableSubjects([]);
+            }
+        };
+        loadSubjects();
+    }, [lessonData.level, availableLevels, currentUser]);
+    // Load strands when subject and level change
+    useEffect(() => {
+        const loadStrands = async () => {
+            if (lessonData.subject && lessonData.level && currentUser) {
+                console.log("Loading strands for:", {
+                    subject: lessonData.subject,
+                    level: lessonData.level,
+                });
+                const strands = await CurriculumService.getStrandsByGradeAndSubject(lessonData.level, lessonData.subject, currentUser.id);
+                console.log("Loaded strands:", strands);
+                setAvailableStrands(strands);
+                // Auto-select if only one strand
+                if (strands.length === 1) {
+                    setLessonData((prev) => ({ ...prev, strand: strands[0].label }));
+                }
+                if (strands.length === 0) {
+                    // Try to give a hint about what IS available
+                    const allCurriculum = await CurriculumService.getUserCurriculum(currentUser.id);
+                    if (allCurriculum.length > 0) {
+                        const available = allCurriculum
+                            .slice(0, 3)
+                            .map((c) => `${c.subject} (${c.grade_level})`)
+                            .join(", ");
+                        toast({
+                            title: "No Strands Found",
+                            description: `Found uploaded data for: ${available}... but not for ${lessonData.subject} - ${lessonData.level}.`,
+                            variant: "destructive",
+                        });
+                        return;
+                    }
+                    else {
+                        toast({
+                            title: "Debug: No Data Found",
+                            description: `User ID: ${currentUser.id.substring(0, 5)}... Total Items: ${allCurriculum.length}. Please check your uploads.`,
+                            duration: 10000,
+                            variant: "destructive",
+                        });
+                        return;
+                    }
+                }
+            }
+            else {
+                setAvailableStrands([]);
+            }
+        };
+        loadStrands();
+    }, [lessonData.subject, lessonData.level, currentUser]);
+    // Load sub-strands when strand changes
+    useEffect(() => {
+        const loadSubStrands = async () => {
+            // Check if we have subject and level. Strand is now optional for initial load (or we handle multiple)
+            if (lessonData.subject && lessonData.level && currentUser) {
+                // Handle Multiple Strands:
+                // Use selectedStrands state if available, otherwise fall back to splitting lessonData.strand
+                // (This supports both the UI selection and loading from drafts/schemes)
+                const currentStrands = selectedStrands.length > 0
+                    ? selectedStrands
+                    : lessonData.strand
+                        ? lessonData.strand.split("\n").filter((s) => s.trim())
+                        : [];
+                if (currentStrands.length > 0) {
+                    let allSubStrands = [];
+                    // Fetch sub-strands for EACH selected strand
+                    for (const strandLabel of currentStrands) {
+                        const subStrands = await CurriculumService.getSubStrandsByStrand(lessonData.level, lessonData.subject, strandLabel, currentUser.id);
+                        // Merge and deduplicate
+                        allSubStrands = [...allSubStrands, ...subStrands];
+                    }
+                    // Remove duplicates based on label/value
+                    const uniqueSubStrands = Array.from(new Map(allSubStrands.map((item) => [item.label, item])).values());
+                    setAvailableSubStrands(uniqueSubStrands);
+                    if (uniqueSubStrands.length === 0) {
+                        // Only warn if we actually had strands selected but found nothing
+                    }
+                }
+                else {
+                    // If no strands selected yet, empty the list
+                    setAvailableSubStrands([]);
+                }
+            }
+            else {
+                setAvailableSubStrands([]);
+            }
+        };
+        loadSubStrands();
+    }, [
+        lessonData.subject,
+        lessonData.level,
+        selectedStrands,
+        lessonData.strand,
+        currentUser,
+    ]);
+    // Load content standards when sub-strand changes
+    useEffect(() => {
+        const loadContentStandards = async () => {
+            if (lessonData.subject && lessonData.level && currentUser) {
+                const currentStrands = selectedStrands.length > 0
+                    ? selectedStrands
+                    : lessonData.strand
+                        ? lessonData.strand.split("\n").filter((s) => s.trim())
+                        : [];
+                const currentSubStrands = selectedSubStrands.length > 0
+                    ? selectedSubStrands
+                    : lessonData.subStrand
+                        ? lessonData.subStrand.split("\n").filter((s) => s.trim())
+                        : [];
+                if (currentStrands.length > 0 && currentSubStrands.length > 0) {
+                    let allStandards = [];
+                    // We need to fetch standards that match ANY the selected strand/substrand combos.
+                    // Since the API takes single strand/substrand, we might need to iterate.
+                    // Optimization: The API likely filters by SubStrand primarily. Strand is context.
+                    // Simple iteration: For each selected SubStrand, try to find its parent Strand (if we knew it)
+                    // or just query for the SubStrand if possible?
+                    // CurriculumService.getContentStandardsBySubStrand requires strand + substrand.
+                    // We'll approximate: Iterate through all selected strands and sub-strands and fetch combinations.
+                    // This might be over-fetching but ensures we get everything.
+                    // OPTIMIZATION: Use Promise.all to fetch in parallel instead of sequential await
+                    const fetchPromises = [];
+                    for (const strand of currentStrands) {
+                        for (const subStrand of currentSubStrands) {
+                            fetchPromises.push(CurriculumService.getContentStandardsBySubStrand(lessonData.level, lessonData.subject, strand, subStrand, currentUser.id).catch((err) => {
+                                console.warn("Failed to fetch standards for", strand, subStrand, err);
+                                return []; // Return empty array on failure so one failure doesn't break all
+                            }));
+                        }
+                    }
+                    const results = await Promise.all(fetchPromises);
+                    allStandards = results.flat();
+                    // Deduplicate standards by code
+                    const uniqueStandards = Array.from(new Map(allStandards.map((item) => [item.code, item])).values());
+                    setAvailableContentStandards(uniqueStandards);
+                }
+                else {
+                    setAvailableContentStandards([]);
+                }
+            }
+            else {
+                setAvailableContentStandards([]);
+            }
+        };
+        loadContentStandards();
+    }, [
+        lessonData.subject,
+        lessonData.level,
+        selectedStrands,
+        selectedSubStrands,
+        lessonData.strand,
+        lessonData.subStrand,
+        currentUser,
+    ]);
+    // Show offline alert
+    useEffect(() => {
+        if (!isOnline) {
+            toast({
+                title: "You're Offline",
+                description: "You can continue working. Changes will be saved locally.",
+                variant: "default",
+            });
+        }
+    }, [isOnline]);
+    const validateStep = (step) => {
+        const errors = {};
+        switch (step) {
+            case 0: // Basic Info
+                if (!lessonData.subject)
+                    errors.subject = "Subject is required";
+                if (!lessonData.level)
+                    errors.level = "Class level is required";
+                if (!lessonData.numLessons || lessonData.numLessons < 1) {
+                    errors.numLessons = "At least 1 lesson required";
+                }
+                else if (lessonData.numLessons > 5) {
+                    errors.numLessons = "Maximum 5 lessons allowed";
+                }
+                break;
+            case 1: // Details
+                if (!lessonData.strand)
+                    errors.strand = "Strand is required";
+                if (!lessonData.subStrand)
+                    errors.subStrand = "Sub-strand is required";
+                if (!lessonData.contentStandard)
+                    errors.contentStandard = "Content standard is required";
+                break;
+        }
+        setValidationErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
+    const nextStep = () => {
+        if (validateStep(currentStep)) {
+            setCurrentStep((prev) => Math.min(prev + 1, STEPS.length - 1));
+        }
+        else {
+            toast({
+                title: "Validation Error",
+                description: "Please fill in all required fields before proceeding.",
+                variant: "destructive",
+            });
+        }
+    };
+    const prevStep = () => {
+        setCurrentStep((prev) => Math.max(prev - 1, 0));
+    };
+    // Check if payment is required before generating
+    const initiateGeneration = async () => {
+        if (!validateStep(currentStep))
+            return;
+        if (!isOnline) {
+            toast({
+                title: "No Internet Connection",
+                description: "Please connect to the internet to generate lesson notes.",
+                variant: "destructive",
+            });
+            return;
+        }
+        // Check if payment is required
+        const { required } = await checkPaymentRequired();
+        if (required) {
+            // Show payment wall
+            setShowPaymentWall(true);
+        }
+        else {
+            // Proceed directly to generation (admin/exempt user)
+            handleGenerate();
+        }
+    };
+    // Called after payment is confirmed or if user is exempt
+    const handleGenerate = async () => {
+        setShowPaymentWall(false);
+        setIsGenerating(true);
+        try {
+            // Fetch timetable configuration if available
+            let scheduledDays;
+            let numLessonsFromTimetable;
+            let classSizeFromTimetable;
+            try {
+                // Only check for timetable matches if this is coming from a Scheme context
+                // Otherwise, trust the user's manual input (Generic Generation)
+                if (currentUser &&
+                    lessonData.level &&
+                    lessonData.subject &&
+                    isFromScheme) {
+                    // Use the new ROBUST fuzzy finder instead of strict getTimetable
+                    const timetable = await TimetableService.findTimetable(currentUser.id, lessonData.level, lessonData.term || "First Term");
+                    if (timetable) {
+                        // Valid timetable found!
+                        console.log("Timetable loaded:", timetable.class_level);
+                        // Get Class Size
+                        if (timetable.class_size) {
+                            classSizeFromTimetable = timetable.class_size.toString();
+                        }
+                        // Get Subject Config
+                        if (timetable.subject_config) {
+                            let subjectConfig = timetable.subject_config[lessonData.subject];
+                            // If no exact match, try robust fuzzy matching
+                            if (!subjectConfig) {
+                                const targetSubject = lessonData.subject.toLowerCase().trim();
+                                // Priority 1: Check for exact word containment (e.g. "Creative Arts" in "Creative Arts & Design")
+                                // But avoid partial word matches (e.g. "Art" in "Language Arts") if possible.
+                                let bestMatchKey = "";
+                                let bestMatchScore = 0;
+                                Object.keys(timetable.subject_config).forEach((key) => {
+                                    const k = key.toLowerCase().trim();
+                                    let score = 0;
+                                    // Exact match (already checked above, but good for completeness)
+                                    if (k === targetSubject)
+                                        score = 100;
+                                    // "Creative Arts" specific handling
+                                    else if ((targetSubject === "creative arts" ||
+                                        targetSubject === "creative arts & design") &&
+                                        k.includes("creative") &&
+                                        k.includes("arts")) {
+                                        score = 95;
+                                    }
+                                    // "History" specific handling
+                                    else if (targetSubject.includes("history") &&
+                                        k.includes("history")) {
+                                        score = 90;
+                                    }
+                                    // Containment with word boundaries
+                                    else if (k.includes(targetSubject) ||
+                                        targetSubject.includes(k)) {
+                                        // Penalize very short matches to avoid "Art" matching "Earth" or "Language Arts"
+                                        if (k.length > 3 && targetSubject.length > 3) {
+                                            score = 50;
+                                            // Boost if it's a prefix match (e.g. "Math" matches "Mathematics")
+                                            if (k.startsWith(targetSubject) ||
+                                                targetSubject.startsWith(k))
+                                                score += 20;
+                                            // Boost if it's "Our World Our People" matching "OWOP" or key words
+                                            if (targetSubject.includes("world") &&
+                                                k.includes("world"))
+                                                score += 30;
+                                        }
+                                    }
+                                    if (score > bestMatchScore) {
+                                        bestMatchScore = score;
+                                        bestMatchKey = key;
+                                    }
+                                });
+                                if (bestMatchKey && bestMatchScore > 0) {
+                                    subjectConfig = timetable.subject_config[bestMatchKey];
+                                    console.log(`Fuzzy matched timetable subject: '${bestMatchKey}' for '${lessonData.subject}' (Score: ${bestMatchScore})`);
+                                }
+                            }
+                            if (subjectConfig) {
+                                // CRITICAL: Ensure we actually capture the days!
+                                if (subjectConfig.days &&
+                                    Array.isArray(subjectConfig.days) &&
+                                    subjectConfig.days.length > 0) {
+                                    scheduledDays = [...subjectConfig.days]; // Clone to ensure no ref issues
+                                    console.log("Found scheduled days:", scheduledDays);
+                                    // Notify user explicitly about the schedule found
+                                    toast({
+                                        title: "📅 Schedule Match Found!",
+                                        description: `Using ${lessonData.subject} schedule: ${scheduledDays.join(" & ")}.`,
+                                        duration: 5000,
+                                        className: "bg-blue-50 border-l-4 border-blue-500 text-blue-800",
+                                    });
+                                }
+                                else {
+                                    console.warn("Timetable entry found but NO DAYS configured:", subjectConfig);
+                                }
+                                if (subjectConfig.frequency) {
+                                    numLessonsFromTimetable = subjectConfig.frequency;
+                                }
+                                if (scheduledDays && scheduledDays.length > 0) {
+                                    /* Toast moved to earlier block for better visibility */
+                                }
+                                else {
+                                    // Explicit warning if subject found but days missing
+                                    toast({
+                                        title: "Timetable Warning",
+                                        description: `Found configuration for ${lessonData.subject} but no days are selected. Using default schedule.`,
+                                        duration: 4000,
+                                        variant: "destructive",
+                                    });
+                                }
+                                console.log("Using timetable:", {
+                                    scheduledDays,
+                                    numLessonsFromTimetable,
+                                    classSizeFromTimetable,
+                                });
+                            }
+                            else {
+                                // Subject not found in config
+                                /* Optional: Warn user if in debug mode
+                
+                                    console.log(`No timetable config found for subject: ${lessonData.subject}`);
+                                    */
+                            }
+                        }
+                    }
+                    else {
+                        console.log("Timetable not found for", {
+                            userId: currentUser.id,
+                            level: lessonData.level,
+                            term: lessonData.term,
+                        });
+                    }
+                }
+            }
+            catch (ttError) {
+                console.warn("Failed to fetch timetable, proceeding with defaults", ttError);
+            }
+            // Ensure consistency: If we found specific days, the number of lessons should match
+            // BUT if the user manually typed a number of lessons, we should respect that over the timetable frequency
+            // unless the timetable explicitly has days selected.
+            const userNumLessons = lessonData.numLessons;
+            const finalNumLessons = scheduledDays && scheduledDays.length > 0
+                ? scheduledDays.length
+                : userNumLessons && userNumLessons > 1
+                    ? userNumLessons
+                    : numLessonsFromTimetable || 1;
+            // Force default days to be the scheduled days if available, to prevent AI hallucination
+            // If we have scheduledDays, we pass them. The AI prompt logic will use them.
+            const dataWithTemplate = {
+                ...lessonData,
+                // Priority: Timetable Days count -> Timetable Freq -> Manual Input -> Default 1
+                numLessons: finalNumLessons,
+                scheduledDays: scheduledDays,
+                classSize: classSizeFromTimetable || lessonData.classSize,
+                template: selectedTemplate || undefined,
+                // IMPORTANT: If we have scheduled days, FORCE the 'weekEnding' logic or others to align if needed?
+                // No, weekEnding is a date.
+                selectedCurriculumFiles: selectedCurriculumFiles.length > 0
+                    ? selectedCurriculumFiles
+                    : undefined,
+                selectedResourceFiles: selectedResourceFiles.length > 0 ? selectedResourceFiles : undefined,
+            };
+            const generatedContent = await generateLessonNote(dataWithTemplate);
+            // Deduct payment after successful generation
+            // Estimate tokens used (based on content length - rough approximation)
+            const estimatedTokens = Math.max(4000, Math.ceil(generatedContent.length / 4) + 1500);
+            const paymentResult = await deductPayment(estimatedTokens, "lesson_note", finalNumLessons);
+            if (!paymentResult.success &&
+                paymentResult.error?.includes("Insufficient")) {
+                // This shouldn't happen if PaymentWall worked correctly, but handle it
+                toast({
+                    title: "Payment Error",
+                    description: paymentResult.error,
+                    variant: "destructive",
+                });
+                setIsGenerating(false);
+                return;
+            }
+            // Save lesson note to database
+            const { data: { user }, } = await supabase.auth.getUser();
+            if (user) {
+                await LessonNotesService.saveLessonNote(user.id, dataWithTemplate, generatedContent, selectedTemplate?.id);
+            }
+            // Store generated content
+            sessionStorage.setItem("generatedLessonNote", generatedContent);
+            sessionStorage.setItem("lessonData", JSON.stringify({
+                ...lessonData,
+                templateName: selectedTemplate?.name,
+            }));
+            if (selectedTemplate) {
+                sessionStorage.setItem("selectedTemplate", JSON.stringify(selectedTemplate));
+            }
+            // Clear draft after successful generation
+            clearDraft();
+            toast({
+                title: "Success!",
+                description: "Your lesson note has been generated successfully.",
+            });
+            navigate("/download");
+        }
+        catch (error) {
+            console.error("Generation error:", error);
+            // Check if it's an API key configuration error - don't retry those
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const isConfigError = errorMessage.toLowerCase().includes("api key") ||
+                errorMessage.toLowerCase().includes("not configured");
+            if (isConfigError) {
+                // Configuration errors should not be retried
+                toast({
+                    title: "Configuration Error",
+                    description: "API key is not configured. Please contact the administrator.",
+                    variant: "destructive",
+                });
+                setRetryCount(0);
+            }
+            else if (retryCount < 2) {
+                // Only retry transient errors
+                toast({
+                    title: "Generation Failed",
+                    description: `Retrying... (Attempt ${retryCount + 2} of 3)`,
+                    variant: "default",
+                });
+                setRetryCount((prev) => prev + 1);
+                // Retry handleGenerate directly, not initiateGeneration (which would check payment again)
+                setTimeout(() => handleGenerate(), 2000);
+            }
+            else {
+                toast({
+                    title: "Generation Failed",
+                    description: errorMessage || "An error occurred. Please try again.",
+                    variant: "destructive",
+                    action: (_jsx(Button, { variant: "outline", size: "sm", onClick: () => {
+                            setRetryCount(0);
+                            initiateGeneration();
+                        }, children: "Retry" })),
+                });
+                setRetryCount(0);
+            }
+        }
+        finally {
+            setIsGenerating(false);
+        }
+    };
+    const handleDetectLocation = () => {
+        if (!navigator.geolocation) {
+            toast({
+                title: "Geolocation not supported",
+                description: "Your browser does not support geolocation.",
+                variant: "destructive",
+            });
+            return;
+        }
+        toast({
+            title: "Detecting location...",
+            description: "Please allow location access if prompted.",
+        });
+        navigator.geolocation.getCurrentPosition(async (position) => {
+            try {
+                const { latitude, longitude } = position.coords;
+                // Use OpenStreetMap Nominatim API for reverse geocoding (free, no key required)
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+                const data = await response.json();
+                const city = data.address.city ||
+                    data.address.town ||
+                    data.address.village ||
+                    data.address.county;
+                const region = data.address.state || data.address.region;
+                const locationString = [city, region].filter(Boolean).join(", ");
+                if (locationString) {
+                    setLessonData({ ...lessonData, location: locationString });
+                    toast({
+                        title: "Location detected",
+                        description: `Set location to: ${locationString}`,
+                    });
+                }
+                else {
+                    setLessonData({
+                        ...lessonData,
+                        location: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+                    });
+                    toast({
+                        title: "Location detected",
+                        description: "Coordinates set. You can edit the location name manually.",
+                    });
+                }
+            }
+            catch (error) {
+                console.error("Error fetching location name:", error);
+                toast({
+                    title: "Could not get location name",
+                    description: "Please enter your location manually.",
+                    variant: "destructive",
+                });
+            }
+        }, (error) => {
+            console.error("Geolocation error:", error);
+            toast({
+                title: "Location detection failed",
+                description: "Please enter your location manually.",
+                variant: "destructive",
+            });
+        });
+    };
+    const handlePasteCurriculum = async () => {
+        if (!pastedText.trim())
+            return;
+        setIsParsingPaste(true);
+        try {
+            const parsed = await parseCurriculumPaste(pastedText);
+            setLessonData({
+                ...lessonData,
+                strand: parsed.strand || lessonData.strand,
+                subStrand: parsed.subStrand || lessonData.subStrand,
+                contentStandard: parsed.contentStandard || lessonData.contentStandard,
+                exemplars: parsed.exemplars || lessonData.exemplars,
+            });
+            toast({
+                title: "Curriculum Data Applied",
+                description: "The pasted content has been filled into the form.",
+            });
+            setIsPasteDialogOpen(false);
+            setPastedText("");
+        }
+        catch (error) {
+            toast({
+                title: "Parsing Failed",
+                description: "Could not parse the text. Please fill the fields manually.",
+                variant: "destructive",
+            });
+        }
+        finally {
+            setIsParsingPaste(false);
+        }
+    };
+    // Update lessonData.indicators when selectedIndicators changes and filter exemplars
+    useEffect(() => {
+        // 1. Sync state to lessonData
+        if (selectedIndicators.length > 0) {
+            setLessonData((prev) => ({
+                ...prev,
+                indicators: selectedIndicators.join("\n"),
+            }));
+        }
+        // 2. Filter Exemplars
+        if (selectedIndicators.length > 0 && availableContentStandards.length > 0) {
+            // Handle multiple content standards
+            const currentStandards = selectedContentStandards.length > 0
+                ? selectedContentStandards
+                : lessonData.contentStandard
+                    ? lessonData.contentStandard.split("\n").filter(Boolean)
+                    : [];
+            const relevantExemplars = new Set();
+            let hasMapping = false;
+            currentStandards.forEach((stdString) => {
+                // Precise match against available standards
+                const selectedStandard = availableContentStandards.find((cs) => stdString === `${cs.code}: ${cs.description}` ||
+                    stdString.startsWith(`${cs.code}:`));
+                if (selectedStandard &&
+                    selectedStandard.mappings &&
+                    selectedStandard.mappings.length > 0) {
+                    hasMapping = true;
+                    selectedStandard.mappings.forEach((mapping) => {
+                        // Robust matching: check if any of the mapping's indicators match selected indicators
+                        const indicatorsMatch = mapping.indicators.some((ind) => {
+                            const indNorm = ind.toLowerCase().trim();
+                            return selectedIndicators.some((sel) => sel.toLowerCase().trim().includes(indNorm) ||
+                                indNorm.includes(sel.toLowerCase().trim()));
+                        });
+                        if (indicatorsMatch) {
+                            mapping.exemplars.forEach((ex) => relevantExemplars.add(ex));
+                        }
+                    });
+                }
+            });
+            if (relevantExemplars.size > 0) {
+                const newExemplars = Array.from(relevantExemplars);
+                setAvailableExemplars(newExemplars);
+                // Also filter selected exemplars to only those that are valid
+                setSelectedExemplars((prev) => prev.filter((ex) => newExemplars.includes(ex)));
+            }
+            else {
+                // Fallback logic
+                if (hasMapping) {
+                    // Mappings exist but no exemplars matched.
+                }
+                else {
+                    // No mappings found at all, just show all exemplars from the standard(s)
+                    const allExemplars = new Set();
+                    currentStandards.forEach((stdString) => {
+                        const selectedStandard = availableContentStandards.find((cs) => stdString.startsWith(cs.code));
+                        if (selectedStandard && selectedStandard.exemplars) {
+                            selectedStandard.exemplars.forEach((ex) => allExemplars.add(ex));
+                        }
+                    });
+                    setAvailableExemplars(Array.from(allExemplars));
+                }
+            }
+        }
+        else {
+            // If no indicators selected, we might want to clear selected exemplars
+            if (!selectedIndicators || selectedIndicators.length === 0) {
+                setSelectedExemplars([]);
+            }
+        }
+    }, [
+        selectedIndicators,
+        availableContentStandards,
+        selectedContentStandards,
+        lessonData.contentStandard,
+    ]);
+    // Update lessonData.exemplars when selectedExemplars changes
+    useEffect(() => {
+        if (selectedExemplars.length > 0) {
+            setLessonData((prev) => ({
+                ...prev,
+                exemplars: selectedExemplars.join("\n"),
+            }));
+        }
+        else if (availableExemplars.length > 0 &&
+            selectedExemplars.length === 0) {
+            // If user unchecks everything, clear the field
+            setLessonData((prev) => ({ ...prev, exemplars: "" }));
+        }
+    }, [selectedExemplars, availableExemplars]);
+    // Auto-populate available indicators/exemplars if content standard matches (Legacy/Single Select)
+    useEffect(() => {
+        // SKIP this effect if we are using the new multi-select mode
+        if (selectedContentStandards.length > 0)
+            return;
+        if (lessonData.contentStandard && availableContentStandards.length > 0) {
+            const selected = availableContentStandards.find((cs) => lessonData.contentStandard === cs.code ||
+                lessonData.contentStandard.startsWith(`${cs.code}:`) ||
+                lessonData.contentStandard.startsWith(`${cs.code} `));
+            if (selected) {
+                setAvailableIndicators(selected.indicators || []);
+                setAvailableExemplars([]); // Start empty, wait for indicators
+                // Try to sync existing text data to selections
+                if (lessonData.indicators) {
+                    const existing = lessonData.indicators
+                        .split("\n")
+                        .map((s) => s.trim());
+                    const matches = (selected.indicators || []).filter((i) => existing.some((e) => i.includes(e) || e.includes(i)));
+                    if (matches.length > 0)
+                        setSelectedIndicators(matches);
+                }
+                if (lessonData.exemplars) {
+                    const existing = lessonData.exemplars
+                        .split("\n")
+                        .map((s) => s.trim());
+                    const matches = (selected.exemplars || []).filter((e) => existing.some((ex) => e.includes(ex) || ex.includes(e)));
+                    if (matches.length > 0)
+                        setSelectedExemplars(matches);
+                }
+            }
+        }
+        else if (lessonData.exemplars && availableExemplars.length === 0) {
+            // Fallback: If we have exemplars in lessonData (e.g. from Scheme) but none in the curriculum DB,
+            // parse the text and use it as the "available" list so the user can interact with it as a checklist.
+            const parsed = lessonData.exemplars
+                .split(/\n|•|;|\r|\d+\.\s/)
+                .map((e) => e.trim())
+                .filter((e) => e.length > 0);
+            if (parsed.length > 0) {
+                setAvailableExemplars(parsed);
+                setSelectedExemplars(parsed);
+            }
+        }
+    }, [
+        lessonData.contentStandard,
+        availableContentStandards,
+        lessonData.exemplars,
+        selectedContentStandards,
+    ]);
+    // Handle data from Scheme of Learning
+    useEffect(() => {
+        if (location.state?.fromScheme && location.state?.schemeData) {
+            const { schemeData } = location.state;
+            console.log("Loading scheme data:", schemeData);
+            setIsFromScheme(true);
+            // We need to ensure we don't overwrite if the user has already started editing
+            // But since they just clicked "Generate" from the scheme page, we probably SHOULD overwrite.
+            setLessonData((prev) => ({
+                ...prev,
+                term: schemeData.term || prev.term,
+                weekNumber: schemeData.weekNumber || prev.weekNumber,
+                weekEnding: schemeData.weekEnding || prev.weekEnding,
+                subject: schemeData.subject || prev.subject,
+                level: schemeData.level || prev.level,
+                strand: schemeData.strand || prev.strand,
+                subStrand: schemeData.subStrand || prev.subStrand,
+                contentStandard: schemeData.contentStandard || prev.contentStandard,
+                indicators: schemeData.indicators || prev.indicators,
+                exemplars: schemeData.exemplars || prev.exemplars,
+                schemeResources: schemeData.resources || undefined,
+            }));
+            toast({
+                title: "Scheme Data Loaded",
+                description: `Loaded data for ${schemeData.weekNumber} - ${schemeData.subject}`,
+            });
+            // Clear the state to prevent re-loading on simple refreshes if desired,
+            // but actually we want it to persist if they refresh immediately.
+            // We can leave it.
+        }
+        else if (location.state?.restoreData) {
+            const { restoreData, autoGenerate } = location.state;
+            console.log("Restoring lesson data:", restoreData);
+            setLessonData((prev) => ({
+                ...prev,
+                ...restoreData,
+            }));
+            if (restoreData.templateName) {
+                const t = lessonTemplates.find((lt) => lt.name === restoreData.templateName);
+                if (t)
+                    setSelectedTemplate(t);
+            }
+            toast({
+                title: "Data Restored",
+                description: "Your previous lesson settings have been restored.",
+            });
+            // If auto-generate is requested, move to review step
+            if (autoGenerate) {
+                setCurrentStep(2);
+            }
+        }
+    }, [location.state]);
+    // Scroll to top when step changes
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    }, [currentStep]);
+    // Load scheme data
+    useEffect(() => {
+        const saved = localStorage.getItem("scheme_of_learning_data");
+        if (saved) {
+            try {
+                setSchemeItems(JSON.parse(saved));
+            }
+            catch (e) {
+                console.error(e);
+            }
+        }
+    }, []);
+    const handleApplyScheme = async (item) => {
+        setIsFromScheme(true);
+        // Helper to clean "STRAND X:" prefixes
+        const cleanPrefix = (str) => {
+            if (!str)
+                return "";
+            // Removes "STRAND 1: ", "STRAND ONE (1): ", "Sub-strand 2: " etc.
+            return str.replace(/^(STRAND|SUB-STRAND)\s+\w+(\s+\(\d+\))?:\s*/i, "");
+        };
+        // 1. Apply basic data immediately
+        setLessonData((prev) => ({
+            ...prev,
+            level: item.classLevel || prev.level,
+            subject: item.subject || prev.subject,
+            term: item.term || prev.term,
+            weekNumber: item.week || prev.weekNumber,
+            weekEnding: item.weekEnding || prev.weekEnding,
+            strand: cleanPrefix(item.strand) || prev.strand,
+            subStrand: cleanPrefix(item.subStrand) || prev.subStrand,
+            contentStandard: item.contentStandard || prev.contentStandard,
+            indicators: item.indicators || prev.indicators,
+            exemplars: item.exemplars || prev.exemplars,
+            schemeResources: item.resources || "",
+        }));
+        // Clear errors
+        setValidationErrors({ ...validationErrors, level: "", subject: "" });
+        setIsSchemeDialogOpen(false);
+        toast({
+            title: "Scheme Data Loaded",
+            description: `Loaded ${item.subject} Week ${item.week}`,
+        });
+        // 2. Try to find better exemplars from the uploaded curriculum
+        if (item.contentStandard && item.classLevel && item.subject) {
+            toast({
+                title: "Looking up details...",
+                description: "Checking curriculum for specific exemplars...",
+            });
+            try {
+                const foundExemplars = await CurriculumService.findRelatedExemplars(currentUser?.id, item.classLevel, item.subject, item.contentStandard);
+                if (foundExemplars && foundExemplars.length > 0) {
+                    setAvailableExemplars(foundExemplars);
+                    // Don't auto-select, let user choose. Or maybe auto-select if empty?
+                    // Currently we keep the scheme's text as default.
+                    toast({
+                        title: "Exemplars Found",
+                        description: `Found ${foundExemplars.length} matching exemplars.`,
+                    });
+                }
+                else {
+                    setAvailableExemplars([]);
+                }
+            }
+            catch (err) {
+                console.error("Failed exemplar lookup", err);
+            }
+        }
+    };
+    const filteredSchemeItems = schemeItems.filter((item) => {
+        if (!schemeSearch)
+            return true;
+        const search = schemeSearch.toLowerCase();
+        return (item.subject?.toLowerCase().includes(search) ||
+            item.week?.toLowerCase().includes(search) ||
+            item.classLevel?.toLowerCase().includes(search) ||
+            item.strand?.toLowerCase().includes(search));
+    });
+    // Sync lessonData string fields to array state on load
+    useEffect(() => {
+        const strFromState = selectedStrands.join("\n");
+        if (lessonData.strand && lessonData.strand !== strFromState) {
+            // Only update if they really differ (avoid clearing if user just cleared state)
+            // But we assume lessonData is source of truth
+            setSelectedStrands(lessonData.strand.split("\n").filter(Boolean));
+        }
+    }, [lessonData.strand]);
+    useEffect(() => {
+        const strFromState = selectedSubStrands.join("\n");
+        if (lessonData.subStrand && lessonData.subStrand !== strFromState) {
+            setSelectedSubStrands(lessonData.subStrand.split("\n").filter(Boolean));
+        }
+    }, [lessonData.subStrand]);
+    useEffect(() => {
+        const strFromState = selectedContentStandards.join("\n");
+        if (lessonData.contentStandard &&
+            lessonData.contentStandard !== strFromState) {
+            setSelectedContentStandards(lessonData.contentStandard.split("\n").filter(Boolean));
+        }
+    }, [lessonData.contentStandard]);
+    if (isLoading) {
+        return _jsx(GeneratorSkeleton, {});
+    }
+    return (_jsx(TooltipProvider, { children: _jsxs("div", { className: "min-h-screen bg-background text-foreground flex flex-col font-sans", children: [_jsx(Navbar, {}), showPaymentWall && (_jsx(PaymentWall, { numLessons: lessonData.numLessons || 1, onPaymentComplete: handleGenerate, onCancel: () => setShowPaymentWall(false) })), (!isOnline || lastSaved) && (_jsxs("div", { className: "bg-accent/10 border-b border-border/40 backdrop-blur-md px-4 py-2 text-center text-xs text-muted-foreground flex flex-wrap justify-center gap-x-4 gap-y-1", children: [!isOnline && (_jsxs("span", { className: "flex items-center gap-1", children: [_jsx(WifiOff, { className: "h-3 w-3" }), " Offline"] })), lastSaved && (_jsx("span", { children: isSaving
+                                ? "Saving..."
+                                : `Draft Saved ${new Date(lastSaved).toLocaleTimeString()}` }))] })), _jsx("main", { className: "container mx-auto px-4 py-8 sm:py-12 max-w-[80rem] flex-grow", children: _jsxs("div", { className: "mx-auto max-w-4xl", children: [_jsxs("div", { className: "mb-12 sm:mb-16 text-center px-4 flex flex-col items-center max-w-3xl mx-auto", children: [_jsx("div", { className: "mb-6 inline-flex items-center justify-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-semibold text-primary shadow-sm backdrop-blur-md animate-fade-in-up", children: "AI Generator" }), _jsx("h2", { className: "mb-4 text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.1]", children: "Create Your Lesson Note" }), _jsx("p", { className: "text-base sm:text-lg text-muted-foreground font-medium max-w-xl mx-auto", children: "Follow the steps below to generate a professional lesson note" }), _jsx("div", { className: "mt-8 flex w-full sm:w-auto justify-center", children: _jsxs(Button, { variant: "outline", onClick: () => navigate("/schemes"), className: "gap-2 w-full sm:w-auto rounded-full shadow-sm hover:bg-secondary/10 transition-colors", children: [_jsx(BookOpen, { className: "h-4 w-4" }), "Manage Schemes of Learning"] }) })] }), _jsx("div", { className: "mb-6 sm:mb-8 overflow-x-auto px-2", children: _jsx(Stepper, { className: "mb-10", steps: STEPS, currentStep: currentStep }) }), _jsx(Card, { className: "p-4 sm:p-6 lg:p-8 group relative overflow-hidden rounded-2xl border border-secondary/20 bg-background/50 backdrop-blur-sm transition-all shadow-xl", children: _jsxs("div", { className: "space-y-4 sm:space-y-6", children: [currentStep === 0 && (_jsx(BasicInfoStep, { lessonData: lessonData, 
+                                            // Pass the setter directly so functional updates work in child
+                                            setLessonData: setLessonData, availableLevels: availableLevels, availableSubjects: availableSubjects, userProfile: userProfile, validationErrors: validationErrors, setValidationErrors: setValidationErrors, handleDetectLocation: handleDetectLocation })), currentStep === 1 && (_jsxs("div", { className: "space-y-4 sm:space-y-6 animate-in fade-in-50 duration-500", children: [_jsxs("div", { className: "flex items-center justify-between", children: [_jsx("h3", { className: "text-lg sm:text-xl font-semibold", children: "Lesson Details" }), _jsxs(Dialog, { open: isPasteDialogOpen, onOpenChange: setIsPasteDialogOpen, children: [_jsx(DialogTrigger, { asChild: true, children: _jsxs(Button, { variant: "outline", size: "sm", className: "gap-2", children: [_jsx(ClipboardPaste, { className: "h-4 w-4" }), _jsx("span", { className: "hidden sm:inline", children: "Paste Curriculum" }), _jsx("span", { className: "sm:hidden", children: "Paste" })] }) }), _jsxs(DialogContent, { children: [_jsxs(DialogHeader, { children: [_jsx(DialogTitle, { children: "Paste Curriculum Details" }), _jsx(DialogDescription, { children: "Paste the Strand, Sub-strand, Content Standard, and Indicators from your document here. AI will try to fill the form for you." })] }), _jsx(Textarea, { value: pastedText, onChange: (e) => setPastedText(e.target.value), placeholder: "Paste text here...", className: "min-h-[200px]" }), _jsxs(DialogFooter, { children: [_jsx(Button, { variant: "outline", onClick: () => setIsPasteDialogOpen(false), children: "Cancel" }), _jsx(Button, { onClick: handlePasteCurriculum, disabled: isParsingPaste, children: isParsingPaste ? "Parsing..." : "Apply to Form" })] })] })] })] }), _jsxs("div", { className: "flex items-center space-x-2 bg-muted/30 p-3 rounded-lg border border-border/50", children: [_jsx(Checkbox, { id: "manual-mode", checked: isManualCurriculum, onCheckedChange: (checked) => setIsManualCurriculum(checked) }), _jsx(Label, { htmlFor: "manual-mode", className: "text-sm font-medium cursor-pointer", children: "Manually enter curriculum standards (Strand, Sub-strand, etc.)" })] }), _jsxs("div", { className: "grid gap-4 sm:gap-6", children: [_jsxs("div", { className: "bg-card p-4 sm:p-5 rounded-xl border shadow-md hover:shadow-lg transition-shadow duration-200 space-y-3", children: [_jsx(Label, { htmlFor: "strand", className: "text-base font-semibold text-primary", children: "Strands *" }), !isManualCurriculum &&
+                                                                    availableStrands.length === 0 && (_jsx("div", { className: "text-xs text-amber-600 dark:text-amber-400 mb-2 bg-amber-50 dark:bg-amber-950/30 p-2 rounded border border-amber-200 dark:border-amber-800", children: "No strands found? Please select a valid subject/level combination." })), isManualCurriculum ? (_jsx(Textarea, { id: "strand", placeholder: "Enter strands (one per line)...", value: lessonData.strand, onChange: (e) => {
+                                                                        setLessonData({
+                                                                            ...lessonData,
+                                                                            strand: e.target.value,
+                                                                        });
+                                                                        setValidationErrors({
+                                                                            ...validationErrors,
+                                                                            strand: "",
+                                                                        });
+                                                                    }, rows: 3 })) : (_jsxs(_Fragment, { children: [_jsx(MultiSelectCombobox, { options: availableStrands.map((s) => s.label), selected: selectedStrands, onChange: (newSelection) => {
+                                                                                setSelectedStrands(newSelection);
+                                                                                // Join with newlines for backend
+                                                                                const newStrandString = newSelection.join("\n");
+                                                                                setLessonData({
+                                                                                    ...lessonData,
+                                                                                    strand: newStrandString,
+                                                                                    // Don't necessarily clear sub-strands, but they might be invalid now.
+                                                                                    // For safety, we keep them, assuming the user is building up a complex lesson.
+                                                                                });
+                                                                                // Let the downstream effects handle loading sub-strands
+                                                                                setValidationErrors({
+                                                                                    ...validationErrors,
+                                                                                    strand: "",
+                                                                                });
+                                                                            }, placeholder: "Select strands...", searchPlaceholder: "Search strands...", emptyText: !lessonData.subject || !lessonData.level
+                                                                                ? "Select subject and level first"
+                                                                                : "No strands found." }), _jsx("p", { className: "text-xs text-muted-foreground", children: "You can select multiple strands." })] })), validationErrors.strand && (_jsx("p", { className: "text-sm text-destructive", children: validationErrors.strand }))] }), _jsxs("div", { className: "bg-card p-4 sm:p-5 rounded-xl border shadow-md hover:shadow-lg transition-shadow duration-200 space-y-3", children: [_jsx(Label, { htmlFor: "subStrand", className: "text-base font-semibold text-primary", children: "Sub-Strands *" }), isManualCurriculum ? (_jsx(Textarea, { id: "subStrand", placeholder: "Enter sub-strands (one per line)...", value: lessonData.subStrand, onChange: (e) => {
+                                                                        setLessonData({
+                                                                            ...lessonData,
+                                                                            subStrand: e.target.value,
+                                                                        });
+                                                                        setValidationErrors({
+                                                                            ...validationErrors,
+                                                                            subStrand: "",
+                                                                        });
+                                                                    }, rows: 3 })) : (_jsxs(_Fragment, { children: [_jsx(MultiSelectCombobox, { options: availableSubStrands.map((s) => s.label), selected: selectedSubStrands, onChange: (newSelection) => {
+                                                                                setSelectedSubStrands(newSelection);
+                                                                                // Join with newlines
+                                                                                const newSubStrandString = newSelection.join("\n");
+                                                                                setLessonData({
+                                                                                    ...lessonData,
+                                                                                    subStrand: newSubStrandString,
+                                                                                });
+                                                                                setValidationErrors({
+                                                                                    ...validationErrors,
+                                                                                    subStrand: "",
+                                                                                });
+                                                                            }, placeholder: "Select sub-strands...", searchPlaceholder: "Search sub-strands...", disabled: selectedStrands.length === 0, emptyText: selectedStrands.length === 0
+                                                                                ? "Select a strand first"
+                                                                                : "No sub-strands found." }), _jsx("p", { className: "text-xs text-muted-foreground", children: "You can select multiple sub-strands." })] })), validationErrors.subStrand && (_jsx("p", { className: "text-sm text-destructive", children: validationErrors.subStrand }))] })] }), _jsxs("div", { className: "bg-card p-4 sm:p-5 rounded-xl border shadow-md hover:shadow-lg transition-shadow duration-200 space-y-3", children: [_jsx(Label, { htmlFor: "contentStandard", className: "text-base font-semibold text-primary", children: "Content Standards *" }), _jsx("div", { className: "bg-muted/30 rounded-lg border border-border/50 p-3 sm:p-4", children: isManualCurriculum ? (_jsx(Textarea, { id: "contentStandard", placeholder: "Enter content standards (one per line)...", value: lessonData.contentStandard, onChange: (e) => {
+                                                                    setLessonData({
+                                                                        ...lessonData,
+                                                                        contentStandard: e.target.value,
+                                                                    });
+                                                                    setValidationErrors({
+                                                                        ...validationErrors,
+                                                                        contentStandard: "",
+                                                                    });
+                                                                }, rows: 3 })) : (_jsxs(_Fragment, { children: [_jsx(MultiSelectCombobox, { options: availableContentStandards.map((cs) => {
+                                                                            let label = `${cs.code}: ${cs.description}`;
+                                                                            if (cs.page_reference) {
+                                                                                label += ` (${cs.page_reference})`;
+                                                                            }
+                                                                            return label;
+                                                                        }), selected: selectedContentStandards, onChange: (newSelection) => {
+                                                                            setSelectedContentStandards(newSelection);
+                                                                            // Join with newlines
+                                                                            const newStandardString = newSelection.join("\n");
+                                                                            // Load related indicators for ALL selected standards
+                                                                            let combinedIndicators = [];
+                                                                            let pageRefs = [];
+                                                                            newSelection.forEach((val) => {
+                                                                                const selected = availableContentStandards.find((cs) => {
+                                                                                    let label = `${cs.code}: ${cs.description}`;
+                                                                                    if (cs.page_reference) {
+                                                                                        label += ` (${cs.page_reference})`;
+                                                                                    }
+                                                                                    return label === val;
+                                                                                });
+                                                                                if (selected) {
+                                                                                    if (selected.page_reference) {
+                                                                                        pageRefs.push(selected.page_reference);
+                                                                                    }
+                                                                                    if (selected.indicators) {
+                                                                                        // Parse and split indicators if they look like "Performance Indicators" list
+                                                                                        const rawIndicators = selected.indicators;
+                                                                                        const parsedIndicators = [];
+                                                                                        rawIndicators.forEach((ind) => {
+                                                                                            // Check if it's the "By the end of the lesson..." generic header with numbered items
+                                                                                            // Or just a numbered list inside strict string
+                                                                                            // Regex: Look for digit-dot-space "1. " or "1.0 " occurring multiple times
+                                                                                            const matches = ind.match(/\d+\.\s+/g);
+                                                                                            if (matches && matches.length >= 1) {
+                                                                                                // It's likely a list. Split it.
+                                                                                                // We split by digit-dot-space, but keep the content.
+                                                                                                // Since JS split consumes the separator, we can use a positive lookahead or just standard split and map.
+                                                                                                // Method: Replace "1. " with "|SPLIT|1. " then split by |SPLIT|
+                                                                                                // This preserves the numbering which is often useful context
+                                                                                                // Remove common header if present
+                                                                                                let cleanInd = ind
+                                                                                                    .replace(/Indicator:?\s*By the end of the lesson.*?able to:?/i, "")
+                                                                                                    .trim();
+                                                                                                // Normalize newlines to spaces for easier splitting if it's just one line
+                                                                                                // cleanInd = cleanInd.replace(/\n/g, " ");
+                                                                                                // If the string starts with a number, or contains them
+                                                                                                const parts = cleanInd
+                                                                                                    .split(/(\d+\.\s+)/)
+                                                                                                    .filter(Boolean);
+                                                                                                // Re-assemble "1. " with "Identify..."
+                                                                                                for (let i = 0; i < parts.length; i++) {
+                                                                                                    if (parts[i].match(/^\d+\.\s+$/) &&
+                                                                                                        parts[i + 1]) {
+                                                                                                        parsedIndicators.push(parts[i + 1].trim());
+                                                                                                        i++;
+                                                                                                    }
+                                                                                                    else if (!parts[i].match(/^\d+\.\s+$/) &&
+                                                                                                        parts[i].length > 5) {
+                                                                                                        // Just a loose string part, maybe the header was left over
+                                                                                                        // parsedIndicators.push(parts[i].trim());
+                                                                                                    }
+                                                                                                }
+                                                                                                // Fallback: If parsing failed to extract meaningful parts (e.g. format wasn't exactly 1.), keep original
+                                                                                                if (parsedIndicators.length === 0)
+                                                                                                    parsedIndicators.push(ind);
+                                                                                            }
+                                                                                            else {
+                                                                                                parsedIndicators.push(ind);
+                                                                                            }
+                                                                                        });
+                                                                                        combinedIndicators = [
+                                                                                            ...combinedIndicators,
+                                                                                            ...parsedIndicators,
+                                                                                        ];
+                                                                                    }
+                                                                                }
+                                                                            });
+                                                                            // Deduplicate
+                                                                            const uniqueIndicators = Array.from(new Set(combinedIndicators));
+                                                                            // Build references string
+                                                                            // Format: "NaCCA [Subject] Curriculum for [Level] pg [Num]"
+                                                                            let referenceText = "";
+                                                                            if (pageRefs.length > 0) {
+                                                                                // De-duplicate pages
+                                                                                const uniquePages = Array.from(new Set(pageRefs)).join(", ");
+                                                                                // Use the currently selected subject and level, defaulting if empty
+                                                                                // Construct string: "NaCCA [Subject] Curriculum for [Level] [Pages]"
+                                                                                // Ensure "pg" prefix is handled if not already in the pageRef
+                                                                                const pagePart = uniquePages.toLowerCase().includes("pg") ||
+                                                                                    uniquePages.toLowerCase().includes("page")
+                                                                                    ? uniquePages
+                                                                                    : `pg ${uniquePages}`;
+                                                                                referenceText = `NaCCA ${lessonData.subject} Curriculum for ${lessonData.level} ${pagePart}`;
+                                                                            }
+                                                                            setLessonData({
+                                                                                ...lessonData,
+                                                                                contentStandard: newStandardString,
+                                                                                exemplars: "",
+                                                                                indicators: "",
+                                                                                references: referenceText, // Auto-fill reference
+                                                                            });
+                                                                            if (uniqueIndicators.length > 0) {
+                                                                                setAvailableIndicators(uniqueIndicators);
+                                                                                setSelectedIndicators([]);
+                                                                                setAvailableExemplars([]);
+                                                                                setSelectedExemplars([]);
+                                                                            }
+                                                                            else {
+                                                                                setAvailableIndicators([]);
+                                                                                setSelectedIndicators([]);
+                                                                                setAvailableExemplars([]);
+                                                                                setSelectedExemplars([]);
+                                                                            }
+                                                                            setValidationErrors({
+                                                                                ...validationErrors,
+                                                                                contentStandard: "",
+                                                                            });
+                                                                        }, placeholder: "Select content standards...", searchPlaceholder: "Search standards...", disabled: selectedSubStrands.length === 0, emptyText: selectedSubStrands.length === 0
+                                                                            ? "Select a sub-strand first"
+                                                                            : "No standards found." }), _jsx("p", { className: "text-xs text-muted-foreground mt-2", children: "Select multiple content standards if needed." })] })) }), validationErrors.contentStandard && (_jsx("p", { className: "text-sm text-destructive", children: validationErrors.contentStandard }))] }), _jsxs("div", { className: "bg-card p-4 sm:p-5 rounded-xl border shadow-md hover:shadow-lg transition-shadow duration-200 space-y-3", children: [_jsxs(Label, { htmlFor: "indicators", className: "text-base font-semibold text-primary flex items-center gap-2", children: ["Learning Indicators", selectedIndicators.length > 0 && (_jsxs("span", { className: "text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full", children: [selectedIndicators.length, " selected"] }))] }), _jsxs("div", { className: "bg-muted/30 rounded-lg border border-border/50 p-3 sm:p-4", children: [availableIndicators.length > 0 &&
+                                                                    !isManualCurriculum ? (_jsx(MultiSelectCombobox, { options: availableIndicators, selected: selectedIndicators, onChange: setSelectedIndicators, placeholder: "Select learning indicators...", searchPlaceholder: "Search indicators...", emptyText: "No indicators found.", maxDisplayed: 3 })) : (_jsx(Textarea, { id: "indicators", placeholder: "Enter learning indicators (e.g., B4.1.2.1.1 - Demonstrate understanding of...)", value: lessonData.indicators, onChange: (e) => setLessonData({
+                                                                        ...lessonData,
+                                                                        indicators: e.target.value,
+                                                                    }), rows: 3, className: "resize-none text-sm bg-background" })), _jsx("p", { className: "mt-2 text-xs text-muted-foreground", children: availableIndicators.length > 0 && !isManualCurriculum
+                                                                        ? "Click to select multiple indicators from your curriculum"
+                                                                        : "No indicators found in curriculum. Enter manually above." })] })] }), _jsxs("div", { className: "bg-card p-4 sm:p-5 rounded-xl border shadow-md hover:shadow-lg transition-shadow duration-200 space-y-3", children: [_jsxs(Label, { htmlFor: "exemplars", className: "text-base font-semibold text-primary flex items-center gap-2", children: ["Exemplars", selectedExemplars.length > 0 && (_jsxs("span", { className: "text-xs bg-secondary/50 text-secondary-foreground px-2 py-0.5 rounded-full", children: [selectedExemplars.length, " selected"] }))] }), _jsxs("div", { className: "bg-muted/30 rounded-lg border border-border/50 p-3 sm:p-4 space-y-3", children: [availableExemplars.length > 0 &&
+                                                                    !isManualCurriculum && (_jsxs("div", { children: [_jsx("p", { className: "text-xs font-medium text-muted-foreground mb-2", children: "Select from curriculum:" }), _jsx(MultiSelectCombobox, { options: availableExemplars, selected: selectedExemplars, onChange: setSelectedExemplars, placeholder: "Select exemplars...", searchPlaceholder: "Search exemplars...", emptyText: "No exemplars found.", maxDisplayed: 2 })] })), _jsxs("div", { children: [_jsx("p", { className: "text-xs font-medium text-muted-foreground mb-2", children: availableExemplars.length > 0 &&
+                                                                                !isManualCurriculum
+                                                                                ? "Or add/edit manually:"
+                                                                                : "Enter exemplars:" }), _jsx(Textarea, { id: "exemplars", placeholder: "E.g., Students will demonstrate ability to identify and explain...", value: lessonData.exemplars, onChange: (e) => setLessonData({
+                                                                                ...lessonData,
+                                                                                exemplars: e.target.value,
+                                                                            }), rows: 3, className: "resize-none text-sm bg-background" })] }), _jsx("p", { className: "text-xs text-muted-foreground", children: availableExemplars.length > 0 && !isManualCurriculum
+                                                                        ? "Combine selected items with manual edits for comprehensive coverage."
+                                                                        : "Describe what learners will be able to do by the end of the lesson." })] })] }), _jsxs("div", { className: "grid gap-6 md:grid-cols-2", children: [_jsxs("div", { className: "space-y-2", children: [_jsxs(Label, { htmlFor: "philosophy", children: ["Teaching Philosophy", _jsxs(Tooltip, { children: [_jsx(TooltipTrigger, { asChild: true, children: _jsx(Info, { className: "h-4 w-4 inline ml-1 text-muted-foreground cursor-help" }) }), _jsx(TooltipContent, { children: _jsx("p", { children: "Select your preferred teaching approach" }) })] })] }), _jsx(Combobox, { options: [
+                                                                        {
+                                                                            value: "student-centered",
+                                                                            label: "Student-Centered (Active Learning)",
+                                                                        },
+                                                                        {
+                                                                            value: "teacher-led",
+                                                                            label: "Teacher-Led (Direct Instruction)",
+                                                                        },
+                                                                        {
+                                                                            value: "balanced",
+                                                                            label: "Balanced (Mixed Approach)",
+                                                                        },
+                                                                        {
+                                                                            value: "inquiry-based",
+                                                                            label: "Inquiry-Based (Discovery Learning)",
+                                                                        },
+                                                                        {
+                                                                            value: "collaborative",
+                                                                            label: "Collaborative (Group Work)",
+                                                                        },
+                                                                    ], value: lessonData.philosophy, onValueChange: (value) => setLessonData({ ...lessonData, philosophy: value }), placeholder: "Select teaching philosophy", searchPlaceholder: "Search philosophies..." })] }), _jsxs("div", { className: "space-y-2", children: [_jsxs(Label, { htmlFor: "detailLevel", children: ["Detail Level", _jsxs(Tooltip, { children: [_jsx(TooltipTrigger, { asChild: true, children: _jsx(Info, { className: "h-4 w-4 inline ml-1 text-muted-foreground cursor-help" }) }), _jsx(TooltipContent, { children: _jsx("p", { children: "How detailed should the lesson note be?" }) })] })] }), _jsx(Combobox, { options: [
+                                                                        {
+                                                                            value: "brief",
+                                                                            label: "Brief (Key Points Only)",
+                                                                        },
+                                                                        {
+                                                                            value: "moderate",
+                                                                            label: "Moderate (Standard Detail)",
+                                                                        },
+                                                                        {
+                                                                            value: "detailed",
+                                                                            label: "Detailed (Comprehensive)",
+                                                                        },
+                                                                        {
+                                                                            value: "very-detailed",
+                                                                            label: "Very Detailed (Extensive)",
+                                                                        },
+                                                                    ], value: lessonData.detailLevel, onValueChange: (value) => setLessonData({ ...lessonData, detailLevel: value }), placeholder: "Select detail level", searchPlaceholder: "Search detail levels..." })] })] }), _jsxs("div", { className: "space-y-2", children: [_jsxs("div", { className: "flex items-center space-x-2", children: [_jsx(Checkbox, { id: "includeDiagrams", checked: lessonData.includeDiagrams, onCheckedChange: (checked) => setLessonData({
+                                                                        ...lessonData,
+                                                                        includeDiagrams: checked,
+                                                                    }) }), _jsxs(Label, { htmlFor: "includeDiagrams", className: "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer", children: ["Include Diagram Outlines", _jsxs(Tooltip, { children: [_jsx(TooltipTrigger, { asChild: true, children: _jsx(Info, { className: "h-4 w-4 inline ml-1 text-muted-foreground cursor-help" }) }), _jsx(TooltipContent, { children: _jsx("p", { children: "Add descriptions of diagrams, charts, or illustrations to include in the lesson" }) })] })] })] }), _jsx("p", { className: "text-xs text-muted-foreground ml-6", children: "When enabled, the lesson note will include outlines and descriptions of diagrams that should be drawn or displayed during the lesson" })] }), _jsxs("div", { className: "space-y-2", children: [_jsx(Label, { htmlFor: "template", children: "Lesson Note Template" }), _jsx(TemplateSelector, { selectedTemplateId: selectedTemplate?.id, onSelectTemplate: setSelectedTemplate }), selectedTemplate && (_jsxs("p", { className: "text-sm text-muted-foreground mt-2", children: ["Selected:", " ", _jsx("span", { className: "font-medium", children: selectedTemplate.name })] }))] })] })), currentStep === 2 && (_jsxs("div", { className: "space-y-6 sm:space-y-8 animate-in fade-in-50 duration-500", children: [_jsxs("div", { children: [_jsx("h3", { className: "text-xl sm:text-2xl font-bold tracking-tight text-foreground", children: "Review Your Information" }), _jsx("p", { className: "text-sm text-muted-foreground mt-1", children: "Please review the details below before generating your lesson note." })] }), _jsxs("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6", children: [_jsxs("div", { className: "bg-card border rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow duration-200", children: [_jsx("h4", { className: "font-semibold text-primary text-sm uppercase tracking-wider mb-4 border-b pb-2", children: "Class Details" }), _jsxs("div", { className: "space-y-3", children: [_jsxs("div", { className: "flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1", children: [_jsx("span", { className: "text-sm text-muted-foreground", children: "Subject" }), _jsx("span", { className: "font-medium text-sm bg-secondary/50 px-2 py-0.5 rounded-md", children: SUBJECTS.find((s) => s.value === lessonData.subject)?.label || lessonData.subject || "Not set" })] }), _jsxs("div", { className: "flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1", children: [_jsx("span", { className: "text-sm text-muted-foreground", children: "Class Level" }), _jsx("span", { className: "font-medium text-sm bg-secondary/50 px-2 py-0.5 rounded-md", children: CLASS_LEVELS.find((l) => l.value === lessonData.level)?.label || lessonData.level || "Not set" })] }), _jsxs("div", { className: "flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1", children: [_jsx("span", { className: "text-sm text-muted-foreground", children: "Class Size" }), _jsx("span", { className: "font-medium text-sm bg-secondary/50 px-2 py-0.5 rounded-md", children: lessonData.classSize || "Not set" })] }), _jsxs("div", { className: "flex flex-col gap-1 border-t pt-2 mt-1", children: [_jsx("span", { className: "text-sm text-muted-foreground", children: "Strand" }), _jsx("span", { className: "font-medium text-sm leading-tight text-foreground/90", children: availableStrands.find((s) => s.value === lessonData.strand)?.label || lessonData.strand || "Not set" })] })] })] }), _jsxs("div", { className: "bg-card border rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow duration-200", children: [_jsx("h4", { className: "font-semibold text-primary text-sm uppercase tracking-wider mb-4 border-b pb-2", children: "Teaching Preferences" }), _jsxs("div", { className: "space-y-3", children: [_jsxs("div", { className: "flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1", children: [_jsx("span", { className: "text-sm text-muted-foreground", children: "Teaching Philosophy" }), _jsx("span", { className: "font-medium text-sm capitalize bg-primary/10 text-primary px-2 py-0.5 rounded-md", children: lessonData.philosophy?.replace("-", " ") || "Balanced" })] }), _jsxs("div", { className: "flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1", children: [_jsx("span", { className: "text-sm text-muted-foreground", children: "Detail Level" }), _jsx("span", { className: "font-medium text-sm capitalize bg-primary/10 text-primary px-2 py-0.5 rounded-md", children: lessonData.detailLevel?.replace("-", " ") || "Moderate" })] }), _jsxs("div", { className: "flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1", children: [_jsx("span", { className: "text-sm text-muted-foreground", children: "Diagram Outlines" }), _jsx("span", { className: `font-medium text-sm px-2 py-0.5 rounded-md ${lessonData.includeDiagrams ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-secondary/50'}`, children: lessonData.includeDiagrams ? "Included" : "Not included" })] })] })] }), _jsxs("div", { className: "bg-card border rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow duration-200 md:col-span-2", children: [_jsx("h4", { className: "font-semibold text-primary text-sm uppercase tracking-wider mb-4 border-b pb-2", children: "Content & Materials" }), _jsxs("div", { className: "grid grid-cols-1 sm:grid-cols-3 gap-4", children: [_jsxs("div", { className: "sm:col-span-2 flex flex-col gap-1", children: [_jsx("span", { className: "text-sm text-muted-foreground", children: "Content Standard" }), _jsx("span", { className: "font-medium text-sm leading-relaxed text-foreground/90 bg-secondary/30 p-2 rounded-lg border border-border/50", children: lessonData.contentStandard || "Not set" })] }), _jsxs("div", { className: "flex flex-col gap-3", children: [_jsxs("div", { className: "flex flex-col gap-1", children: [_jsx("span", { className: "text-sm text-muted-foreground", children: "Curriculum Files" }), _jsx("span", { className: "font-medium text-sm flex items-center gap-2", children: _jsxs("span", { className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 px-2 py-0.5 rounded-md", children: [selectedCurriculumFiles.length, " selected"] }) })] }), _jsxs("div", { className: "flex flex-col gap-1", children: [_jsx("span", { className: "text-sm text-muted-foreground", children: "Layout Template" }), _jsx("span", { className: "font-medium text-sm bg-secondary/50 px-2 py-1 rounded-md line-clamp-1", title: selectedTemplate?.name || "Default template", children: selectedTemplate?.name || "Default template" })] })] })] })] }), _jsxs("div", { className: "bg-card border rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow duration-200 md:col-span-2", children: [_jsxs("div", { className: "flex flex-row gap-2 items-center mb-4 border-b pb-2", children: [_jsx(Checkbox, { id: "includeCoverPage", checked: lessonData.includeCoverPage || false, onCheckedChange: (checked) => setLessonData({ ...lessonData, includeCoverPage: checked }) }), _jsx(Label, { htmlFor: "includeCoverPage", className: "font-semibold text-primary text-sm uppercase tracking-wider cursor-pointer", children: "Include Cover Page (Optional)" })] }), lessonData.includeCoverPage && (_jsxs("div", { className: "space-y-4 mt-4 animate-in fade-in-50 duration-500", children: [_jsxs("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4", children: [_jsxs("button", { type: "button", className: `rounded-2xl border p-4 text-left ${lessonData.coverPageSource === "profiles" ? "border-primary bg-primary/10" : "border-secondary/10 bg-card"}`, onClick: () => setLessonData({ ...lessonData, coverPageSource: "profiles" }), children: [_jsx("div", { className: "text-sm font-semibold", children: "Class Cover Page Profile" }), _jsx("p", { className: "text-xs text-muted-foreground mt-2", children: "Use stored profile values for school and teacher name if available." })] }), _jsxs("button", { type: "button", className: `rounded-2xl border p-4 text-left ${lessonData.coverPageSource === "manual" ? "border-primary bg-primary/10" : "border-secondary/10 bg-card"}`, onClick: () => setLessonData({ ...lessonData, coverPageSource: "manual" }), children: [_jsx("div", { className: "text-sm font-semibold", children: "Manual Entry" }), _jsx("p", { className: "text-xs text-muted-foreground mt-2", children: "Enter your own school and teacher details for the Cover Page." })] })] }), lessonData.coverPageSource === "manual" ? (_jsxs("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4", children: [_jsxs("div", { className: "space-y-2", children: [_jsx(Label, { htmlFor: "schoolName", children: "Name of School" }), _jsx(Input, { id: "schoolName", placeholder: "e.g. Cambridge International School", value: lessonData.schoolName || "", onChange: (e) => setLessonData({ ...lessonData, schoolName: e.target.value }) })] }), _jsxs("div", { className: "space-y-2", children: [_jsx(Label, { htmlFor: "teacherName", children: "Name of Teacher" }), _jsx(Input, { id: "teacherName", placeholder: "e.g. Mr. John Doe", value: lessonData.teacherName || "", onChange: (e) => setLessonData({ ...lessonData, teacherName: e.target.value }) })] })] })) : (_jsxs("div", { className: "rounded-2xl border border-secondary/20 bg-slate-50 p-4", children: [_jsx("div", { className: "text-sm font-semibold mb-3", children: "Cover Page Profile Preview" }), _jsxs("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4", children: [_jsxs("div", { className: "rounded-2xl bg-white p-3 border border-secondary/10", children: [_jsx("div", { className: "text-[11px] uppercase tracking-[0.18em] text-muted-foreground", children: "School Name" }), _jsx("div", { className: "mt-2 text-sm font-medium text-foreground", children: (lessonData.coverPageSource === "profiles"
+                                                                                                        ? coverPageProfile.schoolName || lessonData.schoolName
+                                                                                                        : lessonData.schoolName) || "(profile value or manual fallback)" })] }), _jsxs("div", { className: "rounded-2xl bg-white p-3 border border-secondary/10", children: [_jsx("div", { className: "text-[11px] uppercase tracking-[0.18em] text-muted-foreground", children: "Teacher Name" }), _jsx("div", { className: "mt-2 text-sm font-medium text-foreground", children: (lessonData.coverPageSource === "profiles"
+                                                                                                        ? coverPageProfile.teacherName || lessonData.teacherName
+                                                                                                        : lessonData.teacherName) || "(profile value or manual fallback)" })] })] }), _jsx("p", { className: "mt-3 text-xs text-muted-foreground", children: "Profiles are the default source for cover page metadata. Switch to Manual Entry if you want to override them." })] })), [
+                                                                            "basic7",
+                                                                            "basic8",
+                                                                            "basic9",
+                                                                        ].includes(lessonData.level?.toLowerCase() || "") && (_jsxs("div", { className: "space-y-2", children: [_jsx(Label, { htmlFor: "coverPageSubject", children: "Subjects to Display (Optional for Multiple Subjects)" }), _jsx(Input, { id: "coverPageSubject", placeholder: "e.g. Computing and Creative Arts and Design", value: lessonData.coverPageSubject || "", onChange: (e) => setLessonData({ ...lessonData, coverPageSubject: e.target.value }) }), _jsx("p", { className: "text-[11px] text-muted-foreground mt-1", children: "Use this if you teach multiple subjects. It will override the default subject on the Cover Page only." })] }))] }))] })] }), !isOnline && (_jsxs(Alert, { variant: "destructive", className: "bg-destructive/10 border-destructive/20 text-destructive", children: [_jsx(WifiOff, { className: "h-4 w-4" }), _jsx(AlertDescription, { className: "ml-2 font-medium", children: "You're currently offline. Please connect to the internet to generate your lesson note." })] }))] })), _jsxs("div", { className: "flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-6 mt-6 border-t border-border/40", children: [_jsxs(Button, { variant: "outline", onClick: prevStep, disabled: currentStep === 0 || isGenerating, className: "w-full sm:w-auto order-2 sm:order-1 rounded-full shadow-sm hover:bg-secondary/10", children: [_jsx(ChevronLeft, { className: "mr-2 h-4 w-4" }), "Previous"] }), _jsx("div", { className: "flex gap-2 w-full sm:w-auto order-1 sm:order-2", children: currentStep < STEPS.length - 1 ? (_jsxs(Button, { onClick: nextStep, disabled: isGenerating, className: "w-full sm:w-auto rounded-full shadow-sm", children: ["Next", _jsx(ChevronRight, { className: "ml-2 h-4 w-4" })] })) : (_jsx(Button, { onClick: initiateGeneration, disabled: isGenerating || !isOnline, className: "bg-gradient-hero hover:opacity-90 w-full sm:w-auto rounded-full shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]", children: isGenerating ? (_jsxs(_Fragment, { children: [_jsx(Loader2, { className: "mr-2 h-4 w-4 animate-spin" }), _jsx("span", { className: "hidden sm:inline", children: "Generating..." }), _jsx("span", { className: "sm:hidden", children: "Generating..." })] })) : (_jsxs(_Fragment, { children: [_jsx("span", { className: "hidden sm:inline", children: "Generate Lesson Note" }), _jsx("span", { className: "sm:hidden", children: "Generate" })] })) })) })] })] }) })] }) }), _jsx(Dialog, { open: isPasteDialogOpen, onOpenChange: setIsPasteDialogOpen, children: _jsxs(DialogContent, { className: "sm:max-w-[500px]", children: [_jsxs(DialogHeader, { children: [_jsx(DialogTitle, { children: "Paste Curriculum Data" }), _jsx(DialogDescription, { children: "Paste the curriculum data copied from another source. The system will attempt to parse and fill the relevant fields." })] }), _jsxs("div", { className: "space-y-4", children: [_jsx(Textarea, { value: pastedText, onChange: (e) => setPastedText(e.target.value), placeholder: "Paste your curriculum data here...", rows: 6, className: "resize-none" }), _jsxs("div", { className: "flex justify-end gap-2", children: [_jsx(Button, { variant: "outline", onClick: () => setIsPasteDialogOpen(false), children: "Cancel" }), _jsxs(Button, { onClick: handlePasteCurriculum, disabled: isParsingPaste, children: [isParsingPaste ? (_jsx(Loader2, { className: "mr-2 h-4 w-4 animate-spin" })) : (_jsx(ClipboardPaste, { className: "mr-2 h-4 w-4" })), "Paste and Parse"] })] })] })] }) }), _jsx(Dialog, { open: isSchemeDialogOpen, onOpenChange: setIsSchemeDialogOpen, children: _jsxs(DialogContent, { className: "sm:max-w-[600px]", children: [_jsxs(DialogHeader, { children: [_jsx(DialogTitle, { children: "Select Scheme of Learning" }), _jsx(DialogDescription, { children: "Choose a scheme from the list below to apply its data to the form. You can also paste new data directly." })] }), _jsxs("div", { className: "space-y-4", children: [_jsxs("div", { className: "flex gap-2", children: [_jsx(Input, { placeholder: "Search by subject, week, or class level", value: schemeSearch, onChange: (e) => setSchemeSearch(e.target.value), className: "flex-1" }), _jsx(Button, { variant: "outline", onClick: () => {
+                                                    setSchemeSearch("");
+                                                    setSchemeItems(JSON.parse(localStorage.getItem("scheme_of_learning_data") || "[]"));
+                                                }, disabled: isGenerating, children: "Clear Search" })] }), _jsx("div", { className: "h-[400px] overflow-y-auto pr-2 border rounded-md", children: filteredSchemeItems.length > 0 ? (_jsx("div", { className: "space-y-2 p-2", children: filteredSchemeItems.map((item) => (_jsx("div", { className: "h-[120px] px-1 py-1", children: _jsxs("div", { className: "p-4 rounded-lg bg-muted cursor-pointer hover:bg-muted/80 transition h-full overflow-hidden flex flex-col justify-between", onClick: () => handleApplyScheme(item), children: [_jsxs("div", { className: "flex justify-between items-center", children: [_jsxs("div", { children: [_jsx("p", { className: "text-sm font-medium", children: item.subject }), _jsxs("p", { className: "text-xs text-muted-foreground", children: [item.classLevel, " - ", item.week] })] }), _jsx(Button, { variant: "outline", size: "icon", onClick: (e) => {
+                                                                        e.stopPropagation();
+                                                                        handleApplyScheme(item);
+                                                                    }, children: _jsx(Save, { className: "h-4 w-4" }) })] }), _jsx("div", { className: "mt-2", children: _jsx("p", { className: "text-xs text-muted-foreground line-clamp-2", children: item.indicators }) })] }) }, item.id))) })) : (_jsx("p", { className: "text-sm text-center text-muted-foreground py-4", children: "No schemes found. You can paste new data below." })) }), _jsxs("div", { className: "space-y-2", children: [_jsx(Label, { htmlFor: "newSchemeData", children: "Or paste new scheme data" }), _jsx(Textarea, { id: "newSchemeData", placeholder: "Paste your scheme of learning data here...", rows: 4, className: "resize-none", value: pastedText, onChange: (e) => setPastedText(e.target.value) }), _jsx(Button, { onClick: async () => {
+                                                    try {
+                                                        const parsedData = JSON.parse(pastedText);
+                                                        if (Array.isArray(parsedData)) {
+                                                            localStorage.setItem("scheme_of_learning_data", JSON.stringify(parsedData));
+                                                            setSchemeItems(parsedData);
+                                                            toast({
+                                                                title: "Data Imported",
+                                                                description: "New scheme data has been imported successfully.",
+                                                            });
+                                                        }
+                                                        else {
+                                                            toast({
+                                                                title: "Invalid Data",
+                                                                description: "Please ensure the pasted data is in the correct format.",
+                                                                variant: "destructive",
+                                                            });
+                                                        }
+                                                    }
+                                                    catch (error) {
+                                                        toast({
+                                                            title: "Error",
+                                                            description: "Failed to import data. Please try again.",
+                                                            variant: "destructive",
+                                                        });
+                                                        console.error(error);
+                                                    }
+                                                }, children: "Import Scheme Data" })] })] })] }) })] }) }));
+};
+export default ImprovedGenerator;

@@ -39,16 +39,40 @@ export function cleanAndSplitText(text: string): string[] {
   if (!text) return [];
 
   let processed = text;
-  
-  // FIRST: Remove ALL orphan trailing ** throughout
+  const blockMathPlaceholders: string[] = [];
+  const placeholderPrefix = '@@LATEX_BLOCK_';
+  const placeholderSuffix = '@@';
+
+  // Normalize math delimiters before protecting block math.
+  processed = normalizeLatexMathDelimiters(processed);
+
+    // Protect complete block math blocks so line splitting doesn't break them.
+  processed = processed.replace(/\$\$[\s\S]*?\$\$/g, (match) => {
+    const placeholder = `${placeholderPrefix}${blockMathPlaceholders.length}${placeholderSuffix}`;
+    blockMathPlaceholders.push(match);
+    return placeholder;
+  });
+
+  // ALSO protect inline $...$ math blocks so line splitting doesn't break them.
+  const inlineMathPrefix = '@@INLINE_LATEX_';
+  const inlineMathPlaceholders: string[] = [];
+  processed = processed.replace(/\$[^$\n]+\$/g, (match) => {
+    const placeholder = `${inlineMathPrefix}${inlineMathPlaceholders.length}${placeholderSuffix}`;
+    inlineMathPlaceholders.push(match);
+    return placeholder;
+  });
+
+    // FIRST: Remove ALL orphan trailing ** throughout
   processed = removeOrphanAsterisks(processed);
 
   // Fix jumbled numbered lists with period (e.g. "1. Item 2. Item")
   // Avoid splitting math expressions such as "x + 5 = 11." by excluding common operators.
   processed = processed.replace(/([^\n\d=+\-*/^%])(\s+)(\d+\.\s)/g, '$1\n$3');
 
-  // Fix jumbled numbered lists with parenthesis (e.g. "text 1) Item 2) Item")
-  processed = processed.replace(/([^\n\d])(\s+)(\d+\)\s)/g, '$1\n$3');
+    // Fix jumbled numbered lists with parenthesis (e.g. "text 1) Item 2) Item")
+  // CRITICAL: Exclude math operators (+, -, *, /, =, <, >) as the preceding character
+  // to avoid splitting math expressions like "(5 + 3) * 2" where "3)" is mistaken as numbering
+  processed = processed.replace(/([^\n\d+\-*/=<>\^])(\s+)(\d+\)\s)/g, '$1\n$3');
   
   // Fix jumbled lettered lists (e.g. " a) Item b) Item")
   processed = processed.replace(/([^\n])(\s+)([a-zA-Z][\)\.]\s)/g, '$1\n$3');
@@ -177,8 +201,8 @@ export function cleanAndSplitText(text: string): string[] {
   
   // Step 3: Wrap entire header lines in bold
   // Process line by line to properly wrap
-  const lines = processed.split('\n');
-  const processedLines = lines.map(line => {
+  const headerLines = processed.split('\n');
+  const processedLines = headerLines.map(line => {
     let trimmed = line.trim();
     
     // Skip empty lines
@@ -236,7 +260,20 @@ export function cleanAndSplitText(text: string): string[] {
   // EXCLUDE: Activity/Step/Part/Phase/Group headers (using negative lookahead) - now robust for ** wrapper
   processed = processed.replace(/(\n|^)(?!(?:\*\*)?(?:Activity|Step|Part|Phase|Group)\s+\d+)([^:\n]{3,60}:)[ \t]+([A-Z0-9(])/g, '$1$2\n$3');
   
-  return processed.split('\n');
+    const lines = processed.split('\n').map((line) => {
+    // Restore both block math and inline math placeholders
+    let restored = line.replace(/@@LATEX_BLOCK_(\d+)@@/g, (_match, index) => {
+      const idx = Number(index);
+      return blockMathPlaceholders[idx] || '';
+    });
+    restored = restored.replace(/@@INLINE_LATEX_(\d+)@@/g, (_match, index) => {
+      const idx = Number(index);
+      return inlineMathPlaceholders[idx] || '';
+    });
+    return restored;
+  });
+
+  return lines;
 }
 
 /**
@@ -316,19 +353,37 @@ export type MathTextSegment =
   | { type: 'text'; text: string }
   | { type: 'math'; text: string };
 
+function normalizeCancelArguments(text: string): string {
+  if (!text) return text;
+  return text.replace(/\\(cancel|bcancel|xcancel)(?!\{)\s*([^\s\\{][^\s\\]*)/g, (_match, command, body) => {
+    return `\\${command}{${body}}`;
+  });
+}
+
 export function normalizeLatexMathDelimiters(text: string): string {
   if (!text) return text;
-  return text.replace(/(\${3,})([\s\S]*?)(\${3,})/g, (match, open, body, close) => {
+  let normalizedText = normalizeCancelArguments(text);
+  normalizedText = normalizedText.replace(/(\${3,})([\s\S]*?)(\${3,})/g, (match, open, body, close) => {
     if (open.length !== close.length) return match;
     const delimiter = body.includes('\n') ? '$$' : '$';
     return `${delimiter}${body}${delimiter}`;
   });
+
+  // Convert single-dollar math containing newlines into block math.
+  normalizedText = normalizedText.replace(/\$(?!\$)((?:[^$\n]|\n)*?)\$(?!\$)/g, (match, body) => {
+    if (body.includes('\n')) {
+      return `$$${body}$$`;
+    }
+    return match;
+  });
+
+  return normalizedText;
 }
 
 export function splitTextByLatexMath(text: string): MathTextSegment[] {
   if (!text) return [];
   const normalizedText = normalizeLatexMathDelimiters(text);
-  const parts = normalizedText.split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+\$)/g);
+  const parts = normalizedText.split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+\$|\\(?:cancel|bcancel|xcancel|frac|sqrt|leq|geq|neq|lt|gt|times|div|pm|approx)\{[^}\n]+\}(?:\{[^}\n]+\})?)/g);
   return parts.filter(Boolean).map((segment) => {
     if (segment.startsWith('$$') && segment.endsWith('$$')) {
       return { type: 'math', text: segment.slice(2, -2).trim() };
@@ -351,7 +406,16 @@ function simplifyLatexBody(mathText: string): string {
 
 export function stripLatexMathForDocx(text: string): string {
   if (!text) return text;
-  return normalizeLatexMathDelimiters(text);
+  let processed = normalizeLatexMathDelimiters(text);
+  // Replace common LaTeX commands with Unicode equivalents for plain text fallback
+  processed = processed.replace(/\\(cancel|bcancel|xcancel)\s*\{([^}]*)\}/g, '$2');
+  processed = processed.replace(/\\frac\s*\{([^}]*)\}\s*\{([^}]*)\}/g, '$1/$2');
+  processed = processed.replace(/\\(sqrt)\s*\{([^}]*)\}/g, '√$2');
+  processed = replaceLatexSymbols(processed);
+  // Remove remaining $ delimiters
+  processed = processed.replace(/\$\$([\s\S]*?)\$\$/g, '$1');
+  processed = processed.replace(/\$([^$\n]+)\$/g, '$1');
+  return processed;
 }
 
 /**

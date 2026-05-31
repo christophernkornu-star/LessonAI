@@ -23,7 +23,10 @@ import {
   MathSuperScript,
   MathSubScript,
   MathSubSuperScript,
-  MathRadical
+  MathRadical,
+  BuilderElement,
+  createMathAccentCharacter,
+  createMathBase
 } from "docx";
 import type { MathComponent } from "docx";
 import { saveAs } from "file-saver";
@@ -112,10 +115,34 @@ function extractBraceGroup(text: string, startIndex: number): { content: string;
 }
 
 function extractScriptContent(text: string, startIndex: number): { content: string; endIndex: number } {
-  if (text[startIndex] === '{') {
-    return extractBraceGroup(text, startIndex);
+  let i = startIndex;
+  while (i < text.length && /\s/.test(text[i])) {
+    i += 1;
   }
-  return { content: text[startIndex] || '', endIndex: startIndex + 1 };
+
+  if (text[i] === '{') {
+    return extractBraceGroup(text, i);
+  }
+
+  if (text[i] === '\\') {
+    const commandMatch = /^\\[a-zA-Z]+/.exec(text.slice(i));
+    if (commandMatch) {
+      const command = commandMatch[0];
+      i += command.length;
+      if (text[i] === '{') {
+        const group = extractBraceGroup(text, i);
+        return { content: `${command}{${group.content}}`, endIndex: group.endIndex };
+      }
+      return { content: command, endIndex: i };
+    }
+  }
+
+  const start = i;
+  while (i < text.length && !/\s|\\|\{|\}/.test(text[i])) {
+    i += 1;
+  }
+
+  return { content: text.slice(start, i), endIndex: i > start ? i : Math.min(start + 1, text.length) };
 }
 
 function parseDocxMathComponents(latex: string): MathComponent[] {
@@ -133,6 +160,31 @@ function parseDocxMathComponents(latex: string): MathComponent[] {
         })
       );
       i = denominator.endIndex;
+      continue;
+    }
+
+    if (latex.startsWith('\\cancel', i) || latex.startsWith('\\bcancel', i) || latex.startsWith('\\xcancel', i)) {
+      const command = latex.startsWith('\\bcancel', i)
+        ? '\\bcancel'
+        : latex.startsWith('\\xcancel', i)
+        ? '\\xcancel'
+        : '\\cancel';
+      const cancelArg = extractBraceGroup(latex, i + command.length);
+      const accentType = command === '\\bcancel' ? 'downdiagonalstrike' : 'updiagonalstrike';
+      const baseNode = createMathBase({ children: parseDocxMathComponents(cancelArg.content) });
+      const accentNode = createMathAccentCharacter({ accent: accentType });
+      const cancelWrapper = new BuilderElement({
+        name: 'm:acc',
+        children: [
+          new BuilderElement({
+            name: 'm:accPr',
+            children: [accentNode],
+          }),
+          baseNode,
+        ],
+      });
+      result.push(cancelWrapper as unknown as MathComponent);
+      i = cancelArg.endIndex;
       continue;
     }
 

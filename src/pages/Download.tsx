@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 // Dynamic imports moved to usage sites
 import { toast } from "sonner";
-import { cleanAndSplitText, parseMarkdownLine } from "@/lib/textFormatting";
+import { cleanAndSplitText, parseMarkdownLine, normalizeLatexMathDelimiters } from "@/lib/textFormatting";
 import { Navbar } from "@/components/Navbar";
 import { CLASS_LEVELS } from "@/data/curriculum";
 import * as katex from 'katex';
@@ -51,18 +51,23 @@ const getSavedClassProfile = (classLevel: string) => {
   }
 };
 
-const normalizeLatexDelimiters = (text: string) => {
-  if (!text) return text;
-  return text.replace(/(\${3,})([\s\S]*?)(\${3,})/g, (match, open, body, close) => {
-    if (open.length !== close.length) return match;
-    const delimiter = body.includes('\n') ? '$$' : '$';
-    return `${delimiter}${body}${delimiter}`;
-  });
+const isPotentialGhanaJson = (text: string) => {
+  const trimmed = text.trim();
+  if (/^\s*[{[]/.test(trimmed)) return true;
+  if (/^```(?:json)?[\s\S]*```$/.test(trimmed)) return true;
+  if (trimmed.includes('---')) {
+    const parts = trimmed.split(/(?:^|\r?\n)---(?:\r?\n|$)/g);
+    return parts.some((part) => {
+      const candidate = part.trim();
+      return candidate.startsWith('{') || candidate.startsWith('[') || candidate.startsWith('```');
+    });
+  }
+  return false;
 };
 
 // Function to render text with LaTeX support (only inline math)
 const renderTextWithLatex = (text: string) => {
-  const normalizedText = normalizeLatexDelimiters(text);
+  const normalizedText = normalizeLatexMathDelimiters(text);
   // Split text by inline LaTeX delimiters ($...$) only - block math handled separately
   const parts = normalizedText.split(/(\$[^$\n]+\$)/g);
   
@@ -100,13 +105,13 @@ const containsBlockMath = (text: string): boolean => {
 
 // Function to render a line that may contain block math
 const renderLineWithBlockMath = (line: string, index: number) => {
-  const normalizedLine = normalizeLatexDelimiters(line);
+  const normalizedLine = normalizeLatexMathDelimiters(line);
 
   // Check if line contains block math
   if (containsBlockMath(normalizedLine)) {
     // Split by block math delimiters
     const parts = normalizedLine.split(/(\$\$[\s\S]*?\$\$)/g);
-    
+
     return (
       <div key={index} className="my-2">
         {parts.map((part, partIndex) => {
@@ -244,19 +249,25 @@ const DownloadPage = () => {
         cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
       }
 
-      // Check if the content is JSON (Ghana template)
-      const isJsonFormat = cleanContent.startsWith('{') || cleanContent.startsWith('[') || cleanContent.includes('---');
+      let parsedResult: any = null;
+      if (isPotentialGhanaJson(cleanContent)) {
+        try {
+          const { parseAIJsonResponse } = await import("@/services/ghanaLessonDocxService");
+          parsedResult = parseAIJsonResponse(cleanContent);
+        } catch (jsonError) {
+          console.warn("Ghana JSON parse failed, falling back to text download:", jsonError);
+        }
+      }
+
       const classProfile =
         lessonData?.coverPageSource === "profiles"
           ? getSavedClassProfile(lessonData.level || "")
           : { schoolName: "", teacherName: "", subjectTeachers: {} };
       
-      if (isJsonFormat) {
+      if (parsedResult) {
         // Handle Ghana template JSON format
         try {
-          const { parseAIJsonResponse, generateGhanaLessonFileName, generateGhanaLessonDocx } = await import("@/services/ghanaLessonDocxService");
-          
-          const parsedResult = parseAIJsonResponse(cleanContent);
+          const { generateGhanaLessonFileName, generateGhanaLessonDocx } = await import("@/services/ghanaLessonDocxService");
           
           // Normalize to array for processing metadata
           const parsedArray = Array.isArray(parsedResult) ? parsedResult : [parsedResult];

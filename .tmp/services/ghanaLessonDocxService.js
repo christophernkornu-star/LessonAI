@@ -1,0 +1,1094 @@
+import { Document, Paragraph, TextRun, Table, TableCell, TableRow, WidthType, BorderStyle, AlignmentType, PageBreak, VerticalAlign, Packer, ShadingType, TableLayoutType, Math as DocxMath, MathRun as DocxMathRun, MathFraction, MathSuperScript, MathSubScript, MathRadical, BuilderElement, createMathAccentCharacter, createMathBase } from "docx";
+import { saveAs } from "file-saver";
+import { cleanAndSplitText, parseMarkdownLine, splitTextByLatexMath, capitalizeFirstLetter } from "@/lib/textFormatting";
+const latexSymbolMap = {
+    '\\geq': '≥',
+    '\\leq': '≤',
+    '\\neq': '≠',
+    '\\gt': '>',
+    '\\lt': '<',
+    '\\times': '×',
+    '\\div': '÷',
+    '\\pm': '±',
+    '\\approx': '≈',
+    '\\le': '≤',
+    '\\ge': '≥',
+    '\\cdot': '·',
+};
+function normalizeLatexMathSymbols(text) {
+    return text.replace(/\\(geq|leq|neq|gt|lt|times|div|pm|approx|le|ge|cdot)/g, (match) => {
+        return latexSymbolMap[match] || match;
+    });
+}
+function extractBraceGroup(text, startIndex) {
+    if (text[startIndex] !== '{') {
+        return { content: text[startIndex] || '', endIndex: startIndex + 1 };
+    }
+    let depth = 0;
+    let i = startIndex;
+    let contentStart = startIndex + 1;
+    while (i < text.length) {
+        if (text[i] === '{') {
+            depth += 1;
+        }
+        else if (text[i] === '}') {
+            depth -= 1;
+            if (depth === 0) {
+                return { content: text.slice(contentStart, i), endIndex: i + 1 };
+            }
+        }
+        i += 1;
+    }
+    return { content: text.slice(contentStart), endIndex: text.length };
+}
+function extractScriptContent(text, startIndex) {
+    if (text[startIndex] === '{') {
+        return extractBraceGroup(text, startIndex);
+    }
+    return { content: text[startIndex] || '', endIndex: startIndex + 1 };
+}
+function parseDocxMathComponents(latex) {
+    const result = [];
+    let i = 0;
+    while (i < latex.length) {
+        if (latex.startsWith('\\frac', i)) {
+            const numerator = extractBraceGroup(latex, i + 5);
+            const denominator = extractBraceGroup(latex, numerator.endIndex);
+            result.push(new MathFraction({
+                numerator: parseDocxMathComponents(numerator.content),
+                denominator: parseDocxMathComponents(denominator.content),
+            }));
+            i = denominator.endIndex;
+            continue;
+        }
+        if (latex.startsWith('\\sqrt', i)) {
+            const radicalArg = extractBraceGroup(latex, i + 5);
+            result.push(new MathRadical({ children: parseDocxMathComponents(radicalArg.content) }));
+            i = radicalArg.endIndex;
+            continue;
+        }
+        if (latex.startsWith('\\cancel', i)) {
+            const cancelArg = extractBraceGroup(latex, i + 7);
+            const baseNode = createMathBase({ children: parseDocxMathComponents(cancelArg.content) });
+            const accentNode = createMathAccentCharacter({ accent: 'updiagonalstrike' });
+            const cancelWrapper = new BuilderElement({
+                name: 'm:acc',
+                children: [
+                    new BuilderElement({
+                        name: 'm:accPr',
+                        children: [accentNode],
+                    }),
+                    baseNode,
+                ],
+            });
+            result.push(cancelWrapper);
+            i = cancelArg.endIndex;
+            continue;
+        }
+        if (latex[i] === '^' || latex[i] === '_') {
+            const isSuper = latex[i] === '^';
+            const script = extractScriptContent(latex, i + 1);
+            const base = result.pop() || new DocxMathRun('');
+            if (isSuper) {
+                result.push(new MathSuperScript({
+                    children: [base],
+                    superScript: parseDocxMathComponents(script.content),
+                }));
+            }
+            else {
+                result.push(new MathSubScript({
+                    children: [base],
+                    subScript: parseDocxMathComponents(script.content),
+                }));
+            }
+            i = script.endIndex;
+            continue;
+        }
+        if (latex[i] === '{' || latex[i] === '}') {
+            i += 1;
+            continue;
+        }
+        if (latex[i] === '\\') {
+            const match = /^\\[a-zA-Z]+/.exec(latex.slice(i));
+            if (match) {
+                const symbol = normalizeLatexMathSymbols(match[0]);
+                result.push(new DocxMathRun(symbol));
+                i += match[0].length;
+                continue;
+            }
+        }
+        let start = i;
+        while (i < latex.length &&
+            latex[i] !== '\\' &&
+            latex[i] !== '^' &&
+            latex[i] !== '_' &&
+            latex[i] !== '{' &&
+            latex[i] !== '}') {
+            i += 1;
+        }
+        const fragment = normalizeLatexMathSymbols(latex.slice(start, i));
+        if (fragment) {
+            result.push(new DocxMathRun(fragment));
+        }
+    }
+    return result.length > 0 ? result : [new DocxMathRun(normalizeLatexMathSymbols(latex))];
+}
+function createDocxParagraphChildren(text, bold = false) {
+    const segments = splitTextByLatexMath(text);
+    const children = [];
+    for (const segment of segments) {
+        if (segment.type === 'text') {
+            const tokens = parseMarkdownLine(segment.text);
+            if (tokens.length === 0) {
+                children.push(new TextRun({ text: segment.text || '', bold, size: 20, font: 'Segoe UI' }));
+                continue;
+            }
+            for (const token of tokens) {
+                children.push(new TextRun({
+                    text: token.text,
+                    bold: bold || token.bold,
+                    italics: token.italic,
+                    size: 20,
+                    font: 'Segoe UI',
+                }));
+            }
+            continue;
+        }
+        children.push(new DocxMath({ children: parseDocxMathComponents(segment.text) }));
+    }
+    return children;
+}
+const tableBorders = {
+    top: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+    bottom: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+    left: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+    right: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+};
+function createCell(text, bold = false, columnSpan = 1, isHeader = false, splitBold = false, // New parameter for label:value format
+width // Optional explicit width
+) {
+    const paragraphs = [];
+    if (splitBold && text.includes(':')) {
+        // Split at first colon, bold the label, normal text for value
+        const [label, ...valueParts] = text.split(':');
+        const value = valueParts.join(':'); // Rejoin in case value has colons
+        // Handle multiple lines in the value part (e.g. for Indicators)
+        const lines = cleanAndSplitText(value);
+        if (lines.length === 0) {
+            paragraphs.push(new Paragraph({
+                children: [
+                    new TextRun({
+                        text: label + ':',
+                        bold: true,
+                        size: 20,
+                        font: "Segoe UI",
+                    }),
+                    new TextRun({
+                        text: " ",
+                        bold: false,
+                        size: 20,
+                        font: "Segoe UI",
+                    })
+                ],
+                alignment: isHeader ? AlignmentType.CENTER : AlignmentType.LEFT,
+                spacing: { before: 80, after: 80 },
+            }));
+        }
+        else {
+            lines.forEach((line, index) => {
+                const children = [];
+                // For the first line, include the Label
+                if (index === 0) {
+                    children.push(new TextRun({
+                        text: label + ':',
+                        bold: true,
+                        size: 20,
+                        font: "Segoe UI",
+                    }));
+                    children.push(new TextRun({
+                        text: ' ',
+                        bold: false,
+                        size: 20,
+                        font: "Segoe UI",
+                    }));
+                }
+                children.push(...createDocxParagraphChildren(line.trim(), false));
+                paragraphs.push(new Paragraph({
+                    children: children,
+                    alignment: isHeader ? AlignmentType.CENTER : AlignmentType.LEFT,
+                    // Tighter spacing between lines of the same field, but normal spacing around the whole block
+                    spacing: {
+                        before: index === 0 ? 80 : 40,
+                        after: index === lines.length - 1 ? 80 : 0,
+                    },
+                }));
+            });
+        }
+    }
+    else {
+        // Process text to handle newlines and formatting
+        const lines = cleanAndSplitText(text);
+        for (const line of lines) {
+            let trimmedLine = line.trim();
+            if (!trimmedLine)
+                continue;
+            // Check for specific headers to force-bold ONLY if they aren't already markdown bolded
+            // We check a "clean" version just for detection logic
+            const contentForCheck = trimmedLine.replace(/\*\*/g, '');
+            let forceBold = false;
+            // Handle list items ending in colon (bold them)
+            // Check for colon at end, ignoring trailing bold markers or minimal whitespace
+            if (trimmedLine.replace(/[\*_]+$/, '').trim().endsWith(':')) {
+                forceBold = true;
+            }
+            // Check if this is an Activity/Step/Part/Phase line - make it bold
+            if (/^(Activity|Step|Part|Phase|Group)\s+\d+/i.test(contentForCheck)) {
+                forceBold = true;
+            }
+            // Handle Markdown Headers (e.g. # Title, ## Subtitle)
+            if (trimmedLine.match(/^#+\s/)) {
+                trimmedLine = trimmedLine.replace(/^#+\s/, '');
+                forceBold = true;
+            }
+            // Handle Bullet Points (e.g. - Item, * Item)
+            if (trimmedLine.match(/^[-*]\s/)) {
+                trimmedLine = trimmedLine.replace(/^[-*]\s/, '• ');
+            }
+            // Removed the specific colon check here because we moved it up to be more general
+            const children = createDocxParagraphChildren(trimmedLine, forceBold);
+            let spacingBefore = 80;
+            // Add extra spacing for specific headers to create a visual break (simulating double newline)
+            if (/Sample Class Exercises/i.test(trimmedLine)) {
+                spacingBefore = 400; // ~20pt spacing (approx 2 lines)
+            }
+            paragraphs.push(new Paragraph({
+                children: children,
+                alignment: isHeader ? AlignmentType.CENTER : AlignmentType.LEFT,
+                spacing: { before: spacingBefore, after: 80 }
+            }));
+        }
+        // Fallback if no paragraphs created (empty text)
+        if (paragraphs.length === 0) {
+            paragraphs.push(new Paragraph({
+                children: [new TextRun({ text: "", size: 20, font: "Segoe UI" })],
+                alignment: isHeader ? AlignmentType.CENTER : AlignmentType.LEFT,
+                spacing: { before: 80, after: 80 }
+            }));
+        }
+    }
+    return new TableCell({
+        children: paragraphs,
+        borders: tableBorders,
+        columnSpan,
+        verticalAlign: VerticalAlign.TOP,
+        shading: isHeader ? {
+            fill: "D9D9D9", // Gray background for phase headers
+            type: ShadingType.CLEAR,
+        } : undefined,
+        margins: {
+            top: 100,
+            bottom: 100,
+            left: 100,
+            right: 100,
+        },
+        width: width, // Use explicit width if provided, otherwise let grid/auto handle it
+    });
+}
+/**
+ * Remove "Activity N:" prefix from text
+ */
+function cleanActivityPrefix(text) {
+    if (!text)
+        return "";
+    // Remove "Activity 1:", "Activity 1", etc from start of string or lines
+    let cleaned = text.replace(/^(Activity\s+\d+:?)/i, '');
+    cleaned = cleaned.replace(/\n(Activity\s+\d+:?)/gi, '\n');
+    return cleaned.trim();
+}
+/**
+ * Capitalize the first letter of the string
+ */
+function capitalizeWords(text) {
+    return capitalizeFirstLetter(text);
+}
+/**
+ * Format subject by capitalizing first letter of each word
+ */
+function formatSubject(subject) {
+    return subject.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+}
+/**
+ * Format term to ensure it has "TERM" prefix if needed
+ */
+function formatTerm(term) {
+    if (!term)
+        return 'FIRST TERM';
+    const trimmedTerm = term.trim();
+    const cleanTerm = trimmedTerm.toUpperCase();
+    // If it's just a number (e.g. "1"), return "TERM 1"
+    if (/^\d+$/.test(cleanTerm))
+        return `TERM ${cleanTerm}`;
+    // If it's "FIRST", "SECOND", "THIRD", append "TERM"
+    if (['FIRST', 'SECOND', 'THIRD'].includes(cleanTerm))
+        return `${cleanTerm} TERM`;
+    // Preserve exact uploaded term text when already specified, but ensure uppercase
+    return cleanTerm;
+}
+/**
+ * Format week to ensure it has "WEEK" prefix if needed
+ */
+function formatWeek(week) {
+    if (!week)
+        return 'WEEK 1';
+    const cleanWeek = week.trim().toUpperCase();
+    // If it's just a number (e.g. "5"), return "WEEK 5"
+    if (/^\d+$/.test(cleanWeek))
+        return `WEEK ${cleanWeek}`;
+    // If it doesn't start with "WEEK", prepend it
+    if (!cleanWeek.startsWith('WEEK'))
+        return `WEEK ${cleanWeek}`;
+    return cleanWeek;
+}
+/**
+ * Format class by adding space between 'Basic' and number and ensuring Title Case
+ * e.g., 'Basic6' -> 'Basic 6', 'basic 1' -> 'Basic 1'
+ */
+function formatClass(classText) {
+    if (!classText)
+        return "";
+    // First normalize spacing: Add space between 'Basic' and number if missing
+    let formatted = classText.replace(/([A-Za-z]+)(\d+)/g, '$1 $2');
+    // Title Case (Capitalize first letter of each word)
+    formatted = formatted.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    return formatted;
+}
+/**
+ * Clean Content Standard to remove duplicated codes
+ * e.g. "B1.2.1.1.: B1.2.1.1. Demonstrate" -> "B1.2.1.1: Demonstrate"
+ */
+function cleanContentStandard(text) {
+    if (!text)
+        return "";
+    // Check for duplicated code pattern
+    // Matches "CODE.:|:|." or "CODE: CODE"
+    // Group 1 is the code.
+    const match = text.match(/^([A-Z0-9.]+)(?:\.:|:|.)\s*\1\.?\s*(.*)/i);
+    if (match) {
+        // Return Code + formatted text
+        // match[1] is the code, match[2] is the rest
+        return `${match[1]}: ${match[2]}`;
+    }
+    return text;
+}
+/**
+ * Get abbreviation for subject
+ */
+function getSubjectAbbreviation(subject) {
+    if (!subject)
+        return "SUBJ";
+    const map = {
+        "MATHEMATICS": "MATH",
+        "MATHS": "MATH",
+        "SCIENCE": "SCI",
+        "RELIGIOUS AND MORAL EDUCATION": "RME",
+        "RELIGIOUS & MORAL EDUCATION": "RME",
+        "COMPUTING": "COMP",
+        "INFORMATION AND COMMUNICATION TECHNOLOGY": "ICT",
+        "ICT": "ICT",
+        "CREATIVE ARTS": "C.ART",
+        "OUR WORLD OUR PEOPLE": "OWOP",
+        "HISTORY": "HIST",
+        "GHANAIAN LANGUAGE": "GH.LANG",
+        "ENGLISH LANGUAGE": "ENG",
+        "ENGLISH": "ENG",
+        "FRENCH": "FRE",
+        "PHYSICAL EDUCATION": "PE",
+        "CAREER TECHNOLOGY": "C.TECH",
+        "SOCIAL STUDIES": "S.STD",
+        "HOME ECONOMICS": "HE",
+        "PRE-TECHNICAL SKILLS": "PTS"
+    };
+    const upperSubject = subject.toUpperCase().trim();
+    // Check exact match
+    if (map[upperSubject])
+        return map[upperSubject];
+    // Check partial match for some common ones
+    if (upperSubject.includes("RELIGIOUS"))
+        return "RME";
+    if (upperSubject.includes("OUR WORLD"))
+        return "OWOP";
+    if (upperSubject.includes("CREATIVE"))
+        return "C.ART";
+    if (upperSubject.includes("CAREER"))
+        return "C.TECH";
+    // Default: First 3-4 chars
+    return upperSubject.substring(0, 4).replace(/\s/g, '');
+}
+/**
+ * Get abbreviation for class
+ */
+function getClassAbbreviation(className) {
+    if (!className)
+        return "CLS";
+    const upperClass = className.toUpperCase().trim();
+    if (upperClass.includes("BASIC")) {
+        return upperClass.replace("BASIC", "B").replace(/\s/g, "");
+    }
+    if (upperClass.includes("KG")) {
+        return upperClass.replace(/\s/g, "");
+    }
+    if (upperClass.includes("JHS")) {
+        return upperClass.replace(/\s/g, "");
+    }
+    if (upperClass.includes("YEAR")) {
+        return upperClass.replace("YEAR", "Y").replace(/\s/g, "");
+    }
+    return upperClass.replace(/\s/g, "");
+}
+/**
+ * Get abbreviation for week
+ */
+function getWeekAbbreviation(week) {
+    if (!week)
+        return "WK1";
+    const upperWeek = week.toUpperCase().trim();
+    const numberMatch = upperWeek.match(/\d+/);
+    if (numberMatch) {
+        return `WK${numberMatch[0]}`;
+    }
+    return "WK";
+}
+/**
+ * Clean strand/sub-strand text by removing prefixes like "Strand 1:", "Sub-strand 1:", "1:"
+ */
+function cleanStrandOrSubStrand(text) {
+    if (!text)
+        return "";
+    // Remove "Strand X:", "Sub Strand X:", "Sub-strand X:", "X:" (where X is a number)
+    // Also handle cases where there might be spaces around the colon
+    return text.replace(/^(?:Strand|Sub[- ]?Strand)?\s*\d+\s*:\s*/i, "").trim();
+}
+/**
+ * Ensure Performance Indicator starts with the standard phrase
+ */
+function ensurePerformanceIndicatorPrefix(text) {
+    if (!text)
+        return "";
+    const prefix = "By the end of the lesson, learners will be able to";
+    // Clean up the text first
+    let cleanText = text.trim();
+    // If it already starts with the prefix (case insensitive), just return it (maybe fix casing?)
+    if (cleanText.toLowerCase().startsWith(prefix.toLowerCase())) {
+        // Check if it has the colon
+        const match = cleanText.match(new RegExp(`^${prefix}[:]?`, 'i'));
+        if (match) {
+            // preserve the logic, maybe just standardise the prefix?
+            // Let's just assume if it's there it's fine, but maybe ensure the colon is handled in the text
+            return cleanText;
+        }
+    }
+    return `${prefix}: ${cleanText}`;
+}
+/**
+ * Convert Ghana lesson JSON data to DOCX table format
+ */
+export async function generateGhanaLessonDocx(jsonData, fileName = "ghana-lesson-plan.docx", returnBlob = false, coverPageMeta) {
+    try {
+        // Normalize input to array
+        let dataArray = [];
+        if (Array.isArray(jsonData)) {
+            dataArray = jsonData;
+        }
+        else if (typeof jsonData === 'string') {
+            const parsed = JSON.parse(jsonData);
+            dataArray = Array.isArray(parsed) ? parsed : [parsed];
+        }
+        else {
+            dataArray = [jsonData];
+        }
+        if (dataArray.length === 0 && coverPageMeta) {
+            // If it's empty but we want a cover page, add a dummy entry
+            // so it maps once and produces only the cover.
+            dataArray = [{ _dummyCoverOnly: true }];
+        }
+        const docSections = dataArray.map((lessonData, index) => {
+            // Optional Cover Page logic per lesson entry or globally on index 0
+            const isFirst = index === 0;
+            const pageBreakIfCover = (isFirst && coverPageMeta) ? [new PageBreak()] : [];
+            let coverParagraphs = [];
+            if (isFirst && coverPageMeta) {
+                coverParagraphs = [
+                    new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { before: 1000, after: 1500 },
+                        children: [
+                            new TextRun({
+                                text: (coverPageMeta.schoolName || "NAME OF SCHOOL").toUpperCase(),
+                                bold: true,
+                                font: "Century Gothic",
+                                size: 40 // 20pt
+                            }),
+                        ]
+                    }),
+                    new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 1200 },
+                        children: [
+                            new TextRun({
+                                text: formatTerm(coverPageMeta.term || ""),
+                                bold: true,
+                                font: "Century Gothic",
+                                size: 36 // 18pt
+                            }),
+                        ],
+                    }),
+                    new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 1200 },
+                        children: [
+                            new TextRun({
+                                text: "WEEKLY LESSON NOTE",
+                                bold: true,
+                                font: "Century Gothic",
+                                size: 36
+                            }),
+                        ],
+                    }),
+                    ...(!/basic\s*[1-6]\b/i.test(coverPageMeta.level || "") ? [
+                        new Paragraph({
+                            alignment: AlignmentType.CENTER,
+                            spacing: { after: 1200 },
+                            children: [
+                                new TextRun({
+                                    text: (coverPageMeta.subject || "SUBJECT").toUpperCase(),
+                                    bold: true,
+                                    font: "Century Gothic",
+                                    size: 36
+                                }),
+                            ],
+                        })
+                    ] : []),
+                    new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 1200 },
+                        children: [
+                            new TextRun({
+                                text: `WEEK ${(coverPageMeta.week || "").replace(/[^0-9]/g, '') || "___"}`,
+                                bold: true,
+                                font: "Century Gothic",
+                                size: 36
+                            }),
+                        ],
+                    }),
+                    new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 1200 },
+                        children: [
+                            new TextRun({
+                                text: (coverPageMeta.level || "___").toUpperCase().replace(/([a-zA-Z])(\d)/g, '$1 $2'),
+                                bold: true,
+                                font: "Century Gothic",
+                                size: 36
+                            }),
+                        ],
+                    }),
+                    new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { before: 2500, after: 600 },
+                        children: [
+                            new TextRun({
+                                text: (coverPageMeta.teacherName || "NAME OF TEACHER").toUpperCase(),
+                                bold: true,
+                                font: "Century Gothic",
+                                size: 36
+                            }),
+                        ],
+                    }),
+                    ...(coverPageMeta.subjectTeacher ? [
+                        new Paragraph({
+                            alignment: AlignmentType.CENTER,
+                            spacing: { after: 800 },
+                            children: [
+                                new TextRun({
+                                    text: `SUBJECT TEACHER: ${coverPageMeta.subjectTeacher.toUpperCase()}`,
+                                    bold: true,
+                                    font: "Century Gothic",
+                                    size: 28,
+                                }),
+                            ],
+                        })
+                    ] : []),
+                    new Paragraph({
+                        children: [new PageBreak()],
+                    })
+                ];
+            }
+            // Standardize total width to exactly 10080 DXA (7 inches * 1440 twips)
+            // Table 1: Header Info (Rows 1-3)
+            // Week Ending: 4.7cm (2665 dxa), Day: 3.41cm (1933 dxa), Subject: remaining (10080 - 2665 - 1933 = 5482 dxa)
+            const table1 = new Table({
+                alignment: AlignmentType.CENTER,
+                layout: TableLayoutType.FIXED,
+                width: { size: 10080, type: WidthType.DXA },
+                columnWidths: [2665, 1933, 5482],
+                rows: [
+                    // Row 1: Week Ending | Day | Subject
+                    new TableRow({
+                        children: [
+                            createCell(`Week Ending: ${lessonData.weekEnding || ''}`, false, 1, false, true),
+                            createCell(`Day: ${lessonData.day || ''}`, false, 1, false, true),
+                            createCell(`Subject: ${formatSubject(lessonData.subject || '')}`, false, 1, false, true),
+                        ],
+                    }),
+                    // Row 2: Duration (spanning Week Ending + Day = 2 cols) | Strand (1 col)
+                    new TableRow({
+                        children: [
+                            createCell(`Duration: ${lessonData.duration || ''}`, false, 2, false, true),
+                            createCell(`Strand: ${cleanStrandOrSubStrand(lessonData.strand || '')}`, false, 1, false, true),
+                        ],
+                    }),
+                    // Row 3: Class | Class Size | Sub Strand
+                    new TableRow({
+                        children: [
+                            createCell(`Class: ${formatClass(lessonData.class || '')}`, false, 1, false, true),
+                            createCell(`Class Size: ${lessonData.classSize || ''}`, false, 1, false, true),
+                            createCell(`Sub Strand: ${cleanStrandOrSubStrand(lessonData.subStrand || '')}`, false, 1, false, true),
+                        ],
+                    }),
+                ],
+            });
+            // Table 2: Standards (Row 4)
+            // Independent grid: 3 columns [2100, 6300, 2100]
+            let lessonText = lessonData.lesson || '1 of 1';
+            // If multiple lessons are being generated, enforce sequential numbering "X of Y"
+            if (dataArray.length > 1) {
+                lessonText = `${index + 1} of ${dataArray.length}`;
+            }
+            // If lessonText is just a number "1", format to "Lesson 1" (or "1 of 1")
+            if (/^\d+$/.test(lessonText)) {
+                // Check if we have context to know total? We don't in this scope easily unless passed.
+                // defaulting to "1 of 1" is safe if unknown
+                lessonText = `${lessonText} of 1`;
+            }
+            // Ensure "Lesson: " prefix is handled correctly
+            let finalLessonCellText = "";
+            if (lessonText.toLowerCase().startsWith("lesson: ")) {
+                finalLessonCellText = lessonText;
+            }
+            else if (lessonText.toLowerCase().startsWith("lesson ")) {
+                // e.g. "Lesson 1 of 3" -> "Lesson: 1 of 3" (optional preference, or just use as is)
+                // User prompt implies "Lesson: 1 of 1" is the bad output.
+                // If AI gives "Lesson 1 of 3", we might want "Lesson: 1 of 3"
+                finalLessonCellText = lessonText.replace(/^Lesson\s+/i, "Lesson: ");
+            }
+            else {
+                // e.g. "1 of 3" -> "Lesson: 1 of 3"
+                finalLessonCellText = `Lesson: ${lessonText}`;
+            }
+            const table2 = new Table({
+                alignment: AlignmentType.CENTER,
+                layout: TableLayoutType.FIXED,
+                width: { size: 10080, type: WidthType.DXA },
+                // Content Standard: 8.5cm (4820 dxa), Indicator: 7.04cm (3992 dxa), Lesson: remaining (10080 - 4820 - 3992 = 1268 dxa)
+                columnWidths: [4820, 3992, 1268],
+                rows: [
+                    new TableRow({
+                        children: [
+                            createCell(`Content Standard: ${cleanContentStandard(lessonData.contentStandard || '')}`, false, 1, false, true),
+                            createCell(`Indicator: ${lessonData.indicator || ''}`, false, 1, false, true),
+                            createCell(finalLessonCellText, false, 1, false, true),
+                        ],
+                    }),
+                ],
+            });
+            // Table 3: Competencies (Row 5)
+            // Performance Indicator: 13cm (7371 dxa), Core Competencies: remaining (10080 - 7371 = 2709 dxa)
+            const table3 = new Table({
+                alignment: AlignmentType.CENTER,
+                layout: TableLayoutType.FIXED,
+                width: { size: 10080, type: WidthType.DXA },
+                columnWidths: [7371, 2709],
+                rows: [
+                    new TableRow({
+                        children: [
+                            createCell(`Performance Indicator: ${ensurePerformanceIndicatorPrefix(lessonData.performanceIndicator || '')}`, false, 1, false, true),
+                            createCell(`Core Competencies: ${lessonData.coreCompetencies || ''}`, false, 1, false, true),
+                        ],
+                    }),
+                ],
+            });
+            // Table 4: Keywords & References (Rows 6-7)
+            // Keywords: 2.71cm (1536 dxa), Reference: remaining (10080 - 1536 = 8544 dxa)
+            const table4 = new Table({
+                alignment: AlignmentType.CENTER,
+                layout: TableLayoutType.FIXED,
+                width: { size: 10080, type: WidthType.DXA },
+                columnWidths: [1536, 8544],
+                rows: [
+                    new TableRow({
+                        children: [
+                            createCell(`Keywords:`, false, 1, false, true),
+                            createCell(lessonData.keywords || '', false, 1, false),
+                        ],
+                    }),
+                    new TableRow({
+                        children: [
+                            createCell(`Reference:`, false, 1, false, true),
+                            // STRICT REQUIREMENT: "NaCCA [subject] Curriculum for [Class]"
+                            createCell(`NaCCA ${formatSubject(lessonData.subject || '')} Curriculum for ${formatClass(lessonData.class || '')}`, false, 1, false),
+                        ],
+                    }),
+                ],
+            });
+            // Table 5: Phases (Rows 8+)
+            // Phase/Duration: 3.55cm (2013 dxa), Learners Activities: 10.19cm (5778 dxa), Resources: remaining (10080 - 2013 - 5778 = 2289 dxa)
+            const table5 = new Table({
+                alignment: AlignmentType.CENTER,
+                layout: TableLayoutType.FIXED,
+                width: { size: 10080, type: WidthType.DXA },
+                columnWidths: [2013, 5778, 2289],
+                rows: [
+                    // Header
+                    new TableRow({
+                        children: [
+                            createCell("Phase/Duration", true, 1, true, false, { size: 2013, type: WidthType.DXA }),
+                            createCell("Learners Activities", true, 1, true, false, { size: 5778, type: WidthType.DXA }),
+                            createCell("Resources", true, 1, true, false, { size: 2289, type: WidthType.DXA }),
+                        ],
+                    }),
+                    // Phase 1 - STARTER
+                    new TableRow({
+                        children: [
+                            new TableCell({
+                                width: { size: 2013, type: WidthType.DXA },
+                                children: [
+                                    new Paragraph({
+                                        children: [
+                                            new TextRun({ text: "PHASE 1: STARTER", bold: true, size: 20, font: "Segoe UI" }),
+                                        ],
+                                        spacing: { before: 80, after: 40 },
+                                    }),
+                                    new Paragraph({
+                                        children: [
+                                            new TextRun({ text: "(10 mins)", bold: true, size: 18, font: "Segoe UI" }),
+                                        ],
+                                        spacing: { before: 0, after: 80 },
+                                    }),
+                                ],
+                                borders: tableBorders,
+                                verticalAlign: VerticalAlign.TOP,
+                                margins: { top: 100, bottom: 100, left: 100, right: 100 },
+                            }),
+                            createCell(capitalizeWords(lessonData.phases?.phase1_starter?.learnerActivities || ""), false, 1, false, false, { size: 5778, type: WidthType.DXA }),
+                            createCell(capitalizeWords(lessonData.phases?.phase1_starter?.resources || ""), false, 1, false, false, { size: 2289, type: WidthType.DXA }),
+                        ],
+                    }),
+                    // Phase 2 - NEW LEARNING
+                    new TableRow({
+                        children: [
+                            new TableCell({
+                                width: { size: 2013, type: WidthType.DXA },
+                                children: [
+                                    new Paragraph({
+                                        children: [
+                                            new TextRun({ text: "PHASE 2: NEW LEARNING", bold: true, size: 20, font: "Segoe UI" }),
+                                        ],
+                                        spacing: { before: 80, after: 40 },
+                                    }),
+                                    new Paragraph({
+                                        children: [
+                                            new TextRun({ text: "(40 mins)", bold: true, size: 18, font: "Segoe UI" }),
+                                        ],
+                                        spacing: { before: 0, after: 80 },
+                                    }),
+                                ],
+                                borders: tableBorders,
+                                verticalAlign: VerticalAlign.TOP,
+                                margins: { top: 100, bottom: 100, left: 100, right: 100 },
+                            }),
+                            createCell(capitalizeWords(lessonData.phases?.phase2_newLearning?.learnerActivities || ""), false, 1, false, false, { size: 5778, type: WidthType.DXA }),
+                            createCell(capitalizeWords(lessonData.phases?.phase2_newLearning?.resources || ""), false, 1, false, false, { size: 2289, type: WidthType.DXA }),
+                        ],
+                    }),
+                    // Phase 3 - REFLECTION
+                    new TableRow({
+                        children: [
+                            new TableCell({
+                                width: { size: 2013, type: WidthType.DXA },
+                                children: [
+                                    new Paragraph({
+                                        children: [
+                                            new TextRun({ text: "PHASE 3: REFLECTION", bold: true, size: 20, font: "Segoe UI" }),
+                                        ],
+                                        spacing: { before: 80, after: 40 },
+                                    }),
+                                    new Paragraph({
+                                        children: [
+                                            new TextRun({ text: "(10 mins)", bold: true, size: 18, font: "Segoe UI" }),
+                                        ],
+                                        spacing: { before: 0, after: 80 },
+                                    }),
+                                ],
+                                borders: tableBorders,
+                                verticalAlign: VerticalAlign.TOP,
+                                margins: { top: 100, bottom: 100, left: 100, right: 100 },
+                            }),
+                            createCell(capitalizeWords(lessonData.phases?.phase3_reflection?.learnerActivities || ""), false, 1, false, false, { size: 5778, type: WidthType.DXA }),
+                            createCell(capitalizeWords(lessonData.phases?.phase3_reflection?.resources || ""), false, 1, false, false, { size: 2289, type: WidthType.DXA }),
+                        ],
+                    }),
+                ],
+            });
+            const propertiesObj = {
+                properties: {
+                    page: {
+                        size: {
+                            width: 11906, // A4 Exact Width (dxa)
+                            height: 16838, // A4 Exact Height (dxa)
+                        },
+                        margin: {
+                            top: 720, // 0.5 inch
+                            right: 720,
+                            bottom: 720,
+                            left: 720,
+                        },
+                        borders: (isFirst && coverPageMeta) ? {
+                            pageBorders: {
+                                display: "firstPage",
+                                offsetFrom: "page",
+                            },
+                            pageBorderTop: { style: BorderStyle.DOUBLE, size: 24, space: 31, color: "000000" },
+                            pageBorderBottom: { style: BorderStyle.DOUBLE, size: 24, space: 31, color: "000000" },
+                            pageBorderLeft: { style: BorderStyle.DOUBLE, size: 24, space: 31, color: "000000" },
+                            pageBorderRight: { style: BorderStyle.DOUBLE, size: 24, space: 31, color: "000000" },
+                        } : undefined,
+                    },
+                }
+            };
+            const effectiveTerm = lessonData.term || coverPageMeta?.term || "";
+            let childrenContent = [];
+            if (lessonData._dummyCoverOnly) {
+                // Remove the PageBreak at the end of coverParagraphs for standalone cover page
+                if (coverParagraphs.length > 0) {
+                    coverParagraphs.pop();
+                }
+                childrenContent = [...coverParagraphs];
+            }
+            else {
+                childrenContent = [
+                    ...coverParagraphs,
+                    new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 100 },
+                        children: [
+                            new TextRun({
+                                text: formatTerm(effectiveTerm),
+                                bold: true,
+                                size: 24, // 12pt
+                                font: "Segoe UI",
+                            }),
+                        ],
+                    }),
+                    new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 100 },
+                        children: [
+                            new TextRun({
+                                text: `WEEKLY LESSON PLAN – ${formatClass(lessonData.class || 'BASIC 1').toUpperCase()}`,
+                                bold: true,
+                                size: 24, // 12pt
+                                font: "Segoe UI",
+                            }),
+                        ],
+                    }),
+                    new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 300 },
+                        children: [
+                            new TextRun({
+                                text: formatWeek(lessonData.weekNumber),
+                                bold: true,
+                                size: 24, // 12pt
+                                font: "Segoe UI",
+                                underline: {},
+                            }),
+                        ],
+                    }),
+                    table1,
+                    new Paragraph({
+                        children: [],
+                        spacing: { after: 0, before: 0, line: 1, lineRule: "exact" },
+                        run: { size: 1 }
+                    }),
+                    table2,
+                    new Paragraph({
+                        children: [],
+                        spacing: { after: 0, before: 0, line: 1, lineRule: "exact" },
+                        run: { size: 1 }
+                    }),
+                    table3,
+                    new Paragraph({
+                        children: [],
+                        spacing: { after: 0, before: 0, line: 1, lineRule: "exact" },
+                        run: { size: 1 }
+                    }),
+                    table4,
+                    new Paragraph({
+                        children: [],
+                        spacing: { after: 0, before: 0, line: 1, lineRule: "exact" },
+                        run: { size: 1 }
+                    }),
+                    table5,
+                    new Paragraph({
+                        text: "",
+                        spacing: { before: 400 },
+                    }),
+                ];
+            }
+            return {
+                ...propertiesObj,
+                children: childrenContent,
+            };
+        });
+        // Create document with all sections
+        const doc = new Document({
+            creator: "LessonAi",
+            title: "Ghana Lesson Plan",
+            compatabilityModeVersion: 15, // Force Word 2013 compatibility rules for stricter rendering
+            styles: {
+                default: {
+                    document: {
+                        run: {
+                            font: "Segoe UI, Calibri, sans-serif",
+                        }
+                    }
+                }
+            },
+            sections: docSections,
+        });
+        // Generate and download
+        const blob = await Packer.toBlob(doc);
+        if (returnBlob) {
+            return blob;
+        }
+        saveAs(blob, fileName);
+        console.log("Ghana lesson plan DOCX generated successfully:", fileName);
+    }
+    catch (error) {
+        console.error("Error generating Ghana lesson DOCX:", error);
+        throw new Error("Failed to generate Ghana lesson plan document");
+    }
+}
+/**
+ * Generate filename for Ghana lesson plan
+ */
+export function generateGhanaLessonFileName(lessonData) {
+    try {
+        let rawData = typeof lessonData === 'string' ? JSON.parse(lessonData) : lessonData;
+        // If it's an array (either from parsing or direct input), take the first item
+        const data = Array.isArray(rawData) ? rawData[0] : rawData;
+        const classAbbr = getClassAbbreviation(data.class || "");
+        const subjectAbbr = getSubjectAbbreviation(data.subject || "");
+        const weekAbbr = getWeekAbbreviation(data.weekNumber || "");
+        return `${classAbbr}-${subjectAbbr}-${weekAbbr}.docx`;
+    }
+    catch (error) {
+        return `ghana-lesson-plan-${new Date().toISOString().split('T')[0]}.docx`;
+    }
+}
+/**
+ * Parse JSON from AI response (handles cases where JSON might be wrapped in code blocks, arrays, or multiple lessons separated by ---)
+ */
+export function parseAIJsonResponse(response) {
+    try {
+        // Remove markdown code blocks if present
+        let cleanJson = response.trim();
+        // Remove markdown code fences
+        if (cleanJson.startsWith('```')) {
+            cleanJson = cleanJson.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+        }
+        // PRIORITY 1: Check if it's a JSON array (multiple lessons)
+        const trimmedForCheck = cleanJson.trim();
+        if (trimmedForCheck.startsWith('[') && trimmedForCheck.includes('{')) {
+            try {
+                const parsed = JSON.parse(trimmedForCheck);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    // Validate each item has essential lesson fields
+                    const validLessons = parsed.filter((item) => item.subject || item.phases || item.strand);
+                    if (validLessons.length > 0) {
+                        console.log(`Parsed ${validLessons.length} lessons from JSON array`);
+                        return validLessons.length === 1 ? validLessons[0] : validLessons;
+                    }
+                }
+            }
+            catch (e) {
+                console.warn("Failed to parse as JSON array, trying other methods...");
+            }
+        }
+        // PRIORITY 2: Check for "---" separator logic (legacy multiple lessons format)
+        if (cleanJson.includes('---')) {
+            const parts = cleanJson.split(/(?:^|\n)---(?:\r?\n|$)/g);
+            const results = [];
+            for (const part of parts) {
+                const trimmedPart = part.trim();
+                if (!trimmedPart || trimmedPart.length < 5)
+                    continue;
+                if (!/^\s*[\[{]/.test(trimmedPart) && !trimmedPart.startsWith('```'))
+                    continue;
+                try {
+                    let jsonPart = trimmedPart;
+                    if (jsonPart.startsWith('```')) {
+                        jsonPart = jsonPart.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+                    }
+                    if (!/^\s*[\[{]/.test(jsonPart))
+                        continue;
+                    const parsed = JSON.parse(jsonPart);
+                    if (parsed && (parsed.subject || parsed.phases || parsed.strand)) {
+                        results.push(parsed);
+                    }
+                }
+                catch (e) {
+                    console.warn("Failed to parse partial JSON block:", e);
+                }
+            }
+            if (results.length > 0) {
+                console.log(`Parsed ${results.length} lessons from --- separator format`);
+                return results.length === 1 ? results[0] : results;
+            }
+        }
+        // PRIORITY 3: Standard Single JSON parsing
+        const parsed = JSON.parse(cleanJson);
+        // Check if parsed result is an array
+        if (Array.isArray(parsed)) {
+            const validLessons = parsed.filter((item) => item.subject || item.phases || item.strand);
+            if (validLessons.length > 0) {
+                return validLessons.length === 1 ? validLessons[0] : validLessons;
+            }
+        }
+        return parsed;
+    }
+    catch (error) {
+        console.error("Error parsing AI JSON response:", error);
+        // Attempt fallback for common JSON errors
+        try {
+            // Find the first occurrence of [ or {
+            const firstOpen = response.search(/[{[]/);
+            // Find the last occurrence of } or ]
+            const lastClose = Math.max(response.lastIndexOf('}'), response.lastIndexOf(']'));
+            if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
+                const potentialJson = response.substring(firstOpen, lastClose + 1);
+                const fallbackParsed = JSON.parse(potentialJson);
+                // Handle array result from fallback
+                if (Array.isArray(fallbackParsed)) {
+                    const validLessons = fallbackParsed.filter((item) => item.subject || item.phases || item.strand);
+                    if (validLessons.length > 0) {
+                        return validLessons.length === 1 ? validLessons[0] : validLessons;
+                    }
+                }
+                return fallbackParsed;
+            }
+        }
+        catch (e) { }
+        throw new Error("Failed to parse lesson data. Please ensure the AI returned valid JSON.");
+    }
+}

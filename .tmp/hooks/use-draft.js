@@ -1,0 +1,58 @@
+import { useState, useEffect, useCallback } from 'react';
+export function useDraft(initialData, options) {
+    const { key, autosaveDelay = 2000 } = options;
+    const [data, setData] = useState(initialData);
+    const [lastSaved, setLastSaved] = useState(null);
+    const [isSaving, setIsSaving] = useState(false);
+    // Load draft on mount
+    useEffect(() => {
+        const savedDraft = localStorage.getItem(`draft_${key}`);
+        if (savedDraft) {
+            try {
+                const parsed = JSON.parse(savedDraft);
+                // Merge with initialData to ensure new fields/defaults are preserved
+                setData({ ...initialData, ...parsed.data });
+                setLastSaved(new Date(parsed.timestamp));
+            }
+            catch (error) {
+                console.error('Failed to load draft:', error);
+            }
+        }
+    }, [key]);
+    // Autosave draft
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setIsSaving(true);
+            const draftData = {
+                data,
+                timestamp: new Date().toISOString(),
+            };
+            localStorage.setItem(`draft_${key}`, JSON.stringify(draftData));
+            setLastSaved(new Date());
+            setIsSaving(false);
+        }, autosaveDelay);
+        return () => clearTimeout(timer);
+    }, [data, key, autosaveDelay]);
+    const clearDraft = useCallback(() => {
+        localStorage.removeItem(`draft_${key}`);
+        setLastSaved(null);
+    }, [key]);
+    const saveDraft = useCallback(() => {
+        setIsSaving(true);
+        const draftData = {
+            data,
+            timestamp: new Date().toISOString(),
+        };
+        localStorage.setItem(`draft_${key}`, JSON.stringify(draftData));
+        setLastSaved(new Date());
+        setIsSaving(false);
+    }, [data, key]);
+    return {
+        data,
+        setData,
+        lastSaved,
+        isSaving,
+        clearDraft,
+        saveDraft,
+    };
+}

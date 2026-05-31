@@ -294,6 +294,20 @@ const Dashboard = () => {
     }
   };
 
+  const isPotentialGhanaJson = (text: string) => {
+    const trimmed = text.trim();
+    if (/^\s*[{[]/.test(trimmed)) return true;
+    if (/^```(?:json)?[\s\S]*```$/.test(trimmed)) return true;
+    if (trimmed.includes('---')) {
+      const parts = trimmed.split(/(?:^|\r?\n)---(?:\r?\n|$)/g);
+      return parts.some((part) => {
+        const candidate = part.trim();
+        return candidate.startsWith('{') || candidate.startsWith('[') || candidate.startsWith('```');
+      });
+    }
+    return false;
+  };
+
   const downloadLessonNote = async (id: string) => {
     try {
       const { data } = await supabase
@@ -313,35 +327,28 @@ const Dashboard = () => {
           cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
         }
 
-        // Check if the content is JSON (Ghana template)
-        const isJsonFormat = cleanContent.startsWith('{') || cleanContent.startsWith('[') || cleanContent.includes('---');
-        
-        if (isJsonFormat) {
+        let parsedResult: any = null;
+        if (isPotentialGhanaJson(cleanContent)) {
           try {
-            const parsedResult = parseAIJsonResponse(cleanContent);
-            
-            // Normalize to array for processing metadata
-            const parsedArray = Array.isArray(parsedResult) ? parsedResult : [parsedResult];
-            
-            // Generate filename based on first lesson
-            const filename = generateGhanaLessonFileName(parsedArray[0]);
-            
-            // Generate DOCX
-            await generateGhanaLessonDocx(parsedArray, filename);
-            toast({
-              title: "Success",
-              description: "Lesson note downloaded successfully",
-            });
+            parsedResult = parseAIJsonResponse(cleanContent);
           } catch (jsonError) {
-            console.error("JSON parsing error:", jsonError);
-            toast({
-              title: "Error",
-              description: "Failed to parse lesson data. Downloading as text instead.",
-              variant: "destructive",
-            });
-            // Fallback to text download
-            downloadAsText(data);
+            console.warn("Ghana JSON parse failed, falling back to text download:", jsonError);
           }
+        }
+
+        if (parsedResult) {
+          // Normalize to array for processing metadata
+          const parsedArray = Array.isArray(parsedResult) ? parsedResult : [parsedResult];
+
+          // Generate filename based on first lesson
+          const filename = generateGhanaLessonFileName(parsedArray[0]);
+
+          // Generate DOCX
+          await generateGhanaLessonDocx(parsedArray, filename);
+          toast({
+            title: "Success",
+            description: "Lesson note downloaded successfully",
+          });
         } else {
           // Handle regular text-based templates
           const metadata = {

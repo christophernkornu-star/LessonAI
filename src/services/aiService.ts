@@ -7,6 +7,7 @@ import {
   getDifferentiationStrategy 
 } from "@/data/ghanaContext";
 import { extractTextFromFile } from "./fileParsingService";
+import { normalizeLatexMathDelimiters } from "@/lib/textFormatting";
 
 // AI Provider Configuration
 // Enforced to DeepSeek for production
@@ -24,14 +25,63 @@ function getPhilosophyGuidance(philosophy: string): string {
   return philosophies[philosophy] || philosophies["balanced"];
 }
 
-function getDetailLevelGuidance(detailLevel: string): string {
-  const levels: Record<string, string> = {
-    "brief": "Provide a concise outline with key points only. Keep explanations short and focused on essentials. Aim for brevity while covering all necessary sections.",
-    "moderate": "Provide standard detail with clear explanations and examples. Balance thoroughness with readability. Include practical details without being overwhelming.",
-    "detailed": "Provide comprehensive explanations, multiple examples, and thorough coverage of each section. Include specific instructions, dialogue suggestions, and detailed activity descriptions.",
-    "very-detailed": "Provide extensive detail including scripted dialogue, multiple examples for different scenarios, differentiation strategies for various learner types, detailed timing for each activity segment, and comprehensive assessment rubrics."
+function normalizeDetailLevel(detailLevel: string): string {
+  return detailLevel.toLowerCase().trim().replace(/\s+/g, "-");
+}
+
+function getDetailLevelLabel(detailLevel: string): string {
+  const labels: Record<string, string> = {
+    "brief": "Brief",
+    "moderate": "Moderate",
+    "detailed": "Detailed",
+    "very-detailed": "Very Detailed",
   };
-  return levels[detailLevel] || levels["moderate"];
+  return labels[detailLevel] || labels["moderate"];
+}
+
+function getDetailLevelGuidance(detailLevel: string): string {
+  const normalizedLevel = normalizeDetailLevel(detailLevel);
+  const levels: Record<string, string> = {
+    "brief": "Provide a concise outline with key points only. Keep explanations short and focused on essentials. Aim for brevity while covering all necessary sections. Keep Starter content compact and directly linked to the lesson objective.",
+    "moderate": "Provide standard detail with clear explanations and examples. Balance thoroughness with readability. Include practical details without being overwhelming. Scale the Starter section to include a clear warm-up activity and its purpose.",
+    "detailed": "Provide comprehensive explanations, multiple examples, and thorough coverage of each section. Include specific instructions, dialogue suggestions, and detailed activity descriptions. Ensure the Starter section gives a detailed opening activity with prompts and a strong link to the main learning.",
+    "very-detailed": "Provide extensive detail including scripted dialogue, multiple examples for different scenarios, differentiation strategies for various learner types, detailed timing for each activity segment, and comprehensive assessment rubrics. Provide a very detailed Starter section with explicit prompts, learner responses, and a smooth transition into the main lesson."
+  };
+  return levels[normalizedLevel] || levels["moderate"];
+}
+
+function getDetailLevelOverride(detailLevel: string): string {
+  const normalizedLevel = normalizeDetailLevel(detailLevel);
+  const overrides: Record<string, string> = {
+    "brief": `- For BRIEF detail level, keep the entire lesson note extremely concise.
+- Use only the most essential bullet points and key phrases.
+- Limit each section to one or two short sentences or a single concise bullet.
+- Keep the Phase 1 Starter section very short: one clear warm-up activity and a brief link to the lesson topic.
+- Do NOT add unnecessary explanation, examples, or background details.
+- If the template asks for activities, keep them short and focus on the core action only.
+- The Phase 1 Starter learner activity should be present as a short sentence or bullet, not left blank.
+- Use clear, direct wording rather than full paragraphs.
+`,
+    "moderate": `- For MODERATE detail level, provide clear explanations and at least one example for each major section.
+- Keep content practical and teacher-friendly, without excessive elaboration.
+- Use short paragraphs and bullet points to keep readability high.
+- In the Phase 1 Starter section, include a concise warm-up activity, a clear purpose statement, and a simple connection to the main lesson.
+- Include enough detail so a teacher can use the plan without needing major additions.
+`,
+    "detailed": `- For DETAILED detail level, include comprehensive step-by-step activity instructions and at least two examples.
+- Add teacher prompts, learner responses, and pacing suggestions where appropriate.
+- In the Phase 1 Starter section, describe the starter activity in detail, include prompts/questions, and explain how it prepares learners for new learning.
+- Offer guidance on differentiation and assessment within each section.
+- Keep the lesson plan rich but still well-structured and easy to follow.
+`,
+    "very-detailed": `- For VERY DETAILED level, provide extensive classroom-ready content with multiple examples, explicit teacher dialogue, and detailed timing.
+- Include assessment rubrics, differentiation for different learner needs, and clear pacing for each activity segment.
+- In the Phase 1 Starter section, provide a fully developed starter routine with questions, expected learner responses, and a clear transition into the main lesson.
+- Add practical teaching notes, anticipated learner responses, and variations for higher and lower ability students.
+- Ensure the result is exhaustive, classroom-ready, and highly actionable.
+`,
+  };
+  return overrides[normalizedLevel] || overrides["moderate"];
 }
 
 export interface LessonData {
@@ -385,16 +435,11 @@ export async function generateLessonNote(originalData: LessonData): Promise<stri
     }
 
     // Build teaching approach guidance
+    const normalizedDetailLevel = normalizeDetailLevel(data.detailLevel || 'moderate');
+    const detailLevelLabel = getDetailLevelLabel(normalizedDetailLevel);
     const philosophyGuidance = getPhilosophyGuidance(data.philosophy || 'balanced');
-    const detailGuidance = getDetailLevelGuidance(data.detailLevel || 'moderate');
-    const briefDetailOverride = data.detailLevel === 'brief' ? `
-- For BRIEF detail level, keep the entire lesson note extremely concise.
-- Use only the most essential bullet points and key phrases.
-- Limit each section to one or two short sentences or a single concise bullet.
-- Do NOT add unnecessary explanation, examples, or background details.
-- If the template asks for activities, keep them short and focus on the core action only.
-- Use clear, direct wording rather than full paragraphs.
-` : '';
+    const detailGuidance = getDetailLevelGuidance(normalizedDetailLevel);
+    const detailLevelOverride = getDetailLevelOverride(normalizedDetailLevel);
     
     // Get Ghana-specific context
     const curriculumStandard = getCurriculumStandard(data.level);
@@ -522,8 +567,10 @@ ${ghanaContextPrompt}
 **TEACHING APPROACH:**
 ${philosophyGuidance}
 
-**DETAIL LEVEL:**
-${detailGuidance}${briefDetailOverride}
+**DETAIL LEVEL:** ${detailLevelLabel}
+- Use the selected detail level exactly as specified.
+- ${detailGuidance}
+${detailLevelOverride}
 
 ${data.includeDiagrams ? `**DIAGRAM OUTLINES:**
 Include descriptions of relevant diagrams, charts, illustrations, or visual aids that should be used during the lesson. For each diagram, provide:
@@ -572,7 +619,7 @@ ${data.template.structure}
 - Replace {STARTER_DURATION} with "10 mins"
 - Replace {NEW_LEARNING_DURATION} with "40 mins"
 - Replace {REFLECTION_DURATION} with "10 mins"
-- For {STARTER_ACTIVITIES}: Describe the starter/warm-up activities.
+- For {STARTER_ACTIVITIES}: Provide a concise summary of starter/warm-up activities in one short sentence or a single concise bullet point. Do not leave this section blank, even in Brief mode.
 - For {REFLECTION_ACTIVITIES}: 
   1. Briefly summarize the lesson closure.
   2. ALWAYS add a blank line (double newline), then include the subheading "**Sample Class Exercises:**" (bolded) followed by at least 3 concept application questions for students to solve. 
@@ -603,7 +650,7 @@ ${data.template.structure}
 **CONTENT QUALITY REQUIREMENTS:**
 - **Paragraphing:** Break long text into smaller, readable paragraphs. Use double newlines (\n\n) to separate paragraphs in JSON strings.
 - **Teaching Philosophy:** ${data.philosophy || 'balanced'} - ${philosophyGuidance}
-- **Detail Level:** ${data.detailLevel || 'moderate'} - ${detailGuidance}
+- **Detail Level:** ${detailLevelLabel} - ${detailGuidance}
 - **Diagrams:** ${data.includeDiagrams ? 'Include diagram outlines as requested.' : 'Do not include diagram outlines.'}
 - Generate detailed, practical, actionable content for EVERY section
 - Ensure all content is appropriate for ${data.level} students in Ghana
@@ -677,8 +724,10 @@ ${ghanaContextPrompt}
 **TEACHING APPROACH:**
 ${philosophyGuidance}
 
-**DETAIL LEVEL:**
-${detailGuidance}
+**DETAIL LEVEL:** ${detailLevelLabel}
+- Use the selected detail level exactly as specified.
+- ${detailGuidance}
+${detailLevelOverride}
 - **Formatting:** Use short, clear paragraphs. Avoid long blocks of text. Use bullet points where appropriate.
 
 ${data.includeDiagrams ? `**DIAGRAM OUTLINES:**
@@ -922,15 +971,7 @@ export async function parseSchemeOfLearning(text: string): Promise<Array<{
 }
 
 function normalizeMathDelimiters(text: string): string {
-  if (!text) return text;
-
-  return text.replace(/(\${3,})([\s\S]*?)(\${3,})/g, (match, open, body, close) => {
-    if (open.length !== close.length) {
-      return match;
-    }
-    const delimiter = body.includes('\n') ? '$$' : '$';
-    return `${delimiter}${body}${delimiter}`;
-  });
+  return normalizeLatexMathDelimiters(text);
 }
 
 function wrapMathInLatex(text: string): string {
@@ -955,24 +996,55 @@ function wrapMathInLatex(text: string): string {
 
   let result = normalizedText;
 
-  // ONLY match these specific patterns that are clearly mathematical:
-
-  // 1. Variable equations: "x = 5", "y = 2x + 3"
+  // Preserve raw LaTeX commands as inline math before any other wrapping logic.
   result = replaceOutsideMath(
     result,
-    /(?<![a-zA-Z])([a-zA-Z])\s*=\s*(-?[\da-zA-Z+\-*/^.() ]+?)(?=\s*(?:,|\.|;|\n|$))/g,
+    /\\(?:cancel|frac|sqrt|leq|geq|neq|lt|gt|times|div|pm|approx)\{[^}\n]+\}(?:\{[^}\n]+\})?/g,
+    (match) => `$${match}$`
+  );
+
+  // ONLY match these specific patterns that are clearly mathematical:
+
+    // 1. Variable equations: "x = 5", "y = 2x + 3", "result = (5 + 3) * 2"
+  result = replaceOutsideMath(
+    result,
+    /(?<![a-zA-Z])([a-zA-Z])\s*=\s*([\d(a-zA-Z+\-*/^.() ]+?)(?=\s*(?:,|\.|;|\n|$))/g,
     (match, variable, expression) => {
-      if (/[-+*/^\d]/.test(expression)) {
+      // Check if the expression contains math operators, digits, or parentheses with digits
+      if (/[-+*/^\d()]/.test(expression) && expression.trim().length > 0) {
         return `$${variable} = ${expression.trim()}$`;
       }
       return match;
     }
   );
 
-  // 2. Pure number equations: "2 + 3 = 5"
+    // 2. Pure number equations: "2 + 3 = 5", "(3 + 4) x 2 = 14", "3 x 4 = 12"
+    // Also matches expressions involving parentheses and LaTeX operators like \times
+    result = replaceOutsideMath(
+      result,
+      /(\(?\d+(?:\.\d+)?(?:\s*[+\-*/]\s*\d+(?:\.\d+)?)*\)?\s*[\+\-\*\/]\s*\(?\d+(?:\.\d+)?(?:\s*[+\-*/]\s*\d+(?:\.\d+)?)*\)?\s*=\s*\d+(?:\.\d+)?)/g,
+      (match) => `$${match}$`
+    );
+
+    // 2a. Standalone parenthesized math with mixed operators (no '=' sign)
+    // e.g. "(5 + 3) * 2" or "3 \times 4"
+    result = replaceOutsideMath(
+      result,
+      /(\(?\s*(?:\d+|[a-zA-Z])\s*(?:[+\-*/^]|\\times|\\div|\\cdot)\s*(?:\d+|[a-zA-Z])(?:\s*[+\-*/^]\s*(?:\d+|[a-zA-Z]|[()]))*)/g,
+      (match) => {
+        // Only wrap if it looks like a math expression (has operators and is not just a word)
+        if (match.length > 1 && /[+\-*/^]/.test(match)) {
+          return `$${match}$`;
+        }
+        return match;
+      }
+    );
+
+  // 2b. Broader math expressions with operators that might include LaTeX commands like \times, \div
+  // e.g. "(3 + 4) \times 2 = 7 \times 2 = 14" or "x \times y = z"
   result = replaceOutsideMath(
     result,
-    /(\d+(?:\.\d+)?\s*[+\-*/]\s*\d+(?:\.\d+)?\s*=\s*\d+(?:\.\d+)?)/g,
+    /(\(?\s*(?:\d+|[a-zA-Z])\s*(?:[+\-*/^]|\\times|\\div|\\cdot)\s*(?:\d+|[a-zA-Z])\s*[=<>]\s*(?:\d+|[a-zA-Z])(?:\s*[+\-*/^]\s*(?:\d+|[a-zA-Z]))*)/g,
     (match) => `$${match}$`
   );
 
