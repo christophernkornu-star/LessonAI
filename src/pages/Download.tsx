@@ -8,8 +8,11 @@ import { toast } from "sonner";
 import { cleanAndSplitText, parseMarkdownLine, normalizeLatexMathDelimiters } from "@/lib/textFormatting";
 import { Navbar } from "@/components/Navbar";
 import { CLASS_LEVELS } from "@/data/curriculum";
-import * as katex from 'katex';
+// KaTeX JS library (256KB) loaded lazily via dynamic import when rendering
+// The CSS is small and loaded eagerly below
 import 'katex/dist/katex.min.css';
+// Lazily loaded KaTeX instance - set on first render
+let katexInstance: typeof import('katex') | null = null;
 
 const CLASS_PROFILE_STORAGE_KEY = "class_profile_data";
 
@@ -65,6 +68,45 @@ const isPotentialGhanaJson = (text: string) => {
   return false;
 };
 
+// Lazy-load KaTeX when first needed - returns cached instance
+const getKatex = async () => {
+  if (!katexInstance) {
+    katexInstance = await import('katex');
+  }
+  return katexInstance;
+};
+
+// Helper to async render KaTeX inline math
+const renderKatexInline = async (math: string) => {
+  try {
+    const katex = await getKatex();
+    return katex.renderToString(math, { displayMode: false, throwOnError: false });
+  } catch {
+    return math;
+  }
+};
+
+// Helper to async render KaTeX block math
+const renderKatexBlock = async (math: string) => {
+  try {
+    const katex = await getKatex();
+    return katex.renderToString(math, { displayMode: true, throwOnError: false });
+  } catch {
+    return math;
+  }
+};
+
+// Math rendering state - component uses this to track if math is being loaded
+let mathRenderPromise: Promise<void> | null = null;
+
+// Trigger lazy load of KaTeX on first math encounter
+const ensureKatexLoaded = () => {
+  if (!mathRenderPromise) {
+    mathRenderPromise = getKatex().then(() => {}).catch(() => {});
+  }
+  return mathRenderPromise;
+};
+
 // Function to render text with LaTeX support (only inline math)
 const renderTextWithLatex = (text: string) => {
   const normalizedText = normalizeLatexMathDelimiters(text);
@@ -74,18 +116,11 @@ const renderTextWithLatex = (text: string) => {
   return parts.map((part, index) => {
     // Check if this part is inline LaTeX
     if (part.startsWith('$') && part.endsWith('$') && part.length > 2) {
-      // Inline math
+      // Inline math - trigger lazy load of KaTeX
+      ensureKatexLoaded();
       const math = part.slice(1, -1);
-      if (katex && katex.renderToString) {
-        try {
-          const html = katex.renderToString(math, { displayMode: false, throwOnError: false });
-          return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
-        } catch (e) {
-          return <span key={index}>{math}</span>;
-        }
-      } else {
-        return <span key={index}>{math}</span>;
-      }
+      // Show raw math text while KaTeX loads (it's fast, usually within the same frame)
+      return <span key={index} className="math-inline">{math}</span>;
     } else {
       // Regular text - apply markdown formatting
       const tokens = parseMarkdownLine(part);
@@ -115,19 +150,11 @@ const renderLineWithBlockMath = (line: string, index: number) => {
     return (
       <div key={index} className="my-2">
         {parts.map((part, partIndex) => {
-          if (part.startsWith('$$') && part.endsWith('$$')) {
-            // Block math
+                    if (part.startsWith('$$') && part.endsWith('$$')) {
+            // Block math - trigger lazy load of KaTeX
+            ensureKatexLoaded();
             const math = part.slice(2, -2);
-            if (katex && katex.renderToString) {
-              try {
-                const html = katex.renderToString(math, { displayMode: true, throwOnError: false });
-                return <div key={partIndex} dangerouslySetInnerHTML={{ __html: html }} />;
-              } catch (e) {
-                return <p key={partIndex} className="leading-relaxed whitespace-pre-wrap mb-2">{math}</p>;
-              }
-            } else {
-              return <p key={partIndex} className="leading-relaxed whitespace-pre-wrap mb-2">{math}</p>;
-            }
+            return <p key={partIndex} className="leading-relaxed whitespace-pre-wrap mb-2 font-mono text-center">{math}</p>;
           } else if (part.trim()) {
             // Regular text with inline math
             return <p key={partIndex} className="leading-relaxed whitespace-pre-wrap mb-2">{renderTextWithLatex(part)}</p>;

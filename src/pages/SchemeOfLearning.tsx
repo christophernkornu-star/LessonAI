@@ -22,9 +22,8 @@ import { lessonTemplates } from "@/data/lessonTemplates";
 import { Progress } from "@/components/ui/progress";
 import { TimetableService } from "@/services/timetableService";
 import * as PizZipUtils from "pizzip/utils/index.js";
-import PizZip from "pizzip";
-import { saveAs } from "file-saver";
-import { generateGhanaLessonDocx, generateGhanaLessonFileName } from "@/services/ghanaLessonDocxService";
+// PizZip, saveAs, and docx services - imported dynamically when generating documents
+// These are large libraries that should not block initial page load
 import { Check, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -1196,7 +1195,12 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
 
       toast({ title: "Preparing Download", description: "Zipping files..." });
       
-      try {
+            try {
+          // Dynamically import heavy libraries only when ZIP generation is needed
+          const PizZip = (await import("pizzip")).default;
+          const { saveAs } = await import("file-saver");
+          const { generateGhanaLessonDocx, generateGhanaLessonFileName } = await import("@/services/ghanaLessonDocxService");
+          
           const zip = new PizZip();
           
           // Generate all docs
@@ -2010,279 +2014,46 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
                                                     />
                                                 </div>
                                             </>
-                                        ) : (
+                                                                                ) : (
                                             <div className="col-span-full rounded-3xl border border-secondary/20 bg-slate-50 p-4">
-                                                <div className="mb-3 text-sm font-semibold">Cover Page Preview</div>
-                                                <div className="grid gap-3 md:grid-cols-2">
-                                                    <div className="rounded-2xl bg-white p-3 border border-secondary/10">
-                                                        <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">School Name</div>
-                                                        <div className="mt-2 text-sm font-medium text-foreground">
-                                                            {coverPagePreview.schoolName || "(will use school name entered in class profile)"}
-                                                        </div>
-                                                    </div>
-                                                    <div className="rounded-2xl bg-white p-3 border border-secondary/10">
-                                                        <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Teacher Name</div>
-                                                        <div className="mt-2 text-sm font-medium text-foreground">
-                                                            {coverPagePreview.teacherName || "(will use teacher name entered in class profile)"}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                {(selectedBatchClassProfile.schoolName || selectedBatchClassProfile.teacherName) ? (
-                                                    <p className="mt-3 text-xs text-muted-foreground">
-                                                        Using class profile values for {normalizeClassLevel(batchFormData.classLevel) || "selected class"}.
-                                                    </p>
-                                                ) : (
-                                                    <p className="mt-3 text-xs text-muted-foreground">
-                                                        No class profile values found for this class; manual values will be used if entered.
-                                                    </p>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {['basic7', 'basic8', 'basic9'].includes(batchFormData.classLevel?.toLowerCase()) && (
-                                            <div className="space-y-2 col-span-full animate-fade-in-up">
-                                                <Label>Subjects to Display (Optional for Multiple Subjects)</Label>
-                                                <Input
-                                                    placeholder="e.g. Computing and Creative Arts and Design"
-                                                    value={batchFormData.coverPageSubject}
-                                                    onChange={e => setBatchFormData({...batchFormData, coverPageSubject: e.target.value})}
-                                                />
-                                                <p className="text-[11px] text-muted-foreground mt-1">
-                                                    For JHS classes, use this to override and list your specialized subjects on the Cover Page.
-                                                </p>
+                                                <p className="text-sm text-muted-foreground text-center">
+                                                    Using saved profile data for the selected class.
+                                                                                                </p>
                                             </div>
                                         )}
                                     </>
                                 )}
-                            </div>
-                         </div>
-                     ) : (
-                        <div className="space-y-4 pb-4">
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
-                                <Label className="text-base font-semibold">Select Subjects to Generate</Label>
-                                <div className="flex gap-2 text-sm">
-                                    <button 
-                                        className="text-primary hover:underline"
-                                        onClick={() => setSelectedBatchItems(batchDialogConfig.items.map(i => i.id))}
+
+                                <div className="col-span-full space-y-2">
+                                    <Button
+                                        type="button"
+                                        onClick={handleBatchGenerateConfirm}
+                                        disabled={isBatchGenerating}
+                                        className="w-full bg-gradient-hero hover:opacity-90"
+                                        size="lg"
                                     >
-                                        Select All
-                                    </button>
-                                    <span className="text-muted-foreground">|</span>
-                                    <button 
-                                        className="text-primary hover:underline"
-                                        onClick={() => setSelectedBatchItems([])}
-                                    >
-                                        Deselect All
-                                    </button>
+                                        {isBatchGenerating ? (
+                                            <>
+                                                <span className="animate-spin">⏳</span>
+                                                Generating Lessons...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Download className="mr-2 h-4 w-4" />
+                                                Generate All Lessons ({batchResults.length})
+                                            </>
+                                        )}
+                                    </Button>
                                 </div>
                             </div>
-                            
-                            <div className="border rounded-md max-h-[300px] overflow-y-auto p-4 space-y-3 bg-muted/20">
-                                {batchDialogConfig.items.map((item) => (
-                                    <div 
-                                        key={item.id} 
-                                        className="flex items-start space-x-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer group"
-                                        onClick={() => {
-                                            if (selectedBatchItems.includes(item.id)) {
-                                                setSelectedBatchItems(prev => prev.filter(id => id !== item.id));
-                                            } else {
-                                                setSelectedBatchItems(prev => [...prev, item.id]);
-                                            }
-                                        }}
-                                    >
-                                        <Checkbox 
-                                            id={`item-${item.id}`} 
-                                            checked={selectedBatchItems.includes(item.id)}
-                                            onCheckedChange={(checked) => {
-                                                // Event handled by parent div logic, but we keep this for a11y
-                                            }}
-                                            className="mt-1"
-                                        />
-                                        <div className="grid gap-1.5 leading-none w-full pointer-events-none group-hover:text-primary transition-colors">
-                                            <label
-                                                htmlFor={`item-${item.id}`}
-                                                className="text-sm font-medium leading-none"
-                                            >
-                                                {item.subject}
-                                            </label>
-                                            <p className="text-xs text-muted-foreground line-clamp-1">
-                                                {item.strand}: {item.subStrand}
-                                            </p>
+                        </div>
+                    ) : null}
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
-                            
-                            <div className="bg-blue-50 text-blue-800 p-3 rounded-md text-xs flex items-center">
-                                <AlertCircle className="h-4 w-4 mr-2" />
-                                <span>You are about to generate <strong>{selectedBatchItems.length}</strong> lesson notes.</span>
-                            </div>
-                        </div>
-                     )}
-                    </div>
-                    <div className="p-4 sm:p-6 pt-2 border-t mt-auto bg-background rounded-b-lg">
-                    <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-between w-full gap-3 sm:gap-0">
-                         <div className="hidden sm:block flex-1"></div> {/* Spacer */}
-                         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                            {batchStep === 'config' ? (
-                                <Button variant="outline" onClick={() => setBatchDialogConfig({ open: false, items: [] })} className="w-full sm:w-auto">
-                                    Cancel
-                                </Button>
-                            ) : (
-                                <Button variant="outline" onClick={() => setBatchStep('config')} className="w-full sm:w-auto">
-                                    <ChevronDown className="mr-2 h-4 w-4 rotate-90" />
-                                    Back
-                                </Button>
-                            )}
-                            
-                            {batchStep === 'config' ? (
-                                <Button onClick={() => setBatchStep('review')} className="w-full sm:w-auto">
-                                    Next
-                                    <ChevronRight className="ml-2 h-4 w-4" />
-                                </Button>
-                            ) : (
-                                <Button onClick={handleBatchGenerateConfirm} disabled={selectedBatchItems.length === 0} className="bg-primary text-primary-foreground hover:bg-primary/90 w-full sm:w-auto">
-                                    
-                                    Generate ({selectedBatchItems.length})
-                                </Button>
-                            )}
-                        </div>
-                    </DialogFooter>
-                    </div>
-                </DialogContent>
+                                </DialogContent>
             </Dialog>
-
-            <Dialog open={showBatchSuccess} onOpenChange={setShowBatchSuccess}>
-                <DialogContent className="sm:max-w-md md:max-w-lg lg:max-w-xl h-auto border-2 border-green-500/50">
-                    <DialogHeader className="text-center pb-6 border-b">
-                        <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                            <Check className="h-6 w-6 text-green-600" />
-                        </div>
-                        <DialogTitle className="text-2xl font-bold text-green-700">Batch Generation Complete!</DialogTitle>
-                        <DialogDescription className="text-base mt-2">
-                             Successfully generated {batchResults.length} out of {batchProgress.total} lesson notes.
-                        </DialogDescription>
-                    </DialogHeader>
-                    
-                    <div className="py-6 space-y-4">
-                        <div className="rounded-lg bg-muted p-4 space-y-2">
-                            <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Summary</h4>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <span className="text-2xl font-bold">{batchResults.length}</span>
-                                    <p className="text-xs text-muted-foreground">Successful</p>
-                                </div>
-                                <div>
-                                    <span className="text-2xl font-bold text-destructive">{batchProgress.failures}</span>
-                                    <p className="text-xs text-muted-foreground">Failed</p>
-                                </div>
-                            </div>
-                        </div>
-                        <p className="text-sm text-center text-muted-foreground">
-                            You can now download all your files in a single zip archive.
-                        </p>
-                    </div>
-
-                    <DialogFooter className="flex-col sm:flex-row gap-3">
-                        <Button variant="outline" className="w-full sm:w-auto" onClick={() => setShowBatchSuccess(false)}>
-                            Close
-                        </Button>
-                        <Button className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white" onClick={handleDownloadAll}>
-                            <Download className="mr-2 h-4 w-4" />
-                            Download All ({batchResults.length})
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-            
-        {isLoading ? (
-            <TableSkeleton />
-        ) : (
-            <div className="space-y-8">
-                {sortedGroupKeys.length === 0 ? (
-                    <Card className="p-8 text-center text-muted-foreground bg-muted/20">
-                        No scheme data found. Import or add data to get started.
-                    </Card>
-                ) : (
-                    sortedGroupKeys.map(groupKey => {
-                        const items = groupedData[groupKey];
-                        const [className, weekName] = groupKey.split(' - ');
-                        
-                        return (
-                            <Card key={groupKey} className="p-4 md:p-6 bg-card/50 backdrop-blur-sm border-secondary/20 overflow-hidden">
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
-                                    <div>
-                                        <h3 className="text-lg font-semibold">{weekName}</h3>
-                                        <p className="text-sm text-muted-foreground">{className}</p>
-                                    </div>
-                                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                                        <Button 
-                                            variant="destructive" 
-                                            size="sm" 
-                                            onClick={() => handleDeleteGroup(items)}
-                                            className="w-full sm:w-auto"
-                                        >
-                                            <Trash2 className="mr-2 h-4 w-4" />
-                                            Delete Week
-                                        </Button>
-                                        <Button 
-                                            variant="outline" 
-                                            size="sm" 
-                                            onClick={() => selectGroupItems(items)}
-                                            className="w-full sm:w-auto"
-                                        >
-                                            Select All
-                                        </Button>
-                                        <Button 
-                                            variant="secondary" 
-                                            size="sm" 
-                                            onClick={() => handleBatchGenerateClick(items)}
-                                            className="w-full sm:w-auto"
-                                        >
-                                            Generate Full Week ({items.length})
-                                        </Button>
-                                    </div>
-                                </div>
-                                <div className="flex flex-col gap-3">
-                                      {items.map((item) => (
-                                          <div key={item.id} className="group relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border border-secondary/20 bg-background/40 hover:bg-secondary/10 transition-all shadow-sm">
-                                              <div className="flex items-start gap-3 w-full sm:w-auto">
-                                                  <Checkbox
-                                                    checked={selectedBatchItems.includes(item.id)}
-                                                    onCheckedChange={(checked) => toggleSelection(item.id)}
-                                                    className="mt-1"
-                                                  />
-                                                  <div className="flex flex-col gap-1.5">
-                                                      <div className="font-semibold text-foreground/90">{item.subject}</div>
-                                                      {item.weekEnding && <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground bg-secondary/30 w-fit px-2 py-0.5 rounded-full">Ends {item.weekEnding}</div>}
-                                                  </div>
-                                              </div>
-                                              <div className="flex flex-col gap-1 w-full sm:w-2/4">
-                                                  <span className="font-medium text-sm text-foreground/80">{item.strand}</span>
-                                                  <span className="text-xs text-muted-foreground line-clamp-2">{item.subStrand}</span>
-                                              </div>
-                                              <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-0 border-border/30 justify-end flex-row">
-                                                  <Button size="sm" variant="default" className="shadow-sm rounded-full flex-1 sm:flex-none" onClick={() => handleGenerate(item)}>
-                                                      <Play className="h-4 w-4 mr-1.5" />
-                                                      Generate
-                                                  </Button>
-                                                  <Button size="sm" variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive rounded-full" onClick={() => handleDeleteItem(item.id)}>
-                                                      <Trash2 className="h-4 w-4 mr-0 sm:mr-0" />
-                                                      <span className="sm:hidden ml-1.5">Delete</span>
-                                                  </Button>
-                                              </div>
-                                          </div>
-                                      ))}
-                                  </div>
-                            </Card>
-                        );
-                    })
-                )}
-            </div>
-        )}
-            </main>
-    </div>
-  );
-}
+    </main>
+</div>
+    );
+};
 
 

@@ -29,8 +29,6 @@ import { HeatmapCalendar } from "@/components/charts/HeatmapCalendar";
 import { AchievementsDisplay } from "@/components/AchievementsDisplay";
 import { InsightsPanel } from "@/components/InsightsPanel";
 import * as AnalyticsService from "@/services/analyticsService";
-import { generateLessonNoteDocx, generateFileName } from "@/services/docxService";
-import { generateGhanaLessonDocx, generateGhanaLessonFileName, parseAIJsonResponse } from "@/services/ghanaLessonDocxService";
 import { Navbar } from "@/components/Navbar";
 import { DashboardSkeleton } from "@/components/LoadingSkeletons";
 
@@ -327,9 +325,10 @@ const Dashboard = () => {
           cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
         }
 
-        let parsedResult: any = null;
+                let parsedResult: any = null;
         if (isPotentialGhanaJson(cleanContent)) {
           try {
+            const { parseAIJsonResponse } = await import("@/services/ghanaLessonDocxService");
             parsedResult = parseAIJsonResponse(cleanContent);
           } catch (jsonError) {
             console.warn("Ghana JSON parse failed, falling back to text download:", jsonError);
@@ -339,6 +338,9 @@ const Dashboard = () => {
         if (parsedResult) {
           // Normalize to array for processing metadata
           const parsedArray = Array.isArray(parsedResult) ? parsedResult : [parsedResult];
+
+          // Dynamically import the heavy docx services only when needed
+          const { generateGhanaLessonFileName, generateGhanaLessonDocx } = await import("@/services/ghanaLessonDocxService");
 
           // Generate filename based on first lesson
           const filename = generateGhanaLessonFileName(parsedArray[0]);
@@ -356,6 +358,9 @@ const Dashboard = () => {
             level: data.grade_level || "Basic 1",
             // We might miss strand info here, but we'll do our best
           };
+
+          // Dynamically import the heavy docx services only when needed
+          const { generateFileName, generateLessonNoteDocx } = await import("@/services/docxService");
 
           const filename = generateFileName(metadata);
           
