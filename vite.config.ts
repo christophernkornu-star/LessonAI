@@ -84,11 +84,42 @@ export default defineConfig(({ mode }) => ({
     // Let Vite/Rollup handle chunking naturally.
     rollupOptions: {
       output: {
-        manualChunks: undefined,
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+
+          // React and core UI libraries - these need to be in ONE chunk
+          // to avoid circular dependency issues (lucide-react v0.462+)
+          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom') ||
+              id.includes('@tanstack/react-query') || id.includes('@supabase/supabase-js') ||
+              id.includes('lucide-react') || id.includes('@radix-ui') || id.includes('sonner') ||
+              id.includes('clsx') || id.includes('tailwind-merge')) {
+            return 'vendor-core';
+          }
+
+          if (id.includes('katex')) {
+            return 'vendor-katex';
+          }
+
+          if (id.includes('docx') || id.includes('docxtemplater') || id.includes('pizzip')) {
+            return 'vendor-docx';
+          }
+
+          if (id.includes('pdfjs-dist')) {
+            return 'vendor-pdf';
+          }
+
+          if (id.includes('file-saver')) {
+            return 'vendor-filesaver';
+          }
+
+          if (id.includes('date-fns')) {
+            return 'vendor-date';
+          }
+
+          return 'vendor-misc';
+        },
       },
     },
   },
 }));
-
-
 
