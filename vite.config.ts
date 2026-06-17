@@ -77,46 +77,16 @@ export default defineConfig(({ mode }) => ({
   },
     build: {
     target: 'es2022',
-    chunkSizeWarningLimit: 1500,
-    // Do NOT split node_modules into separate vendor chunks.
-    // lucide-react v0.462+ uses dynamic icon imports that break with chunk splitting
-    // (causes "Cannot access 'n' before initialization" TDZ errors).
-    // Let Vite/Rollup handle chunking naturally.
+    chunkSizeWarningLimit: 3000,
     rollupOptions: {
       output: {
+        // Put ALL node_modules into a single vendor chunk to avoid
+        // cross-chunk dependency issues (lucide-react dynamic imports,
+        // radix-ui inter-dependencies, vendor-misc needing React context, etc.)
         manualChunks(id) {
-          if (!id.includes('node_modules')) return;
-
-          // React and core UI libraries - these need to be in ONE chunk
-          // to avoid circular dependency issues (lucide-react v0.462+)
-          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom') ||
-              id.includes('@tanstack/react-query') || id.includes('@supabase/supabase-js') ||
-              id.includes('lucide-react') || id.includes('@radix-ui') || id.includes('sonner') ||
-              id.includes('clsx') || id.includes('tailwind-merge')) {
-            return 'vendor-core';
+          if (id.includes('node_modules')) {
+            return 'vendor';
           }
-
-          if (id.includes('katex')) {
-            return 'vendor-katex';
-          }
-
-          if (id.includes('docx') || id.includes('docxtemplater') || id.includes('pizzip')) {
-            return 'vendor-docx';
-          }
-
-          if (id.includes('pdfjs-dist')) {
-            return 'vendor-pdf';
-          }
-
-          if (id.includes('file-saver')) {
-            return 'vendor-filesaver';
-          }
-
-          if (id.includes('date-fns')) {
-            return 'vendor-date';
-          }
-
-          return 'vendor-misc';
         },
       },
     },
