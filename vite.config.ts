@@ -17,6 +17,20 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
+  optimizeDeps: {
+    // Force pre-bundling of these packages to avoid chunk ordering issues
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      'lucide-react',
+      'sonner',
+      'clsx',
+      'tailwind-merge',
+    ],
+    // Ensure all radix-ui packages are bundled together
+    exclude: [],
+  },
   plugins: [
     react(),
     mode === "development" && componentTagger(),
@@ -107,3 +121,4 @@ export default defineConfig(({ mode }) => ({
     },
   },
 }));
+
