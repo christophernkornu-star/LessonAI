@@ -776,8 +776,9 @@ ${data.numLessons && data.numLessons > 1 ? `
     // Apply formatting patches for requested bolding ONLY for non-JSON (text) output
     // JSON templates should not have text formatting applied as it corrupts the JSON
     if (data.template) {
-      // JSON mode - return as-is without text formatting
-      return text;
+      // JSON mode - but still need to normalize malformed LaTeX in single-lesson template
+      const processedStr = processJsonLessonContent(text, 0, 1);
+      return processedStr;
     }
     return formatGeneratedContent(text);
   } catch (error) {
@@ -1069,10 +1070,17 @@ function formatGeneratedContent(text: string): string {
   if (!text) return text;
   let formatted = text;
 
+  // Normalize malformed LaTeX-style text commands early so these fixes apply
+  // before any further formatting or math wrapping is done.
+  formatted = normalizeLatexMathDelimiters(formatted);
+
   // 1. Wrap math equations in LaTeX delimiters
   // Match common math expressions: numbers with operators, variables with operators, etc.
   // This prevents text formatting from splitting equations
   formatted = wrapMathInLatex(formatted);
+
+  // Re-run normalization after math wrapping in case wrapping introduced or exposed stray malformed text.
+  formatted = normalizeLatexMathDelimiters(formatted);
 
   // 2. Recap Activity: ... (Bold the header line) - case insensitive
   formatted = formatted.replace(/(^|\n)(?!\*\*)(Recap Activity:[^\n]*)/gi, '$1**$2**');
@@ -1200,13 +1208,14 @@ function processJsonLessonContent(jsonStr: string, index: number, totalLessons: 
       if (typeof val === 'string') {
         let formatted = val;
 
-        // 1. Wrap math equations in LaTeX delimiters
-        formatted = wrapMathInLatex(formatted);
+            // Normalize malformed LaTeX-style text commands before any other formatting.
+            formatted = normalizeLatexMathDelimiters(formatted);
 
-        // 2. Fix Numbering: "Lesson 1 of 1" -> "Lesson {i} of {n}"
-        // Only replace if we find the specific "1 of 1" pattern to avoid breaking other numbers
-        formatted = formatted.replace(/Lesson\s*:?\s*1\s*of\s*1/gi, `Lesson ${index + 1} of ${totalLessons}`);
-        
+            // 1. Wrap math equations in LaTeX delimiters
+            formatted = wrapMathInLatex(formatted);
+
+            // Re-normalize after math wrapping, in case the wrapper exposed or created malformed tokens.
+            formatted = normalizeLatexMathDelimiters(formatted);
         // 3. Format Sample Class Exercises
         // Same aggressive regex as the text-mode formatter
         formatted = formatted.replace(/(\n|^)[ \t]*(\*\*|)[ \t]*Sample Class Exercises.*?:?[ \t]*(\*\*|)[ \t]*(\n|$)/gi, '\n\n**Sample Class Exercises:**\n');

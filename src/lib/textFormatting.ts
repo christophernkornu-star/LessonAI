@@ -67,15 +67,17 @@ export function cleanAndSplitText(text: string): string[] {
 
   // Fix jumbled numbered lists with period (e.g. "1. Item 2. Item")
   // Avoid splitting math expressions such as "x + 5 = 11." by excluding common operators.
-  processed = processed.replace(/([^\n\d=+\-*/^%])(\s+)(\d+\.\s)/g, '$1\n$3');
+  // Only split when the next text looks like a list item, not when it is an equation or formula.
+  processed = processed.replace(/([^\n])\s+(\d+\.\s+(?=[A-Za-z]))/g, '$1\n$2');
 
     // Fix jumbled numbered lists with parenthesis (e.g. "text 1) Item 2) Item")
   // CRITICAL: Exclude math operators (+, -, *, /, =, <, >) as the preceding character
   // to avoid splitting math expressions like "(5 + 3) * 2" where "3)" is mistaken as numbering
-  processed = processed.replace(/([^\n\d+\-*/=<>\^])(\s+)(\d+\)\s)/g, '$1\n$3');
+  processed = processed.replace(/([^\n\d+\-*/=<>\^])\s+(\d+\)\s+(?=[A-Za-z]))/g, '$1\n$2');
   
-  // Fix jumbled lettered lists (e.g. " a) Item b) Item")
-  processed = processed.replace(/([^\n])(\s+)([a-zA-Z][\)\.]\s)/g, '$1\n$3');
+  // Fix jumbled lettered lists (e.g. "a) Item b) Item")
+  // Only split when the marker is followed by a word start, not a standalone parenthetical expression.
+  processed = processed.replace(/([^\n])\s+([a-zA-Z][\)\.])\s+(?=[A-Za-z])/g, '$1\n$2 ');
 
   // Fix jumbled Tiers (e.g. " Tier 1 ... Tier 2 ...")
   processed = processed.replace(/([^\n])(\s+)(Tier\s\d)/gi, '$1\n$3');
@@ -254,6 +256,10 @@ export function cleanAndSplitText(text: string): string[] {
   // CRITICAL FIX: If we have "3.\nText" at the end, join it.
   // The global regex above handles it, but let's be sure about the final split.
 
+  // Join broken parenthetical fragments across accidental newlines, e.g. "2 (sectors 2 and\n4)"
+  // This preserves inline parenthetical expressions while leaving real sentence breaks intact.
+  processed = processed.replace(/\(([^\n]*)\n([^\n]*)\)/g, '($1 $2)');
+
   // Feature: Force split for headers ending in colons that are inline
   // e.g. "The teacher asks: Students do X" -> "The teacher asks:\nStudents do X"
   // Look for: start of line, 3-60 chars of text, colon, whitespace, then capital letter or number
@@ -360,9 +366,35 @@ function normalizeCancelArguments(text: string): string {
   });
 }
 
+/**
+ * Fixes malformed \text commands in LaTeX.
+ * Converts \textevent, \textnumber, etc. to \text{event}, \text{number}
+ */
+function fixMalformedTextCommands(text: string): string {
+  if (!text) return text;
+  const validTextMacros = new Set([
+    'bf', 'it', 'tt', 'sl', 'sc', 'sf', 'md', 'up', 'rm',
+    'normal', 'color', 'style', 'size', 'width', 'height', 'kern',
+    'large', 'large', 'small', 'tiny', 'huge', 'Huge', 'scriptsize',
+    'footnotesize', 'displaystyle', 'textstyle', 'scriptstyle', 'scriptscriptstyle'
+  ]);
+
+  return text.replace(/\\text(?!\{)([A-Za-z]+(?:\s+[A-Za-z]+)*)/g, (match, content) => {
+    const normalized = content.trim();
+    const lower = normalized.toLowerCase();
+
+    if (validTextMacros.has(lower) || lower.startsWith('color') || lower.startsWith('normal')) {
+      return match;
+    }
+
+    return `\\text{${normalized}}`;
+  });
+}
+
 export function normalizeLatexMathDelimiters(text: string): string {
   if (!text) return text;
   let normalizedText = normalizeCancelArguments(text);
+  normalizedText = fixMalformedTextCommands(normalizedText);
   normalizedText = normalizedText.replace(/(\${3,})([\s\S]*?)(\${3,})/g, (match, open, body, close) => {
     if (open.length !== close.length) return match;
     const delimiter = body.includes('\n') ? '$$' : '$';
@@ -383,7 +415,10 @@ export function normalizeLatexMathDelimiters(text: string): string {
 export function splitTextByLatexMath(text: string): MathTextSegment[] {
   if (!text) return [];
   const normalizedText = normalizeLatexMathDelimiters(text);
-  const parts = normalizedText.split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+\$|\\(?:cancel|bcancel|xcancel|frac|sqrt|leq|geq|neq|lt|gt|times|div|pm|approx)\{[^}\n]+\}(?:\{[^}\n]+\})?)/g);
+  // First, protect bare LaTeX commands that lack $ delimiters by wrapping them.
+  // This handles cases where the AI outputs \text{...} or \frac{...}{...} without $...$ wrapping.
+  const protectedText = wrapBareLatexInMathDelimiters(normalizedText);
+  const parts = protectedText.split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+\$|\\(?:cancel|bcancel|xcancel|frac|sqrt|leq|geq|neq|lt|gt|times|div|pm|approx)\{[^}\n]+\}(?:\{[^}\n]+\})?)/g);
   return parts.filter(Boolean).map((segment) => {
     if (segment.startsWith('$$') && segment.endsWith('$$')) {
       return { type: 'math', text: segment.slice(2, -2).trim() };
@@ -393,6 +428,50 @@ export function splitTextByLatexMath(text: string): MathTextSegment[] {
     }
     return { type: 'text', text: segment };
   });
+}
+
+/**
+ * Automatically wraps bare LaTeX commands (like \text{}, \frac{}, \sqrt{}, etc.)
+ * that are NOT already wrapped in $...$ or $$...$$ delimiters.
+ * This handles cases where the AI generates LaTeX without proper $ delimiters.
+ * 
+ * We use a targeted approach: only wrap text that contains known math LaTeX 
+ * command patterns with braces (\text{...}, \frac{...}{...}, etc.) since these 
+ * are unambiguous indicators of math content.
+ */
+function wrapBareLatexInMathDelimiters(text: string): string {
+  if (!text) return text;
+  
+  const result: string[] = [];
+  // Split by existing math delimiters to avoid double-wrapping
+  const segments = text.split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+\$)/g);
+  
+  for (const segment of segments) {
+    // If this segment is already wrapped in $...$ or $$...$$, keep it as-is
+    if ((segment.startsWith('$$') && segment.endsWith('$$')) || 
+        (segment.startsWith('$') && segment.endsWith('$'))) {
+      result.push(segment);
+      continue;
+    }
+    
+    // Check if this text segment contains bare LaTeX math commands.
+    // We use a precise pattern to match common math LaTeX commands with brace arguments:
+    // \frac{...}{...}, \text{...}, \sqrt{...}, \cancel{...}, \bcancel{...}, \xcancel{...}
+    // Also match command sequences like \leq, \geq, \neq enclosed in the expression
+    const hasBareFraction = /\\frac\s*\{[^}]*\}\s*\{[^}]*\}/.test(segment);
+    const hasBareText = /\\text\s*\{[^}]*\}/.test(segment);
+    const hasBareSqrt = /\\sqrt\s*\{[^}]*\}/.test(segment);
+    const hasBareCancel = /\\(?:cancel|bcancel|xcancel)\s*\{[^}]*\}/.test(segment);
+    
+    if (hasBareFraction || hasBareText || hasBareSqrt || hasBareCancel) {
+      // Wrap the entire segment in $...$ if it contains bare LaTeX
+      result.push('$' + segment + '$');
+    } else {
+      result.push(segment);
+    }
+  }
+  
+  return result.join('');
 }
 
 function simplifyLatexBody(mathText: string): string {

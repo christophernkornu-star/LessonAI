@@ -62,12 +62,46 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
+    target: 'es2022',
+    chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules')) {
-             return 'vendor';
+          if (!id.includes('node_modules')) return;
+
+          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+            return 'react-vendor';
           }
+
+          if (id.includes('@tanstack/react-query') || id.includes('@supabase/supabase-js')) {
+            return 'data-vendor';
+          }
+
+          if (id.includes('lucide-react') || id.includes('@radix-ui') || id.includes('sonner') || id.includes('clsx') || id.includes('tailwind-merge')) {
+            return 'ui-vendor';
+          }
+
+          if (id.includes('katex')) {
+            return 'katex-vendor';
+          }
+
+          if (id.includes('docx') || id.includes('docxtemplater') || id.includes('pizzip')) {
+            return 'docx-vendor';
+          }
+
+          if (id.includes('pdfjs-dist')) {
+            return 'pdf-vendor';
+          }
+
+          if (id.includes('file-saver')) {
+            return 'file-saver-vendor';
+          }
+
+          if (id.includes('date-fns')) {
+            return 'date-fns';
+          }
+
+          return 'vendor';
         },
       },
     },

@@ -98,7 +98,7 @@ function parseDocxMathComponents(latex: string): MathComponent[] {
   let i = 0;
 
   while (i < latex.length) {
-    if (latex.startsWith('\\frac', i)) {
+        if (latex.startsWith('\\frac', i)) {
       const numerator = extractBraceGroup(latex, i + 5);
       const denominator = extractBraceGroup(latex, numerator.endIndex);
       result.push(
@@ -109,6 +109,23 @@ function parseDocxMathComponents(latex: string): MathComponent[] {
       );
       i = denominator.endIndex;
       continue;
+    }
+
+    // Handle \text{...} command in math mode - renders as regular (non-italic) text
+    if (latex.startsWith('\\text', i)) {
+      // Check if followed by {
+      const nextChar = latex[i + 5];
+      if (nextChar === '{') {
+        const textContent = extractBraceGroup(latex, i + 5);
+        // Render as text runs (non-italic, regular weight) within the math zone
+        result.push(new DocxMathRun(textContent.content));
+        i = textContent.endIndex;
+        continue;
+      } else {
+        // \text without braces - skip past it
+        i += 5;
+        continue;
+      }
     }
 
     if (latex.startsWith('\\cancel', i) || latex.startsWith('\\bcancel', i) || latex.startsWith('\\xcancel', i)) {
