@@ -83,16 +83,13 @@ export default defineConfig(({ mode }) => ({
         manualChunks(id) {
           if (!id.includes('node_modules')) return;
 
-          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
-            return 'react-vendor';
-          }
-
-          if (id.includes('@tanstack/react-query') || id.includes('@supabase/supabase-js')) {
-            return 'data-vendor';
-          }
-
-          if (id.includes('lucide-react') || id.includes('@radix-ui') || id.includes('sonner') || id.includes('clsx') || id.includes('tailwind-merge')) {
-            return 'ui-vendor';
+          // Group ALL UI-related packages into ONE vendor chunk to avoid
+          // cross-dependency issues (lucide-react, radix-ui, etc.)
+          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom') ||
+              id.includes('@tanstack/react-query') || id.includes('@supabase/supabase-js') ||
+              id.includes('lucide-react') || id.includes('@radix-ui') || id.includes('sonner') ||
+              id.includes('clsx') || id.includes('tailwind-merge')) {
+            return 'app-vendor';
           }
 
           if (id.includes('katex')) {
@@ -121,4 +118,5 @@ export default defineConfig(({ mode }) => ({
     },
   },
 }));
+
 
