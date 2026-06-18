@@ -52,10 +52,6 @@ const Index = () => {
         <div className="absolute left-0 right-0 top-0 -z-10 m-auto h-[310px] w-[310px] rounded-full bg-primary/20 opacity-40 blur-[100px]"></div>
 
         <div className="mx-auto max-w-5xl text-center flex flex-col items-center">
-          <div className="mb-6 inline-flex animate-fade-in-up items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm font-medium text-primary shadow-sm backdrop-blur-md">
-            <Sparkles className="h-4 w-4" />
-            <span>AI-Powered Lesson Planning for Ghana</span>
-          </div>
           <h1 className="mb-8 text-4xl font-extrabold tracking-tight sm:text-6xl md:text-7xl lg:text-8xl leading-tight">
             Create Professional <br className="hidden sm:block" />
             <span className="bg-gradient-to-r from-primary via-blue-500 to-secondary bg-clip-text text-transparent">
