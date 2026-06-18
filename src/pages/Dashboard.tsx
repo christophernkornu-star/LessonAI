@@ -20,6 +20,8 @@ import {
   Award,
   Upload,
   Clock,
+  Trash2,
+  CheckSquare,
 } from "lucide-react";
 import { SimpleBarChart } from "@/components/charts/SimpleBarChart";
 import { SimplePieChart } from "@/components/charts/SimplePieChart";
@@ -28,7 +30,7 @@ import { CoverageProgress } from "@/components/charts/CoverageProgress";
 import { HeatmapCalendar } from "@/components/charts/HeatmapCalendar";
 import { AchievementsDisplay } from "@/components/AchievementsDisplay";
 import { InsightsPanel } from "@/components/InsightsPanel";
-import * as AnalyticsService from "@/services/analyticsService";
+// AnalyticsService import removed - all metrics now computed client-side
 import { Navbar } from "@/components/Navbar";
 import { DashboardSkeleton } from "@/components/LoadingSkeletons";
 
@@ -62,7 +64,9 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [lessonNotes, setLessonNotes] = useState<LessonNote[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(true);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
   // Analytics state
   const [lessonsBySubject, setLessonsBySubject] = useState<any[]>([]);
@@ -98,7 +102,7 @@ const Dashboard = () => {
     };
   }, []);
 
-  const loadDashboardData = async () => {
+    const loadDashboardData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -112,7 +116,7 @@ const Dashboard = () => {
           .single(),
         supabase
           .from("lesson_notes")
-          .select("id, title, subject, grade_level, created_at, is_favorite")
+          .select("id, title, subject, grade_level, created_at, is_favorite, exemplars")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
       ]);
@@ -128,13 +132,14 @@ const Dashboard = () => {
         } as unknown as Profile);
       }
 
-      setLessonNotes(notesData);
+            setLessonNotes(notesData);
 
-      // --- Client-Side Analytics Calculation (Performance Optimization) ---
-      // Instead of making 5+ separate API calls that fetch the same data, 
-      // we compute metrics from the already fetched lessonNotes.
-      
-      // 1. Subjects Distribution (Cleaned & Normalized)
+      // --- Enforce 200 lesson cap: delete oldest if over limit ---
+      await enforceLessonLimit(user.id, notesData);
+
+      // --- ALL Analytics Computed Client-Side (Zero extra Supabase queries) ---
+
+      // 1. Subjects Distribution
       const subjectMap: Record<string, number> = {};
       const subjectNormalization: Record<string, string> = {
         "rme": "Religious and Moral Education",
@@ -142,7 +147,7 @@ const Dashboard = () => {
         "math": "Mathematics",
         "history of ghana": "History",
         "our world our people": "Our World Our People",
-        "creative arts and design": "Creative Arts", // Grouping for cleaner chart
+        "creative arts and design": "Creative Arts",
         "computing": "Computing",
         "science": "Science",
         "english": "English Language",
@@ -155,20 +160,16 @@ const Dashboard = () => {
       notesData.forEach((n: any) => {
         let s = (n.subject || 'Unknown').trim();
         const lowerS = s.toLowerCase();
-        
-        // Normalize common variations
         if (subjectNormalization[lowerS]) {
             s = subjectNormalization[lowerS];
         } else {
-             // Title Case basics
              s = s.charAt(0).toUpperCase() + s.slice(1);
         }
-
         subjectMap[s] = (subjectMap[s] || 0) + 1;
       });
       setLessonsBySubject(Object.entries(subjectMap)
-        .sort((a, b) => b[1] - a[1]) // Sort highest first for better readability
-        .slice(0, 8) // Limit to top 8 to prevent chart crowding
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
         .map(([name, value]) => ({ name, value })));
 
       // 2. Grade Distribution
@@ -182,16 +183,11 @@ const Dashboard = () => {
       // 3. Weekly Trends (Last 12 Weeks)
       const trendMap: Record<string, number> = {};
       const now = new Date();
-      // Initialize last 12 weeks with 0
       for (let i = 11; i >= 0; i--) {
         const d = new Date(now);
         d.setDate(d.getDate() - (i * 7));
-        // Find start of that week
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Monday start? Or Sunday?
-        // Using simple ISO string slicing for consistency with service
         const weekStart = new Date(d);
-        weekStart.setDate(d.getDate() - d.getDay()); 
+        weekStart.setDate(d.getDate() - d.getDay());
         const key = weekStart.toISOString().split('T')[0];
         if (!trendMap[key]) trendMap[key] = 0;
       }
@@ -199,8 +195,8 @@ const Dashboard = () => {
       notesData.forEach((n: any) => {
         const d = new Date(n.created_at);
         const diffTime = Math.abs(now.getTime() - d.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-        if (diffDays <= 90) { // Approx 12 weeks
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays <= 90) {
             const weekStart = new Date(d);
             weekStart.setDate(d.getDate() - d.getDay());
             const key = weekStart.toISOString().split('T')[0];
@@ -211,11 +207,7 @@ const Dashboard = () => {
         .sort((a, b) => a[0].localeCompare(b[0]))
         .map(([week, count]) => ({ week, count })));
 
-
-      // 4. Engagement Metrics (Calculated properly via AnalyticsService)
-      // Removed local simplified calculation to rely on actual data from AnalyticsService below
-
-      // 5. Heatmap
+      // 4. Heatmap
       const dateMap: { [key: string]: number } = {};
       notesData.forEach((item: any) => {
          const date = new Date(item.created_at).toISOString().split('T')[0];
@@ -223,33 +215,125 @@ const Dashboard = () => {
       });
       setHeatmapData(Object.entries(dateMap).map(([date, count]) => ({ date, count })));
 
-      // Load heavy external data separately
-      const [achievementsData, insightsData, qualityData, engagementData] = await Promise.all([
-        AnalyticsService.getUserAchievements(user.id),
-        AnalyticsService.getInsights(user.id),
-        AnalyticsService.getQualityMetrics(user.id),
-        AnalyticsService.getEngagementMetrics(user.id)
-      ]);
-      
-      setAchievements(achievementsData);
-      setInsights(insightsData);
-      
-      setEngagementMetrics({
-        lessons_this_week: engagementData.lessons_this_week,
-        lessons_this_month: engagementData.lessons_this_month,
-        last_generated: engagementData.last_generated,
-        current_streak: engagementData.current_streak,
-        longest_streak: engagementData.longest_streak
-      });
-      
+      // === Quality Metrics (client-side from notesData) ===
+      const totalLessons = notesData.length;
+      const favoritesCount = notesData.filter((l: any) => l.is_favorite).length;
+      const favoriteRate = totalLessons > 0 ? Math.round((favoritesCount / totalLessons) * 100) : 0;
+      const lessonsWithResources = notesData.filter((l: any) =>
+        l.exemplars && l.exemplars.trim().length > 0
+      ).length;
+
       setQualityMetrics({
-        total_lessons: qualityData.total_lessons,
-        favorites_count: qualityData.favorites_count,
-        favorite_rate: qualityData.favorite_rate ? Math.round(qualityData.favorite_rate) : 0,
-        avg_content_length: Math.round(qualityData.avg_content_length || 0),
-        lessons_with_resources: qualityData.lessons_with_resources || 0
+        total_lessons: totalLessons,
+        favorites_count: favoritesCount,
+        favorite_rate: favoriteRate,
+        avg_content_length: 0, // computed without fetching generated_content
+        lessons_with_resources: lessonsWithResources,
       });
-      
+
+      // === Engagement Metrics & Streaks (client-side from notesData) ===
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const lastGenerated = notesData[0]?.created_at || null;
+      const lessonsThisWeek = notesData.filter((l: any) => new Date(l.created_at) >= weekAgo).length;
+      const lessonsThisMonth = notesData.filter((l: any) => new Date(l.created_at) >= monthAgo).length;
+
+      // Streak calculation
+      const dates = notesData
+        .map((l: any) => new Date(l.created_at).toDateString())
+        .filter((date: string, index: number, self: string[]) => self.indexOf(date) === index)
+        .sort((a: string, b: string) => new Date(b).getTime() - new Date(a).getTime());
+
+      let currentStreak = 0;
+      let longestStreak = 0;
+      let tempStreak = 1;
+
+      const today = new Date().toDateString();
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString();
+
+      if (dates[0] === today || dates[0] === yesterday) {
+        currentStreak = 1;
+        for (let i = 1; i < dates.length; i++) {
+          const prevDate = new Date(dates[i - 1]);
+          const currDate = new Date(dates[i]);
+          const diffDays = Math.floor((prevDate.getTime() - currDate.getTime()) / (1000 * 60 * 60 * 24));
+          if (diffDays === 1) {
+            currentStreak++;
+          } else {
+            break;
+          }
+        }
+      }
+
+      for (let i = 1; i < dates.length; i++) {
+        const prevDate = new Date(dates[i - 1]);
+        const currDate = new Date(dates[i]);
+        const diffDays = Math.floor((prevDate.getTime() - currDate.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays === 1) {
+          tempStreak++;
+        } else {
+          longestStreak = Math.max(longestStreak, tempStreak);
+          tempStreak = 1;
+        }
+      }
+      longestStreak = Math.max(longestStreak, tempStreak);
+
+      // Most active day & hour
+      const dayMap: Record<string, number> = {};
+      const hourMap: Record<number, number> = {};
+      notesData.forEach((l: any) => {
+        const d = new Date(l.created_at);
+        const day = d.toLocaleDateString('en-US', { weekday: 'long' });
+        const hour = d.getHours();
+        dayMap[day] = (dayMap[day] || 0) + 1;
+        hourMap[hour] = (hourMap[hour] || 0) + 1;
+      });
+      const mostActiveDay = Object.entries(dayMap).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
+      const mostActiveHour = Object.entries(hourMap).sort((a, b) => b[1] - a[1])[0]?.[0] || 0;
+
+      setEngagementMetrics({
+        lessons_this_week: lessonsThisWeek,
+        lessons_this_month: lessonsThisMonth,
+        last_generated: lastGenerated,
+        current_streak: currentStreak,
+        longest_streak: longestStreak,
+        most_active_day: mostActiveDay,
+        most_active_hour: parseInt(mostActiveHour as any),
+      });
+
+      // === Achievements (client-side) ===
+      const subjectCount = Object.keys(subjectMap).length;
+      const achievementsData = [
+        { id: 'first_lesson', title: 'Getting Started', description: 'Create your first lesson', icon: '🎯', earned: totalLessons >= 1, progress: Math.min(totalLessons, 1), target: 1 },
+        { id: 'ten_lessons', title: 'Productive Teacher', description: 'Generate 10 lessons', icon: '📚', earned: totalLessons >= 10, progress: Math.min(totalLessons, 10), target: 10 },
+        { id: 'fifty_lessons', title: 'Master Planner', description: 'Create 50 lessons', icon: '🏆', earned: totalLessons >= 50, progress: Math.min(totalLessons, 50), target: 50 },
+        { id: 'hundred_lessons', title: 'Legend', description: 'Reach 100 lessons', icon: '👑', earned: totalLessons >= 100, progress: Math.min(totalLessons, 100), target: 100 },
+        { id: 'first_favorite', title: 'Quality First', description: 'Mark your first favorite', icon: '⭐', earned: favoritesCount >= 1, progress: Math.min(favoritesCount, 1), target: 1 },
+        { id: 'multi_subject', title: 'Versatile Educator', description: 'Create lessons in 3+ subjects', icon: '🎨', earned: subjectCount >= 3, progress: Math.min(subjectCount, 3), target: 3 },
+        { id: 'week_streak', title: 'Consistent Creator', description: '7-day streak', icon: '🔥', earned: currentStreak >= 7, progress: Math.min(currentStreak, 7), target: 7 },
+        { id: 'month_streak', title: 'Dedication Master', description: '30-day streak', icon: '💎', earned: currentStreak >= 30, progress: Math.min(currentStreak, 30), target: 30 },
+      ];
+      setAchievements(achievementsData);
+
+      // === Insights (client-side) ===
+      const insightsData: string[] = [];
+      const recentWeekCount = notesData.filter((l: any) => new Date(l.created_at) >= weekAgo).length;
+      if (recentWeekCount === 0 && totalLessons > 0) {
+        insightsData.push("You haven't created any lessons this week. Keep the momentum going!");
+      }
+      if (subjectCount === 1 && totalLessons >= 5) {
+        insightsData.push(`Try creating lessons for other subjects beyond ${Object.keys(subjectMap)[0]}`);
+      }
+      if (totalLessons >= 10 && favoritesCount === 0) {
+        insightsData.push("Mark your best lessons as favorites for quick access");
+      }
+      const milestoneDiff = [10, 25, 50, 100].find(m => m > totalLessons);
+      if (milestoneDiff) {
+        const remaining = milestoneDiff - totalLessons;
+        insightsData.push(`${remaining} more lesson${remaining > 1 ? 's' : ''} to reach ${milestoneDiff} total!`);
+      }
+      setInsights(insightsData);
+
     } catch (error: any) {
       toast({
         title: "Error",
@@ -289,6 +373,123 @@ const Dashboard = () => {
         description: "Failed to update favorite status",
         variant: "destructive",
       });
+    }
+  };
+
+    const enforceLessonLimit = async (userId: string, notes: any[]) => {
+    if (notes.length <= 200) return;
+    
+    // Sort oldest first, then delete excess
+    const sorted = [...notes].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    const toDelete = sorted.slice(0, sorted.length - 200);
+    const idsToDelete = toDelete.map((n: any) => n.id);
+
+    try {
+      // Delete in batches of 50 to avoid URL length issues
+      const batchSize = 50;
+      for (let i = 0; i < idsToDelete.length; i += batchSize) {
+        const batch = idsToDelete.slice(i, i + batchSize);
+        const { error } = await supabase
+          .from("lesson_notes")
+          .delete()
+          .eq("user_id", userId)
+          .in("id", batch);
+
+        if (error) throw error;
+      }
+
+      console.log(`Auto-cleaned ${idsToDelete.length} old lessons (cap: 200)`);
+    } catch (error) {
+      console.error("Failed to enforce lesson limit:", error);
+    }
+  };
+
+  const deleteLessonNote = async (id: string) => {
+    const confirmed = window.confirm("Are you sure you want to delete this lesson note?");
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase
+        .from("lesson_notes")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+
+      setLessonNotes(lessonNotes.filter((note) => note.id !== id));
+      toast({
+        title: "Deleted",
+        description: "Lesson note deleted successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete lesson note",
+        variant: "destructive",
+      });
+    }
+  };
+
+    const deleteSelectedLessons = async () => {
+    if (selectedIds.size === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedIds.size} lesson note(s)?`
+    );
+    if (!confirmed) return;
+
+    try {
+      const ids = Array.from(selectedIds);
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // Delete in batches of 50 to avoid URL length issues
+      const batchSize = 50;
+      for (let i = 0; i < ids.length; i += batchSize) {
+        const batch = ids.slice(i, i + batchSize);
+        const { error } = await supabase
+          .from("lesson_notes")
+          .delete()
+          .eq("user_id", user?.id)
+          .in("id", batch);
+
+        if (error) throw error;
+      }
+
+      setLessonNotes(lessonNotes.filter((note) => !selectedIds.has(note.id)));
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      toast({
+        title: "Deleted",
+        description: `${ids.length} lesson note(s) deleted successfully`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete lesson notes",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const toggleSelectNote = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === lessonNotes.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(lessonNotes.map((n) => n.id)));
     }
   };
 
@@ -391,19 +592,6 @@ const Dashboard = () => {
     element.click();
     document.body.removeChild(element);
   };
-
-  useEffect(() => {
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate("/login");
-      } else {
-        await loadDashboardData();
-      }
-    };
-
-    checkUser();
-  }, []);
 
   if (loading) {
     return <DashboardSkeleton />;
@@ -707,7 +895,7 @@ const Dashboard = () => {
                 <TabsTrigger value="profile" className="h-full px-6 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">Profile</TabsTrigger>
               </TabsList>
 
-            <TabsContent value="all" className="mt-6">
+                        <TabsContent value="all" className="mt-6">
               {lessonNotes.length === 0 ? (
                 <div className="text-center py-12">
                   <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -720,45 +908,106 @@ const Dashboard = () => {
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {lessonNotes.map((note) => (
-                    <Card key={note.id} className="p-5 sm:p-6 group relative overflow-hidden rounded-2xl border border-border/50 bg-background/50 hover:bg-accent/5 transition-all duration-300 shadow-sm hover:-translate-y-1 hover:shadow-md">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-                        <div className="flex-1 min-w-0 pr-4">
-                          <h3 className="font-semibold text-lg sm:text-xl mb-2 text-foreground/90">{note.title}</h3>
-                          <div className="flex flex-wrap items-center gap-2 mb-3">
-                            <Badge variant="secondary" className="text-xs font-medium px-2.5 py-0.5">{note.subject}</Badge>
-                            <Badge variant="outline" className="text-xs font-medium px-2.5 py-0.5 bg-background">{note.grade_level}</Badge>
+                <div>
+                  {/* Mass Action Toolbar */}
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant={selectMode ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setSelectMode(!selectMode);
+                          if (selectMode) setSelectedIds(new Set());
+                        }}
+                      >
+                        <CheckSquare className="h-4 w-4 mr-1" />
+                        {selectMode ? "Exit Select" : "Select"}
+                      </Button>
+                      {selectMode && (
+                        <>
+                          <Button variant="ghost" size="sm" onClick={toggleSelectAll}>
+                            {selectedIds.size === lessonNotes.length ? "Deselect All" : "Select All"}
+                          </Button>
+                          <span className="text-sm text-muted-foreground">
+                            {selectedIds.size} selected
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    {selectMode && selectedIds.size > 0 && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={deleteSelectedLessons}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Delete Selected ({selectedIds.size})
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    {lessonNotes.map((note) => (
+                      <Card key={note.id} className="p-5 sm:p-6 group relative overflow-hidden rounded-2xl border border-border/50 bg-background/50 hover:bg-accent/5 transition-all duration-300 shadow-sm hover:-translate-y-1 hover:shadow-md">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                          <div className="flex-1 min-w-0 pr-4 flex items-start gap-3">
+                            {selectMode && (
+                              <input
+                                type="checkbox"
+                                className="mt-1 h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                                checked={selectedIds.has(note.id)}
+                                onChange={() => toggleSelectNote(note.id)}
+                              />
+                            )}
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-lg sm:text-xl mb-2 text-foreground/90">{note.title}</h3>
+                              <div className="flex flex-wrap items-center gap-2 mb-3">
+                                <Badge variant="secondary" className="text-xs font-medium px-2.5 py-0.5">{note.subject}</Badge>
+                                <Badge variant="outline" className="text-xs font-medium px-2.5 py-0.5 bg-background">{note.grade_level}</Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary/40 block"></span>
+                                Created {new Date(note.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
                           </div>
-                          <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary/40 block"></span>
-                            Created {new Date(note.created_at).toLocaleDateString()}
-                          </p>
+                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                            {!selectMode && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="rounded-full hover:bg-red-50/50 hover:text-red-500 transition-colors"
+                                  onClick={() => toggleFavorite(note.id, note.is_favorite)}
+                                >
+                                  <Heart
+                                    className={`h-5 w-5 ${
+                                      note.is_favorite ? "fill-red-500 text-red-500" : ""
+                                    }`}
+                                  />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => downloadLessonNote(note.id)}
+                                >
+                                  <Download className="h-5 w-5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="rounded-full hover:bg-red-50/50 hover:text-red-500 transition-colors"
+                                  onClick={() => deleteLessonNote(note.id)}
+                                >
+                                  <Trash2 className="h-5 w-5 text-muted-foreground hover:text-red-500" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-full hover:bg-red-50/50 hover:text-red-500 transition-colors"
-                            onClick={() => toggleFavorite(note.id, note.is_favorite)}
-                          >
-                            <Heart
-                              className={`h-5 w-5 ${
-                                note.is_favorite ? "fill-red-500 text-red-500" : ""
-                              }`}
-                            />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => downloadLessonNote(note.id)}
-                          >
-                            <Download className="h-5 w-5" />
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
+                      </Card>
+                    ))}
+                  </div>
                 </div>
               )}
             </TabsContent>
@@ -787,7 +1036,7 @@ const Dashboard = () => {
                               Created {new Date(note.created_at).toLocaleDateString()}
                             </p>
                           </div>
-                          <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                                                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                             <Button
                               variant="ghost"
                               size="icon"
@@ -802,6 +1051,14 @@ const Dashboard = () => {
                               onClick={() => downloadLessonNote(note.id)}
                             >
                               <Download className="h-5 w-5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="rounded-full hover:bg-red-50/50 hover:text-red-500 transition-colors"
+                              onClick={() => deleteLessonNote(note.id)}
+                            >
+                              <Trash2 className="h-5 w-5 text-muted-foreground hover:text-red-500" />
                             </Button>
                           </div>
                         </div>
