@@ -2,10 +2,19 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
+// Unregister any stale service workers to prevent caching issues
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister();
+    }
+  });
+}
+
 // Handle chunk load errors (e.g., after a new deployment)
 window.addEventListener('vite:preloadError', (event) => {
   console.warn('Vite preload error, reloading page...', event);
-  window.location.reload();
+    window.location.reload();
 });
 
 // Handle dynamic import errors globally
@@ -23,3 +32,4 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 createRoot(document.getElementById("root")!).render(<App />);
+

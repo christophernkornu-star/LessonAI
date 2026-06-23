@@ -252,16 +252,19 @@ export default function SchemeOfLearning() {
   };
 
   useEffect(() => {
-    const init = async () => {
+        const init = async () => {
       try {
           // 1. Get User
           const { data: { user } } = await supabase.auth.getUser();
           setUserId(user?.id || null);
 
           if (!user) {
+              console.log("Scheme init - No authenticated user found, skipping DB load");
               setIsLoading(false);
               return;
           }
+
+          console.log("Scheme init - Loading data for user:", user.id);
 
           // 2. Load from Supabase (Source of Truth)
           const { data, error } = await supabase
@@ -269,7 +272,12 @@ export default function SchemeOfLearning() {
             .select('*')
             .eq('user_id', user.id);
 
+          if (error) {
+            console.error("Scheme init - Supabase select error:", error);
+          }
+
           if (data && data.length > 0) {
+            console.log(`Scheme init - Loaded ${data.length} schemes from Supabase`);
             // Transform DB schema to App interface
             const loadedSchemes: SchemeItem[] = data.map(item => ({
               id: item.id,
@@ -287,28 +295,55 @@ export default function SchemeOfLearning() {
             }));
             setSchemeData(loadedSchemes);
           } else {
+            console.log("Scheme init - No data in Supabase, checking localStorage");
             // Fallback to localStorage if DB is empty (migration scenario)
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) {
-                // Optional: You could auto-migrate here, but let's just load for now
-                setSchemeData(JSON.parse(saved));
+                const parsed = JSON.parse(saved);
+                console.log(`Scheme init - Loaded ${parsed.length} items from localStorage fallback`);
+                setSchemeData(parsed);
+                // Auto-migrate from localStorage to Supabase
+                if (user.id && parsed.length > 0) {
+                  const dbRecords = parsed.map(item => ({
+                    user_id: user.id,
+                    week: item.week,
+                    week_ending: item.weekEnding,
+                    term: item.term,
+                    subject: item.subject,
+                    class_level: item.classLevel,
+                    strand: item.strand,
+                    sub_strand: item.subStrand,
+                    content_standard: item.contentStandard,
+                    indicators: item.indicators,
+                    exemplars: item.exemplars,
+                    resources: item.resources,
+                  }));
+                  supabase.from('schemes').insert(dbRecords).then(({ error: insertError }) => {
+                    if (insertError) console.error("Scheme init - Auto-migration failed:", insertError);
+                    else console.log("Scheme init - Auto-migrated localStorage data to Supabase");
+                  });
+                }
+            } else {
+              console.log("Scheme init - No data in localStorage either");
             }
           }
       } catch (e) {
-         console.error(e);
+         console.error("Scheme init - Unexpected error:", e);
       } finally {
         setIsLoading(false);
+        console.log("Scheme init - Complete");
       }
     };
 
     init();
   }, []);
 
-  const saveToSupabase = async (items: SchemeItem[]) => {
+    const saveToSupabase = async (items: SchemeItem[]) => {
      if (!userId) return;
+     if (items.length === 0) return;
      
      // Convert to DB format
-     const dbItems = items.map(item => ({
+     const dbRecords = items.map(item => ({
         user_id: userId,
         week: item.week,
         week_ending: item.weekEnding,
@@ -322,14 +357,13 @@ export default function SchemeOfLearning() {
         exemplars: item.exemplars,
         resources: item.resources,
      }));
-     // Note: This is a full sync/replace approach for simplicity given the bulk import nature
-     // Ideally we upsert, but we don't have stable external IDs. 
-     // For this turn, we will insert new ones. 
-     // IMPROVEMENT: On real app, we should manage diffs.
-     // For now, let's just insert the NEW items only?
-     
-     // Actually, let's iterate and insert one by one or batch insert the *new* ones.
-     // The upload handler filters duplicates already;
+
+     const { error } = await supabase.from('schemes').insert(dbRecords);
+     if (error) {
+       console.error("saveToSupabase - Insert error:", error);
+     } else {
+       console.log(`saveToSupabase - Saved ${dbRecords.length} items to DB`);
+     }
   };
 
   const handleSystemImport = async () => {
@@ -1566,7 +1600,7 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
                       </div>
                     </div>
                   </DialogContent>
-                </Dialog>
+                                </Dialog>
               </div>
             </div>
 
@@ -1739,49 +1773,144 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
                   )}
                 </div>
               </div>
-            </div>
+                        </div>
 
-            <div className="sticky top-28 mt-8 mb-8 w-full rounded-full border border-secondary/20 bg-white/95 px-5 py-4 shadow-xl shadow-secondary/20 backdrop-blur-sm ring-1 ring-slate-200/40 z-40">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div className="relative w-full xl:w-[48%]">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search class, subject, strand..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                <div className="flex flex-wrap items-center justify-end gap-3 w-full xl:w-auto">
-                  {selectedBatchItems.length > 0 && (
-                    <>
-                      <Button
-                        variant="secondary"
-                        onClick={() => {
-                          const selectedItems = schemeData.filter(item => selectedBatchItems.includes(item.id));
-                          if (selectedItems.length === 0) {
-                            toast({ title: "No Items Selected", description: "Please select at least one item to generate.", variant: "destructive" });
-                            return;
+                                                {/* Scheme Data Cards Section - List Form */}
+                        {schemeData.length > 0 && (() => {
+                          // Determine which data to display (filtered or all)
+                          const displayData = searchTerm.trim() ? filteredSchemeData : schemeData;
+                          // Group by Class Level, then by Week
+                          const groupedByClass: Record<string, Record<string, SchemeItem[]>> = {};
+                          for (const item of displayData) {
+                            const cls = item.classLevel || "Unknown";
+                            const week = item.week || "Unknown";
+                            if (!groupedByClass[cls]) groupedByClass[cls] = {};
+                            if (!groupedByClass[cls][week]) groupedByClass[cls][week] = [];
+                            groupedByClass[cls][week].push(item);
                           }
-                          handleBatchGenerateClick(selectedItems);
-                        }}
-                        className="w-full sm:w-auto"
-                      >
-                        <Play className="mr-2 h-4 w-4" />
-                        Generate Selected ({selectedBatchItems.length})
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={clearBatchSelection}
-                        className="w-full sm:w-auto"
-                      >
-                        Clear Selection
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
+
+                          // Sort class levels and weeks
+                          const sortedClasses = Object.keys(groupedByClass).sort();
+                          const weekOrder = (w: string) => {
+                            const num = parseInt(w.replace(/[^0-9]/g, ''));
+                            return isNaN(num) ? 999 : num;
+                          };
+
+                                                    return (
+                            <div className="mb-8 space-y-6">
+                              {/* Search Bar */}
+                              <div className="sticky top-20 z-40 w-full rounded-full border border-secondary/20 bg-white/95 px-4 py-2.5 shadow-md backdrop-blur-sm">
+                                <div className="flex items-center gap-3">
+                                  <div className="relative flex-1">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                    <Input
+                                      placeholder="Search class, subject, strand..."
+                                      value={searchTerm}
+                                      onChange={(e) => setSearchTerm(e.target.value)}
+                                      className="pl-9 h-9 text-sm"
+                                    />
+                                  </div>
+                                  {schemeData.length > 0 && (
+                                    <Button variant="outline" size="sm" onClick={handleDownloadCSV} className="shrink-0 h-9">
+                                      <Download className="mr-1.5 h-3.5 w-3.5" />
+                                      <span className="hidden sm:inline text-xs">Export</span>
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <h2 className="text-lg font-semibold">Uploaded Scheme of Learning</h2>
+                                  <p className="text-sm text-muted-foreground">{schemeData.length} items loaded{searchTerm.trim() ? ` (${filteredSchemeData.length} matching)` : ''}.</p>
+                                </div>
+                                {selectedBatchItems.length > 0 && (
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={() => {
+                                      const selectedItems = schemeData.filter(item => selectedBatchItems.includes(item.id));
+                                      if (selectedItems.length > 0) handleBatchGenerateClick(selectedItems);
+                                    }}
+                                    className="shrink-0"
+                                  >
+                                    <Play className="mr-1.5 h-4 w-4" />
+                                    Generate Selected ({selectedBatchItems.length})
+                                  </Button>
+                                )}
+                              </div>
+
+                                                            {sortedClasses.length === 0 && searchTerm.trim() ? (
+                                <div className="rounded-xl border border-dashed border-secondary/30 bg-background/60 p-8 text-center text-sm text-muted-foreground">
+                                  No results match &quot;{searchTerm}&quot;.
+                                </div>
+                              ) : null}
+                              {sortedClasses.map((cls) => {
+                                const weeks = Object.keys(groupedByClass[cls]).sort((a, b) => weekOrder(a) - weekOrder(b));
+                                return (
+                                  <div key={cls} className="rounded-3xl border border-secondary/10 bg-muted/80 p-5 shadow-sm">
+                                    <div className="mb-4 flex items-center gap-2">
+                                      <div className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                                        {cls}
+                                      </div>
+                                      <span className="text-xs text-muted-foreground">{weeks.length} week{weeks.length > 1 ? 's' : ''}</span>
+                                    </div>
+                                    <div className="space-y-3">
+                                      {weeks.map((week) => {
+                                        const items = groupedByClass[cls][week];
+                                        const allIds = items.map(i => i.id);
+                                        const allSelected = allIds.every(id => selectedBatchItems.includes(id));
+                                        return (
+                                          <div key={`${cls}-${week}`} className="rounded-xl border border-secondary/20 bg-white p-4 shadow-sm">
+                                            <div className="mb-3 flex items-center justify-between">
+                                              <div className="flex items-center gap-2">
+                                                <Checkbox
+                                                  checked={allSelected}
+                                                  onCheckedChange={(checked) => {
+                                                    setSelectedBatchItems((prev) =>
+                                                      checked
+                                                        ? [...prev, ...allIds.filter(id => !prev.includes(id))]
+                                                        : prev.filter((id) => !allIds.includes(id))
+                                                    );
+                                                  }}
+                                                />
+                                                <span className="text-sm font-semibold">Week {week.replace(/^Week\s*/i, '')}</span>
+                                              </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                              {items.map((item) => (
+                                                <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-secondary/10 bg-slate-50/50 px-4 py-2.5">
+                                                  <div className="min-w-0 flex-1">
+                                                    <div className="text-sm font-medium text-foreground">{item.subject}</div>
+                                                    <div className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                                                      {item.strand && <span><span className="font-medium">Strand:</span> {item.strand}</span>}
+                                                      {item.subStrand && <span><span className="font-medium">Sub-Strand:</span> {item.subStrand}</span>}
+                                                    </div>
+                                                  </div>
+                                                  <button
+                                                    onClick={() => {
+                                                      const singleItem = schemeData.filter(i => i.id === item.id);
+                                                      if (singleItem.length > 0) handleBatchGenerateClick(singleItem);
+                                                    }}
+                                                    className="shrink-0 rounded-md bg-primary/10 px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
+                                                  >
+                                                    Generate
+                                                  </button>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+
+            
 
         {isBatchGenerating && (
             <Card className="mb-6 p-4 border-primary/20 bg-primary/5 sticky top-[160px] z-50 shadow-md backdrop-blur-sm bg-primary/10">
