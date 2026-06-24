@@ -60,6 +60,7 @@ export default function SchemeOfLearning() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loadingStep, setLoadingStep] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [showClassProfiles, setShowClassProfiles] = useState(true);
   const [deleteClassDialogOpen, setDeleteClassDialogOpen] = useState(false);
   const [classToDelete, setClassToDelete] = useState("");
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
@@ -1601,20 +1602,43 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
                     </div>
                   </DialogContent>
                                 </Dialog>
-              </div>
+                            </div>
             </div>
 
-        {isBatchGenerating && (
+        {isBatchGenerating && batchProgress.current < batchProgress.total && (
             <Card className="mb-6 p-4 border-primary/20 bg-primary/5 sticky top-[160px] z-50 shadow-md backdrop-blur-sm bg-primary/10">
                 <div className="space-y-2">
                     <div className="flex justify-between text-sm font-medium">
-                        <span>Generating Batch Compliance...</span>
+                        <span>Generating Lesson Notes...</span>
                         <span>{batchProgress.current} / {batchProgress.total}</span>
                     </div>
                     <Progress value={(batchProgress.current / batchProgress.total) * 100} className="h-2" />
                     <p className="text-xs text-muted-foreground">Please do not close this window. Processing lesson notes sequentially...</p>
                 </div>
             </Card>
+        )}
+
+        {!isBatchGenerating && batchResults.length > 0 && (
+          <Card className="mb-6 border-primary/20 bg-green-50 p-4 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <div>
+                  <p className="text-sm font-semibold text-green-800">{batchResults.length} Lesson Note{batchResults.length === 1 ? '' : 's'} Generated Successfully</p>
+                  <p className="text-xs text-green-600">{batchProgress.successes} succeeded{batchProgress.failures > 0 ? `, ${batchProgress.failures} failed` : ''}</p>
+                </div>
+              </div>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleDownloadAll}
+                className="shrink-0 bg-green-600 hover:bg-green-700"
+              >
+                <Download className="mr-1.5 h-4 w-4" />
+                Download All ({batchResults.length})
+              </Button>
+            </div>
+          </Card>
         )}
 
             {schemeData.length > 0 && (
@@ -1682,10 +1706,19 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
 
             <div className="mb-6 rounded-3xl border border-secondary/10 bg-muted/80 p-5 shadow-sm">
               <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold">Class Cover Page Profiles</h2>
-                    <p className="text-sm text-muted-foreground">Enter school and teacher names for each class to automatically populate cover page details during generation.</p>
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowClassProfiles(!showClassProfiles)}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <ChevronDown className={`h-5 w-5 transition-transform ${showClassProfiles ? '' : '-rotate-90'}`} />
+                    </button>
+                    <div>
+                      <h2 className="text-lg font-semibold">Class Cover Page Profiles</h2>
+                      <p className="text-sm text-muted-foreground">Enter school and teacher names for each class to automatically populate cover page details during generation.</p>
+                    </div>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center w-full sm:w-auto">
                     <Input
@@ -1705,6 +1738,7 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
                   </div>
                 </div>
 
+                {showClassProfiles && (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {profileClassLevels.length === 0 ? (
                     <div className="col-span-full rounded-2xl border border-dashed border-secondary/50 bg-background/80 p-6 text-center text-sm text-muted-foreground">
@@ -1770,8 +1804,9 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
                         </div>
                       );
                     })
-                  )}
-                </div>
+                                    )}
+                                </div>
+                        )}    {/* end showClassProfiles */}
               </div>
                         </div>
 
@@ -1819,26 +1854,40 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
                                 </div>
                               </div>
 
-                              <div className="flex items-center justify-between">
+                                                            <div className="flex items-center justify-between">
                                 <div>
                                   <h2 className="text-lg font-semibold">Uploaded Scheme of Learning</h2>
                                   <p className="text-sm text-muted-foreground">{schemeData.length} items loaded{searchTerm.trim() ? ` (${filteredSchemeData.length} matching)` : ''}.</p>
                                 </div>
-                                {selectedBatchItems.length > 0 && (
-                                  <Button
-                                    variant="default"
-                                    size="sm"
-                                    onClick={() => {
-                                      const selectedItems = schemeData.filter(item => selectedBatchItems.includes(item.id));
-                                      if (selectedItems.length > 0) handleBatchGenerateClick(selectedItems);
-                                    }}
-                                    className="shrink-0"
-                                  >
-                                    <Play className="mr-1.5 h-4 w-4" />
-                                    Generate Selected ({selectedBatchItems.length})
-                                  </Button>
-                                )}
                               </div>
+
+                                                            {selectedBatchItems.length > 0 && (
+                                                              <div className="sticky top-[88px] z-50 -mx-5 rounded-xl border border-primary/20 bg-primary/5 px-5 py-3 shadow-sm backdrop-blur-sm">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-sm font-medium text-primary">{selectedBatchItems.length} item{selectedBatchItems.length === 1 ? '' : 's'} selected</span>
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        variant="default"
+                                        size="sm"
+                                        onClick={() => {
+                                          const selectedItems = schemeData.filter(item => selectedBatchItems.includes(item.id));
+                                          if (selectedItems.length > 0) handleBatchGenerateClick(selectedItems);
+                                        }}
+                                      >
+                                        <Play className="mr-1.5 h-4 w-4" />
+                                        Generate Selected ({selectedBatchItems.length})
+                                      </Button>
+                                                                            <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={clearBatchSelection}
+                                      >
+                                        Clear
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
 
                                                             {sortedClasses.length === 0 && searchTerm.trim() ? (
                                 <div className="rounded-xl border border-dashed border-secondary/30 bg-background/60 p-8 text-center text-sm text-muted-foreground">
@@ -1912,18 +1961,7 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
 
             
 
-        {isBatchGenerating && (
-            <Card className="mb-6 p-4 border-primary/20 bg-primary/5 sticky top-[160px] z-50 shadow-md backdrop-blur-sm bg-primary/10">
-                <div className="space-y-2">
-                    <div className="flex justify-between text-sm font-medium">
-                        <span>Generating Batch Compliance...</span>
-                        <span>{batchProgress.current} / {batchProgress.total}</span>
-                    </div>
-                    <Progress value={(batchProgress.current / batchProgress.total) * 100} className="h-2" />
-                    <p className="text-xs text-muted-foreground">Please do not close this window. Processing lesson notes sequentially...</p>
-                </div>
-            </Card>
-        )}
+
 
         <Dialog open={batchDialogConfig.open} onOpenChange={(open) => !open && setBatchDialogConfig({ open: false, items: [] })}>
                 <DialogContent className="fixed left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] w-[95vw] max-w-2xl max-h-[90vh] flex flex-col p-0">
