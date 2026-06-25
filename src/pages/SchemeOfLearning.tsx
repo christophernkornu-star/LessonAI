@@ -1926,14 +1926,26 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
                                                 <span className="text-sm font-semibold">Week {week.replace(/^Week\s*/i, '')}</span>
                                               </div>
                                             </div>
-                                            <div className="space-y-2">
+                                                                                        <div className="space-y-2">
                                               {items.map((item) => (
                                                 <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-secondary/10 bg-slate-50/50 px-4 py-2.5">
-                                                  <div className="min-w-0 flex-1">
-                                                    <div className="text-sm font-medium text-foreground">{item.subject}</div>
-                                                    <div className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                                                      {item.strand && <span><span className="font-medium">Strand:</span> {item.strand}</span>}
-                                                      {item.subStrand && <span><span className="font-medium">Sub-Strand:</span> {item.subStrand}</span>}
+                                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                    <Checkbox
+                                                      checked={selectedBatchItems.includes(item.id)}
+                                                      onCheckedChange={(checked) => {
+                                                        setSelectedBatchItems((prev) =>
+                                                          checked
+                                                            ? [...prev, item.id]
+                                                            : prev.filter((id) => id !== item.id)
+                                                        );
+                                                      }}
+                                                    />
+                                                    <div>
+                                                      <div className="text-sm font-medium text-foreground">{item.subject}</div>
+                                                      <div className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                                                        {item.strand && <span><span className="font-medium">Strand:</span> {item.strand}</span>}
+                                                        {item.subStrand && <span><span className="font-medium">Sub-Strand:</span> {item.subStrand}</span>}
+                                                      </div>
                                                     </div>
                                                   </div>
                                                   <button
@@ -2207,7 +2219,7 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
                                         ) : (
                                             <>
                                                 <Download className="mr-2 h-4 w-4" />
-                                                Generate All Lessons ({batchResults.length})
+                                                Generate All Lessons ({batchDialogConfig.items.filter(i => selectedBatchItems.includes(i.id)).length || batchDialogConfig.items.length})
                                             </>
                                         )}
                                     </Button>
