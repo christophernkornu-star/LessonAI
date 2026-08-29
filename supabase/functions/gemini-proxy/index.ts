@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+﻿import { createClient } from "npm:@supabase/supabase-js@2";
 
 const allowedOrigins = [
   "https://lessonai.vercel.app",
@@ -30,11 +30,11 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-    const apiKey = Deno.env.get("DEEPSEEK_API_KEY");
+    const apiKey = Deno.env.get("GEMINI_API_KEY");
 
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: "DEEPSEEK_API_KEY not configured in Supabase secrets." }),
+        JSON.stringify({ error: "GEMINI_API_KEY not configured in Supabase secrets." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -76,7 +76,7 @@ Deno.serve(async (req: Request) => {
       maxOutputTokens,
       numLessons,
       expectJson,
-      model = "deepseek-chat"
+      model = "gemini-3.6-flash"
     } = await req.json();
 
     if (!prompt) {
@@ -86,59 +86,58 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const cleanModel = model.replace(/^models\//i, "").trim() || "gemini-3.6-flash";
+
     const baseTokens = 4000;
     const tokensPerLesson = 2500;
-    let calculatedMaxTokens = (maxOutputTokens || maxTokens)
+    const calculatedMaxTokens = (maxOutputTokens || maxTokens)
       ? (maxOutputTokens || maxTokens)
       : (numLessons && numLessons > 1
         ? baseTokens + (numLessons * tokensPerLesson)
         : baseTokens);
 
-    // DeepSeek output token limit
-    if (calculatedMaxTokens > 8192) {
-      calculatedMaxTokens = 8192;
+    const systemPrompt = systemInstruction || systemMessage || "You are an expert educational content creator.";
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${apiKey}`;
+
+    // When the caller expects a JSON object/array back (lesson templates,
+    // curriculum extraction, etc.), ask Gemini to emit valid JSON directly.
+    // This is what actually prevents "Bad escaped character in JSON" errors:
+    // Gemini's own JSON encoder correctly escapes backslashes (LaTeX commands,
+    // etc.) inside string values, instead of us trying to repair malformed
+    // escaping after the fact on the client.
+    const generationConfig: Record<string, unknown> = {
+      temperature: 0.7,
+      maxOutputTokens: calculatedMaxTokens,
+    };
+    if (expectJson) {
+      generationConfig.responseMimeType = "application/json";
     }
 
-    const systemPrompt = systemInstruction || systemMessage || "You are an expert educational content creator.";
-    
-    const deepseekRequestBody: Record<string, unknown> = {
-      model: model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: prompt }
-      ],
-      max_tokens: calculatedMaxTokens,
-      temperature: 0.7,
+    const geminiRequestBody = {
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
+      generationConfig,
     };
 
-    if (expectJson) {
-      deepseekRequestBody.response_format = { type: "json_object" };
-    }
-
+    // Auto-retry up to 3 times on temporary traffic spikes or 503/429
     let lastResponse: Response | null = null;
-    let lastData: Record<string, unknown> | null = null;
+    let lastData: any = null;
     const maxRetries = 3;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      lastResponse = await fetch("https://api.deepseek.com/chat/completions", {
+      lastResponse = await fetch(geminiUrl, {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify(deepseekRequestBody),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(geminiRequestBody),
       });
 
-      lastData = (await lastResponse.json()) as Record<string, unknown>;
+      lastData = await lastResponse.json();
 
       if (lastResponse.ok) {
         break;
       }
 
-      const errorMessage = typeof lastData?.error === "object" && lastData?.error !== null && "message" in lastData.error
-        ? String((lastData.error as Record<string, unknown>).message).toLowerCase()
-        : "";
-
+      const errorMessage = (lastData?.error?.message || "").toLowerCase();
       const isTemporaryDemand =
         lastResponse.status === 429 ||
         lastResponse.status === 503 ||
@@ -148,7 +147,7 @@ Deno.serve(async (req: Request) => {
 
       if (isTemporaryDemand && attempt < maxRetries) {
         console.warn(`[Attempt ${attempt}/${maxRetries}] High demand encountered. Retrying in ${attempt * 1500}ms...`);
-        await sleep(attempt * 1500);
+        await sleep(attempt * 1500); // 1.5s, 3s backoff
         continue;
       }
 
@@ -156,32 +155,25 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!lastResponse || !lastResponse.ok) {
-      const errorMsg = typeof lastData?.error === "object" && lastData?.error !== null && "message" in lastData.error
-        ? String((lastData.error as Record<string, unknown>).message)
-        : `DeepSeek API request failed (${lastResponse?.status})`;
-
+      const errorMsg = lastData?.error?.message || `Gemini API request failed (${lastResponse?.status})`;
       return new Response(
         JSON.stringify({ error: errorMsg, details: lastData }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const choices = Array.isArray(lastData?.choices) ? lastData.choices : [];
-    const firstChoice = (choices[0] as Record<string, unknown>) || {};
-    const firstMessage = (firstChoice.message as Record<string, unknown>) || {};
-    const generatedText = String(firstMessage.content || "");
-    const usage = (lastData?.usage as Record<string, unknown>) || {};
-    const totalTokens = Number(usage.total_tokens || 0);
+    const generatedText = lastData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const totalTokens = lastData.usageMetadata?.totalTokenCount || 0;
 
     return new Response(
       JSON.stringify({
         text: generatedText,
-        candidates: [{ content: { parts: [{ text: generatedText }] } }],
+        candidates: lastData.candidates,
         usage: {
           totalTokenCount: totalTokens,
           total_tokens: totalTokens
         },
-        choices: choices
+        choices: [{ message: { content: generatedText } }]
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

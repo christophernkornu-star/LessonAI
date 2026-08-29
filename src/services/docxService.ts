@@ -464,19 +464,31 @@ export async function generateLessonNoteDocx(
       let isLineBold = false;
 
       // Check for bold markers ** at the start and end of line - this indicates
-      // the line was deliberately bolded by the formatting pipeline.
-      // We keep the ** markers in the line because createDocxParagraphChildren 
-      // -> parseMarkdownLine handles them correctly.
+      // the line was deliberately bolded by the formatting pipeline (e.g. a
+      // short standalone label like "**Materials:**"). We keep the **
+      // markers in the line because createDocxParagraphChildren ->
+      // parseMarkdownLine handles them correctly, respecting exactly which
+      // part of the line was actually marked bold.
       if (line.startsWith('**') && line.endsWith('**') && line.length > 4) {
         isLineBold = true;
         // Keep the ** markers - parseMarkdownLine will process them
       }
 
-      // Check if this is an Activity/Step/Part/Phase line - make it bold
-      const contentForCheck = line.replace(/\*\*/g, ''); // Use clean for pattern recognition only
-      if (/^(Activity|Step|Part|Phase|Group)\s+\d+/i.test(contentForCheck)) {
-        isLineBold = true;
-      }
+      // NOTE: We deliberately do NOT force-bold the whole line just because
+      // it starts with "Activity N:" / "Step N:" / "Phase N:" / "Part N:" /
+      // "Group N:" (an earlier version of this function did, via a check
+      // like `/^(Activity|Step|Part|Phase|Group)\s+\d+/i.test(contentForCheck)`
+      // that set isLineBold = true for the entire line). That check used to
+      // override the correctly-scoped ** markup coming from the AI service
+      // (which wraps ONLY the "Activity 1:" label in ** and leaves the rest
+      // of the activity's text plain) by force-bolding every token in the
+      // entire paragraph via createDocxParagraphChildren's `bold ||
+      // token.bold` logic — producing a fully-bold activity block instead of
+      // just a bold label. The ** markers already present in the text
+      // (handled per-token by parseMarkdownLine) are sufficient and
+      // correctly scoped; no line-level override is needed or wanted here.
+      // THIS REMOVAL IS THE FIX for the "whole activity paragraph is bold"
+      // bug.
 
       // Handle Markdown Headers (e.g. # Title, ## Subtitle)
       if (line.match(/^#+\s/)) {

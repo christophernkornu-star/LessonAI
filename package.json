@@ -53,6 +53,7 @@
     "file-saver": "^2.0.5",
     "groq-sdk": "^0.35.0",
     "input-otp": "^1.4.2",
+    "jsonrepair": "^3.15.0",
     "katex": "^0.16.21",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",

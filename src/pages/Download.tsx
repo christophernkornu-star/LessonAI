@@ -1,5 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Download, CheckCircle, FileText, Printer, RotateCw, PlusCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -251,6 +260,7 @@ const DownloadPage = () => {
   const navigate = useNavigate();
   const [generatedContent, setGeneratedContent] = useState("");
   const [lessonData, setLessonData] = useState<any>(null);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   useEffect(() => {
     const content = sessionStorage.getItem("generatedLessonNote");
@@ -262,6 +272,11 @@ const DownloadPage = () => {
     
     if (data) {
       setLessonData(JSON.parse(data));
+    }
+
+    // Show the confirmation dialog once the generated content is available
+    if (content) {
+      setIsConfirmOpen(true);
     }
   }, []);
 
@@ -401,9 +416,43 @@ const DownloadPage = () => {
     }
   };
 
-  return (
+    return (
     <div className="min-h-screen bg-gradient-subtle">
       <Navbar />
+
+      {/* Confirmation dialog - shows when the lesson note has finished generating */}
+      <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen} modal>
+        <DialogContent className="sm:max-w-md text-center">
+          <DialogHeader>
+            <DialogTitle className="flex flex-col items-center gap-2">
+              <CheckCircle className="h-10 w-10 text-secondary" />
+              <span>Your Lesson Note is Ready!</span>
+            </DialogTitle>
+            <DialogDescription className="text-base">
+              Your lesson note has been generated successfully. Would you like
+              to download it as a Word document (.docx)?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsConfirmOpen(false)}
+            >
+              No, I&apos;ll review it first
+            </Button>
+            <Button
+              onClick={() => {
+                setIsConfirmOpen(false);
+                handleDownload();
+              }}
+              className="bg-gradient-hero hover:opacity-90"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Yes, Download
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <main className="container mx-auto px-3 sm:px-4 py-6 sm:py-12">
         <div className="mx-auto max-w-2xl">

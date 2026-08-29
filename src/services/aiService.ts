@@ -1,19 +1,33 @@
 import type { LessonTemplate } from "@/data/lessonTemplates";
 import { supabase } from "@/integrations/supabase/client";
-import { 
-  GHANA_CONTEXT, 
-  getCurriculumStandard, 
-  getSubjectExamples, 
-  getDifferentiationStrategy 
+import {
+  GHANA_CONTEXT,
+  getCurriculumStandard,
+  getSubjectExamples,
+  getDifferentiationStrategy
 } from "@/data/ghanaContext";
 import { extractTextFromFile } from "./fileParsingService";
 import { normalizeLatexMathDelimiters } from "@/lib/textFormatting";
+import { jsonrepair } from "jsonrepair"; // npm install jsonrepair
 
+// ============================================================================
 // AI Provider Configuration
-// Enforced to DeepSeek for production
-const AI_PROVIDER = "deepseek";
+//
+// Two providers are supported: Gemini (default) and DeepSeek. Which one a
+// given user hits is controlled by the `ai_provider` column on their row in
+// the `profiles` table (see getUserContext below) — set by an admin directly
+// in the database (or via whatever admin tooling you build on top of this),
+// not something the end user chooses themselves. Unset / unrecognized values
+// fall back to Gemini.
+// ============================================================================
+const GEMINI_MODEL = "gemini-3.6-flash";
+const DEEPSEEK_MODEL = "deepseek-chat";
 
-// Helper functions for teaching philosophy and detail level
+type AIProvider = "gemini" | "deepseek";
+
+// ============================================================================
+// Teaching philosophy / detail level helpers
+// ============================================================================
 function getPhilosophyGuidance(philosophy: string): string {
   const philosophies: Record<string, string> = {
     "student-centered": "Focus on student-led activities, discovery learning, and hands-on exploration. Minimize direct instruction. Emphasize group work, discussions, and student presentations.",
@@ -58,32 +72,27 @@ function getDetailLevelOverride(detailLevel: string): string {
 - Limit each section to one or two short sentences or a single concise bullet.
 - Keep the Phase 1 Starter section very short: one clear warm-up activity and a brief link to the lesson topic.
 - Do NOT add unnecessary explanation, examples, or background details.
-- If the template asks for activities, keep them short and focus on the core action only.
 - The Phase 1 Starter learner activity should be present as a short sentence or bullet, not left blank.
-- Use clear, direct wording rather than full paragraphs.
 `,
     "moderate": `- For MODERATE detail level, provide clear explanations and at least one example for each major section.
 - Keep content practical and teacher-friendly, without excessive elaboration.
-- Use short paragraphs and bullet points to keep readability high.
 - In the Phase 1 Starter section, include a concise warm-up activity, a clear purpose statement, and a simple connection to the main lesson.
-- Include enough detail so a teacher can use the plan without needing major additions.
 `,
     "detailed": `- For DETAILED detail level, include comprehensive step-by-step activity instructions and at least two examples.
 - Add teacher prompts, learner responses, and pacing suggestions where appropriate.
 - In the Phase 1 Starter section, describe the starter activity in detail, include prompts/questions, and explain how it prepares learners for new learning.
-- Offer guidance on differentiation and assessment within each section.
-- Keep the lesson plan rich but still well-structured and easy to follow.
 `,
     "very-detailed": `- For VERY DETAILED level, provide extensive classroom-ready content with multiple examples, explicit teacher dialogue, and detailed timing.
 - Include assessment rubrics, differentiation for different learner needs, and clear pacing for each activity segment.
 - In the Phase 1 Starter section, provide a fully developed starter routine with questions, expected learner responses, and a clear transition into the main lesson.
-- Add practical teaching notes, anticipated learner responses, and variations for higher and lower ability students.
-- Ensure the result is exhaustive, classroom-ready, and highly actionable.
 `,
   };
   return overrides[normalizedLevel] || overrides["moderate"];
 }
 
+// ============================================================================
+// Types
+// ============================================================================
 export interface LessonData {
   subject: string;
   level: string;
@@ -91,12 +100,12 @@ export interface LessonData {
   subStrand: string;
   contentStandard: string;
   indicators?: string;
-  indicator?: string; // specific single indicator
+  indicator?: string;
   exemplars: string;
   curriculum?: string;
   classSize?: string;
   philosophy?: string;
-  teachingPhilosophy?: string; // alias for philosophy
+  teachingPhilosophy?: string;
   term?: string;
   weekNumber?: string;
   weekEnding?: string;
@@ -107,20 +116,17 @@ export interface LessonData {
   selectedResourceFiles?: string[];
   location?: string;
   schemeResources?: string;
-  
-  // Cover Page Fields
+
   includeCoverPage?: boolean;
   schoolName?: string;
   teacherName?: string;
   subjectTeacher?: string;
   coverPageSubject?: string;
   coverPageSource?: "profiles" | "manual";
-  
-  // New field matching the user requirement
-  numLessons?: number; // Defaults to 1 if undefined
-  scheduledDays?: string[]; // Specific days for the lessons (e.g. ["Monday", "Wednesday"])
-  
-  // Additional fields for generator state
+
+  numLessons?: number;
+  scheduledDays?: string[];
+
   topic?: string;
   subTopic?: string;
   date?: string;
@@ -148,12 +154,14 @@ export interface LessonData {
   lesson?: number;
 }
 
-// Helper to log usage
+// ============================================================================
+// Usage logging / eligibility
+// ============================================================================
 async function logAIUsage(
-  model: string, 
-  requestType: string, 
-  success: boolean, 
-  tokens: number = 0, 
+  model: string,
+  requestType: string,
+  success: boolean,
+  tokens: number = 0,
   errorMessage?: string
 ) {
   try {
@@ -171,199 +179,305 @@ async function logAIUsage(
   }
 }
 
-async function verifyUserEligibility() {
+// Fetches the current user's suspension status and assigned AI provider in a
+// single query. `ai_provider` is a column on `profiles` — set it per user
+// (e.g. via the Supabase dashboard, a SQL statement, or an admin panel you
+// build separately) to control which provider that account's requests go
+// to. Defaults to "gemini" when unset, unrecognized, or when the profile
+// can't be read at all (fail open to the default provider, not fail closed
+// on an unrelated read error).
+async function getUserContext(): Promise<{ provider: AIProvider }> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return; // Allow anonymous generation if app logic permits, or enforce login here. Assuming logged in.
+  if (!user) return { provider: "gemini" };
 
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('is_suspended, role')
+    .select('is_suspended, role, ai_provider')
     .eq('id', user.id)
     .single();
 
   if (error) {
-    console.warn("Failed to check suspension status:", error);
-    // If we can't check, deciding whether to fail closed or open. 
-    // Recommended: Fail open but log, OR Fail closed if security is paramount.
-    // For now, logging.
-    return; 
+    console.warn("Failed to check profile/provider assignment:", error);
+    return { provider: "gemini" };
   }
 
-  // Explicitly check for true
   const isSuspended = (profile as any)?.is_suspended === true;
-
   if (isSuspended) {
-    // Double check it's not an error in the DB call returning weird data
-    console.log(`Blocking suspended user: ${user.id}`);
     throw new Error("Your account has been suspended. Please contact the administrator.");
   }
+
+  const provider: AIProvider = (profile as any)?.ai_provider === "deepseek" ? "deepseek" : "gemini";
+  return { provider };
 }
 
-export async function callAIAPI(prompt: string, systemMessage?: string, numLessons?: number, maxTokens?: number): Promise<string> {
-  await verifyUserEligibility();
-  // Strictly use DeepSeek API
-  return callDeepSeekAPI(prompt, systemMessage, numLessons, maxTokens);
+// ============================================================================
+// Shared edge-function invocation
+//
+// Both providers go through a Supabase edge function (gemini-proxy /
+// deepseek-proxy) with the same shape of concerns: retry on transient
+// failures (429/503, or a provider-specific "high demand"/quota message),
+// prefer the real HTTP status the edge function forwards over guessing from
+// text, honor a structured retryAfterSeconds hint when the edge function
+// supplies one, and log usage. Pulling this into one helper means the retry
+// policy only needs to be gotten right once, instead of drifting between
+// two near-identical copies as each provider gets tweaked over time.
+// ============================================================================
+async function invokeAIEdgeFunction(
+  functionName: string,
+  body: Record<string, unknown>,
+  extractContent: (data: any) => string | undefined,
+  extractTokens: (data: any) => number,
+  modelLabel: string,
+): Promise<string> {
+  const maxClientRetries = 2;
+
+  for (let attempt = 0; attempt <= maxClientRetries; attempt++) {
+    try {
+      const { data, error } = await supabase.functions.invoke(functionName, { body });
+
+      if (error) {
+        let serverErrorMsg = error.message;
+        let httpStatus: number | undefined = (error as any).context?.status;
+        let retryAfterSeconds: number | undefined;
+
+        try {
+          const errorBody = await (error as any).context?.json();
+          if (errorBody?.error) serverErrorMsg = errorBody.error;
+          if (typeof errorBody?.retryAfterSeconds === 'number') {
+            retryAfterSeconds = errorBody.retryAfterSeconds;
+          }
+        } catch (_e) { /* fall back to default message */ }
+
+        const isTransient = httpStatus === 429 || httpStatus === 503 ||
+          serverErrorMsg.toLowerCase().includes("quota exceeded") ||
+          serverErrorMsg.toLowerCase().includes("please retry in") ||
+          serverErrorMsg.toLowerCase().includes("high demand") ||
+          serverErrorMsg.toLowerCase().includes("resource exhausted") ||
+          serverErrorMsg.toLowerCase().includes("rate limit");
+
+        if (isTransient && attempt < maxClientRetries) {
+          const waitSecs = retryAfterSeconds ? Math.ceil(retryAfterSeconds) + 2 : 12;
+          console.warn(`[Client Backoff:${functionName}] Waiting ${waitSecs}s before retrying (status ${httpStatus ?? 'unknown'})...`);
+          await new Promise((r) => setTimeout(r, waitSecs * 1000));
+          continue;
+        }
+
+        console.error(`${functionName} Error (status ${httpStatus ?? 'unknown'}):`, serverErrorMsg);
+        throw new Error(serverErrorMsg);
+      }
+
+      const content = extractContent(data);
+      if (!content) {
+        console.error(`Invalid response structure from ${functionName}:`, data);
+        logAIUsage(modelLabel, "text-generation", false, 0, "Invalid response structure");
+        throw new Error("Invalid response from AI Service");
+      }
+
+      logAIUsage(modelLabel, "text-generation", true, extractTokens(data));
+      return content;
+
+    } catch (error: any) {
+      if (attempt === maxClientRetries) {
+        console.error(`Call to ${functionName} failed after retries:`, error);
+        throw error;
+      }
+    }
+  }
+
+  throw new Error("Failed to generate content after retries.");
 }
 
-async function callDeepSeekAPI(prompt: string, systemMessage?: string, numLessons?: number, maxTokens?: number): Promise<string> {
-  console.log("Calling DeepSeek via Secure Edge Function...");
+// ============================================================================
+// callAIAPI — the single entry point every prompt in this file goes through.
+//
+// Routes to Gemini or DeepSeek based on the calling user's `ai_provider`
+// assignment (see getUserContext above). Both branches accept the same
+// `expectJson` flag: for Gemini this maps to generationConfig.responseMimeType
+// = "application/json"; for DeepSeek it maps to response_format:
+// { type: "json_object" } (DeepSeek's OpenAI-compatible JSON mode). Either
+// way, the MODEL is made responsible for producing well-formed JSON —
+// including correctly escaping any backslashes it emits for LaTeX (\frac,
+// \times, etc.) — instead of us trying to reconstruct valid JSON from raw
+// text after the fact. This is what actually fixes the "Bad escaped
+// character in JSON" crash: that class of bug is a generation-time problem,
+// not something a smarter regex can reliably patch afterwards.
+//
+// IMPORTANT: both edge functions need to forward the `expectJson` flag into
+// the respective provider's request — see the gemini-proxy / deepseek-proxy
+// source for exactly where. If an edge function ignores the extra field,
+// everything still works exactly as before (falls back to the
+// jsonrepair-based safety net elsewhere in this file) — this is a strict
+// improvement, not a breaking change.
+// ============================================================================
+export async function callAIAPI(
+  prompt: string,
+  systemMessage?: string,
+  numLessons?: number,
+  maxTokens?: number,
+  expectJson: boolean = false
+): Promise<string> {
+  const { provider } = await getUserContext();
+  if (provider === "deepseek") {
+    return callDeepSeekAPI(prompt, systemMessage, numLessons, maxTokens, expectJson);
+  }
+  return callGeminiAPI(prompt, systemMessage, numLessons, maxTokens, expectJson);
+}
 
+async function callGeminiAPI(
+  prompt: string,
+  systemMessage?: string,
+  numLessons?: number,
+  maxTokens?: number,
+  expectJson: boolean = false
+): Promise<string> {
   const defaultSystemMessage = "You are an expert educational content creator specializing in creating comprehensive, professional lesson plans for Ghanaian teachers following the National Pre-tertiary Curriculum.";
-  
-  // Calculate max_tokens based on number of lessons if not explicitly provided
-  // DeepSeek has a max_tokens limit of 8192
+
   const baseTokens = 6000;
   const tokensPerLesson = 2500;
-  const calculatedMaxTokens = maxTokens 
-    ? Math.min(maxTokens, 8192)  // Cap explicit maxTokens at 8192
-    : (numLessons && numLessons > 1 
-      ? Math.min(baseTokens + (numLessons * tokensPerLesson), 8192)
-      : Math.min(baseTokens, 8192));
-  
-  try {
-    const { data: { session: activeSession } } = await supabase.auth.getSession();
-    
-    const { data, error } = await supabase.functions.invoke('deepseek-proxy', {
-      body: {
-        prompt,
-        systemMessage: systemMessage || defaultSystemMessage,
-        maxTokens: calculatedMaxTokens,
-        numLessons
-      },
-    });
+  const calculatedMaxTokens = maxTokens
+    ? maxTokens
+    : (numLessons && numLessons > 1
+      ? baseTokens + (numLessons * tokensPerLesson)
+      : baseTokens);
 
-    if (error) {
-      console.error("Supabase Edge Function Error:", error);
-      throw new Error(`Edge Function Error: ${error.message}`);
-    }
-
-    if (!data || !data.choices || !data.choices[0]?.message?.content) {
-      console.error("Invalid response structure from Edge Function:", data);
-      logAIUsage("deepseek-chat", "text-generation", false, 0, "Invalid response from Edge Function");
-      throw new Error("Invalid response from AI Service");
-    }
-
-    const content = data.choices[0].message.content;
-    const tokens = data.usage?.total_tokens || 0;
-    
-    logAIUsage("deepseek-chat", "text-generation", true, tokens);
-    return content;
-
-  } catch (error: any) {
-    console.error("Call DeepSeek API failed:", error);
-    throw error;
-  }
+  return invokeAIEdgeFunction(
+    'gemini-proxy',
+    {
+      prompt,
+      systemInstruction: systemMessage || defaultSystemMessage,
+      maxOutputTokens: calculatedMaxTokens,
+      model: GEMINI_MODEL,
+      numLessons,
+      expectJson, // edge function maps this -> generationConfig.responseMimeType
+    },
+    (data) => data?.text || data?.candidates?.[0]?.content?.parts?.[0]?.text || data?.choices?.[0]?.message?.content,
+    (data) => data.usage?.totalTokenCount || data.usage?.total_tokens || 0,
+    GEMINI_MODEL,
+  );
 }
 
+async function callDeepSeekAPI(
+  prompt: string,
+  systemMessage?: string,
+  numLessons?: number,
+  maxTokens?: number,
+  expectJson: boolean = false
+): Promise<string> {
+  const defaultSystemMessage = "You are an expert educational content creator specializing in creating comprehensive, professional lesson plans for Ghanaian teachers following the National Pre-tertiary Curriculum.";
+
+  const baseTokens = 6000;
+  const tokensPerLesson = 2500;
+  // DeepSeek's max_tokens hard cap is 8192 — capped in the edge function too,
+  // but capping here as well keeps the number we log/reason about accurate.
+  const calculatedMaxTokens = maxTokens
+    ? Math.min(maxTokens, 8192)
+    : (numLessons && numLessons > 1
+      ? Math.min(baseTokens + (numLessons * tokensPerLesson), 8192)
+      : Math.min(baseTokens, 8192));
+
+  return invokeAIEdgeFunction(
+    'deepseek-proxy',
+    {
+      prompt,
+      systemMessage: systemMessage || defaultSystemMessage,
+      maxTokens: calculatedMaxTokens,
+      model: DEEPSEEK_MODEL,
+      numLessons,
+      expectJson, // edge function maps this -> response_format: { type: "json_object" }
+    },
+    (data) => data?.choices?.[0]?.message?.content || data?.text,
+    (data) => data.usage?.total_tokens || data.usage?.totalTokenCount || 0,
+    DEEPSEEK_MODEL,
+  );
+}
+
+// ============================================================================
+// Main lesson generation
+// ============================================================================
 export async function generateLessonNote(originalData: LessonData): Promise<string> {
   try {
-    // Clone data to avoid mutating the original
     const data = { ...originalData };
     const numLessons = data.numLessons || 1;
 
-    // ITERATIVE GENERATION STRATEGY:
-    // If multiple lessons are requested, we generate them individually and combine the results.
-    // This bypasses the single-response token limit (8192 tokens) which often causes 
-    // incomplete generation (e.g. stopping at 3 lessons instead of 5).
-    // It also ensures each lesson receives the full attention of the model.
-
+    // SEQUENTIAL GENERATION: process one lesson at a time to avoid RPM limits
+    // and to give each lesson the model's full attention/token budget.
     if (numLessons > 1) {
-      console.log(`Generating ${numLessons} lessons iteratively to ensure full detail...`);
-      
-      // Helper to safely get the Nth item (splitting by newline)
+      console.log(`Generating ${numLessons} lessons sequentially...`);
+
       const getItem = (text: string | undefined, index: number) => {
-          if (!text) return "";
-          const parts = text.split('\n').map(p => p.trim()).filter(p => p.length > 0);
-          if (parts.length === 0) return "";
-          // If we have enough parts, use the specific one. Otherwise, repeat the last one or reuse.
-          // Standard logic: If 1 part provided but 5 lessons asked, use that part for all.
-          // If 5 parts provided for 5 lessons, use 1-to-1.
-          if (parts.length === 1) return parts[0];
-          return parts[Math.min(index, parts.length - 1)];
+        if (!text) return "";
+        const parts = text.split('\n').map(p => p.trim()).filter(p => p.length > 0);
+        if (parts.length === 0) return "";
+        if (parts.length === 1) return parts[0];
+        return parts[Math.min(index, parts.length - 1)];
       };
 
-      const lessonPromises = Array.from({ length: numLessons }).map(async (_, index) => {
-           // Construct specific data for THIS lesson
-           const singleLessonData: LessonData = {
-               ...data,
-               numLessons: 1, // Force single generation mode for the recursive call
-               strand: getItem(data.strand, index),
-               subStrand: getItem(data.subStrand, index),
-               contentStandard: getItem(data.contentStandard, index),
-               indicators: getItem(data.indicators, index),
-               exemplars: getItem(data.exemplars, index),
-               // Assign specific day if available
-               scheduledDays: data.scheduledDays && data.scheduledDays[index] ? [data.scheduledDays[index]] : [],
-               // Pass term/week info directly
-               term: data.term,
-               weekNumber: data.weekNumber,
-               weekEnding: data.weekEnding,
-           };
-           
-           // Generating individual lesson...
-           return generateLessonNote(singleLessonData);
-      });
+      const results: string[] = [];
 
-      const results = await Promise.all(lessonPromises);
+      for (let index = 0; index < numLessons; index++) {
+        if (index > 0) {
+          // Gemini's per-minute rate limit is shared across all lessons in
+          // this batch, including whatever the edge function already retried
+          // internally. 1.5s was too tight and led to repeated 429s once a
+          // few lessons had already consumed the minute's quota; 5s gives
+          // meaningfully more headroom without making a 5-lesson batch feel slow.
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+        }
+
+        const singleLessonData: LessonData = {
+          ...data,
+          numLessons: 1, // forces the single-lesson prompt path below
+          strand: getItem(data.strand, index),
+          subStrand: getItem(data.subStrand, index),
+          contentStandard: getItem(data.contentStandard, index),
+          indicators: getItem(data.indicators, index),
+          exemplars: getItem(data.exemplars, index),
+          scheduledDays: data.scheduledDays && data.scheduledDays[index] ? [data.scheduledDays[index]] : [],
+          term: data.term,
+          weekNumber: data.weekNumber,
+          weekEnding: data.weekEnding,
+        };
+
+        const lessonResult = await generateLessonNote(singleLessonData);
+        results.push(lessonResult);
+      }
 
       if (data.template) {
-          const validObjects: any[] = [];
-          results.forEach((r, index) => {
-             const processedStr = processJsonLessonContent(r, index, numLessons);
-             try {
-                 validObjects.push(JSON.parse(processedStr));
-             } catch (e) {
-                 console.warn(`Generated JSON for lesson ${index} is unparsable. Creating safe fallback text object.`, e);
-                 // Provide a safe fallback object so the markdown preview at least gets *something* valid
-                 validObjects.push({
-                     error: "This lesson's JSON format was interrupted or corrupted.",
-                     raw_content: processedStr.substring(0, 200) + "..."
-                 });
-             }
-          });
-          return JSON.stringify(validObjects);
+        const validObjects: any[] = [];
+        results.forEach((r, index) => {
+          const processed = safeParseLessonJson(r, index, numLessons);
+          validObjects.push(processed);
+        });
+        return JSON.stringify(validObjects);
       } else {
-          // If using standard mode (Text Mode), join with separator
-          // Ensure explicit numbering is present if it wasn't generated by AI
-          // Apply formatting to each result before combining
-          const titledResults = results.map((res, index) => {
-              // Apply text formatting (bolding, etc.)
-              let formattedRes = formatGeneratedContent(res);
-              
-              // Remove ANY existing "Lesson X of Y" or "Lesson X" headers to avoid duplicates or wrong counts
-              // We explicitly target "Lesson: 1 of 1" which is the common culprit
-              formattedRes = formattedRes.replace(/(\*\*|)?Lesson:?\s*1\s*of\s*1(\*\*|)?/gi, '');
-              // Also broader catch for other variations at the start
-              formattedRes = formattedRes.replace(/^(\*\*|)?Lesson:?\s*\d+(\s*of\s*\d+)?(\*\*|)?\s*\n*/gim, '');
-              
-              // Create the correct header for this lesson in the sequence
-              const header = `**Lesson: ${index + 1} of ${numLessons}**`;
-              
-              // Prepend the correct header
-              return `${header}\n\n${formattedRes.trim()}`;
-          });
-          return titledResults.join('\n\n---\n\n');
+        const titledResults = results.map((res, index) => {
+          let formattedRes = formatGeneratedContent(res);
+          formattedRes = formattedRes.replace(/(\*\*|)?Lesson:?\s*1\s*of\s*1(\*\*|)?/gi, '');
+          formattedRes = formattedRes.replace(/^(\*\*|)?Lesson:?\s*\d+(\s*of\s*\d+)?(\*\*|)?\s*\n*/gim, '');
+          const header = `**Lesson: ${index + 1} of ${numLessons}**`;
+          return `${header}\n\n${formattedRes.trim()}`;
+        });
+        return titledResults.join('\n\n---\n\n');
       }
     }
-    
-    // === SINGLE LESSON GENERATION LOGIC (Original Flow) ===
-    
-    if (numLessons === 1) {
-      const splitAndGetFirst = (text: string | undefined) => {
-        if (!text) return "";
-        // Split by newlines (used in Scheme grouping)
-        const parts = text.split('\n');
-        return parts[0].trim();
-      };
-      
-      data.strand = splitAndGetFirst(data.strand);
-      data.subStrand = splitAndGetFirst(data.subStrand);
-      data.contentStandard = splitAndGetFirst(data.contentStandard);
-      data.indicators = splitAndGetFirst(data.indicators);
-      data.exemplars = splitAndGetFirst(data.exemplars);
-    }
-    
-    // Fetch selected files if any
+
+    // === SINGLE LESSON PATH ===
+    // (numLessons is guaranteed to be 1 here — either the caller asked for 1,
+    // or the sequential loop above forced it. No "generate an N-lesson JSON
+    // array in one shot" branch is needed, which removes a whole class of
+    // prompt complexity and token pressure.)
+
+    const splitAndGetFirst = (text: string | undefined) => {
+      if (!text) return "";
+      return text.split('\n')[0].trim();
+    };
+
+    data.strand = splitAndGetFirst(data.strand);
+    data.subStrand = splitAndGetFirst(data.subStrand);
+    data.contentStandard = splitAndGetFirst(data.contentStandard);
+    data.indicators = splitAndGetFirst(data.indicators);
+    data.exemplars = splitAndGetFirst(data.exemplars);
+
     let curriculumFilesInfo = "";
     let resourceFilesInfo = "";
 
@@ -372,37 +486,32 @@ export async function generateLessonNote(originalData: LessonData): Promise<stri
         .from("resource_files")
         .select("title, description, file_name, file_path, file_type")
         .in("id", data.selectedCurriculumFiles);
-      
+
       if (curriculumFiles && curriculumFiles.length > 0) {
         const filesWithContent = await Promise.all(curriculumFiles.map(async (file: any) => {
-            let content = "";
-            if (file.file_path) {
-                // Determine bucket based on file type (default to resource-files if unknown)
-                // IMPORTANT: The file_path stored in DB might already be a full URL or a relative path
-                // If it's a full URL from Supabase, we can use it directly or extract the path
-                
-                let publicUrl = "";
-                if (file.file_path.startsWith('http')) {
-                    publicUrl = file.file_path;
-                } else {
-                    const bucketName = file.file_type ? `${file.file_type}-files` : 'resource-files';
-                    const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(file.file_path);
-                    publicUrl = publicUrlData.publicUrl;
-                }
-
-                if (publicUrl) {
-                    try {
-                        content = await extractTextFromFile(publicUrl, file.file_name);
-                    } catch (err) {
-                        console.warn(`Failed to extract text from ${file.file_name}:`, err);
-                        content = "[Content extraction failed - file may be inaccessible]";
-                    }
-                }
+          let content = "";
+          if (file.file_path) {
+            let publicUrl = "";
+            if (file.file_path.startsWith('http')) {
+              publicUrl = file.file_path;
+            } else {
+              const bucketName = file.file_type ? `${file.file_type}-files` : 'resource-files';
+              const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(file.file_path);
+              publicUrl = publicUrlData.publicUrl;
             }
-            return { ...file, content };
+            if (publicUrl) {
+              try {
+                content = await extractTextFromFile(publicUrl, file.file_name);
+              } catch (err) {
+                console.warn(`Failed to extract text from ${file.file_name}:`, err);
+                content = "[Content extraction failed - file may be inaccessible]";
+              }
+            }
+          }
+          return { ...file, content };
         }));
 
-        curriculumFilesInfo = `\n\n**Reference Curriculum Documents:**\n${filesWithContent.map((file: any, idx: number) => 
+        curriculumFilesInfo = `\n\n**Reference Curriculum Documents:**\n${filesWithContent.map((file: any, idx: number) =>
           `${idx + 1}. ${file.title}${file.description ? ` - ${file.description}` : ''} (${file.file_name})\nCONTENT:\n${file.content.substring(0, 3000)}...`
         ).join('\n\n')}`;
       }
@@ -413,116 +522,133 @@ export async function generateLessonNote(originalData: LessonData): Promise<stri
         .from("resource_files")
         .select("title, description, file_name, file_path, file_type")
         .in("id", data.selectedResourceFiles);
-      
+
       if (resourceFiles && resourceFiles.length > 0) {
         const filesWithContent = await Promise.all(resourceFiles.map(async (file: any) => {
-            let content = "";
-            if (file.file_path) {
-                // Determine bucket based on file type
-                const bucketName = file.file_type ? `${file.file_type}-files` : 'resource-files';
-                const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(file.file_path);
-                if (publicUrlData?.publicUrl) {
-                    content = await extractTextFromFile(publicUrlData.publicUrl, file.file_name);
-                }
+          let content = "";
+          if (file.file_path) {
+            const bucketName = file.file_type ? `${file.file_type}-files` : 'resource-files';
+            const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(file.file_path);
+            if (publicUrlData?.publicUrl) {
+              content = await extractTextFromFile(publicUrlData.publicUrl, file.file_name);
             }
-            return { ...file, content };
+          }
+          return { ...file, content };
         }));
 
-        resourceFilesInfo = `\n\n**Additional Resource Materials:**\n${filesWithContent.map((file: any, idx: number) => 
+        resourceFilesInfo = `\n\n**Additional Resource Materials:**\n${filesWithContent.map((file: any, idx: number) =>
           `${idx + 1}. ${file.title}${file.description ? ` - ${file.description}` : ''} (${file.file_name})\nCONTENT:\n${file.content.substring(0, 3000)}...`
         ).join('\n\n')}`;
       }
     }
 
-    // Build teaching approach guidance
     const normalizedDetailLevel = normalizeDetailLevel(data.detailLevel || 'moderate');
     const detailLevelLabel = getDetailLevelLabel(normalizedDetailLevel);
     const philosophyGuidance = getPhilosophyGuidance(data.philosophy || 'balanced');
     const detailGuidance = getDetailLevelGuidance(normalizedDetailLevel);
     const detailLevelOverride = getDetailLevelOverride(normalizedDetailLevel);
-    
-    // Get Ghana-specific context
+
     const curriculumStandard = getCurriculumStandard(data.level);
     const subjectExamples = getSubjectExamples(data.subject);
-    const differentiationStrategies = getDifferentiationStrategy('mixed'); // Default to mixed for now, could be added to LessonData
+    const differentiationStrategies = getDifferentiationStrategy('mixed');
 
-    const isEnglishGrammar = data.subject.toLowerCase().includes('english') && 
-      (data.strand.toLowerCase().includes('grammar') || 
-       data.subStrand.toLowerCase().includes('grammar') || 
-       (data.indicators && data.indicators.toLowerCase().includes('grammar')) ||
-       (data.exemplars && data.exemplars.toLowerCase().includes('grammar')));
+    const isEnglishGrammar = data.subject.toLowerCase().includes('english') &&
+      (data.strand.toLowerCase().includes('grammar') ||
+        data.subStrand.toLowerCase().includes('grammar') ||
+        (data.indicators && data.indicators.toLowerCase().includes('grammar')) ||
+        (data.exemplars && data.exemplars.toLowerCase().includes('grammar')));
 
     const englishGrammarPrompt = isEnglishGrammar ? `
 **ENGLISH GRAMMAR SPECIFIC INSTRUCTIONS (CRITICAL):**
-- The lesson MUST focus strictly on the grammatical concepts specified in the Sub-Strand and Indicators (e.g., Nouns, Verbs, Adjectives, Tenses, Subject-Verb Agreement, Conjunctions, etc.).
+- The lesson MUST focus strictly on the grammatical concepts specified in the Sub-Strand and Indicators.
 - Do NOT generate a literature, reading comprehension, or creative writing lesson unless explicitly stated in the indicators.
 - Provide clear, explicit definitions of the grammar rules being taught.
 - Include at least 5-10 specific sentence examples demonstrating the grammar rule in action.
 - Ensure all grammar examples use Ghanaian context (e.g., "Kofi is eating fufu" instead of "John is eating pizza").
-- Include specific grammar exercises (e.g., "Identify the verb in the sentence", "Fill in the blank with the correct tense") in the New Learning and Reflection activities.
-- Focus on the mechanics of the English language as prescribed by the NaCCA curriculum.
+- Include specific grammar exercises in the New Learning and Reflection activities.
 ` : '';
 
-    const isGhanaianLanguage = data.subject.toLowerCase().includes('ghanaian language') || 
-                               data.subject.toLowerCase().includes('twi') || 
-                               data.subject.toLowerCase().includes('fante') || 
-                               data.subject.toLowerCase().includes('ewe') || 
-                               data.subject.toLowerCase().includes('ga') || 
-                               data.subject.toLowerCase().includes('dagbani');
+    const isGhanaianLanguage = data.subject.toLowerCase().includes('ghanaian language') ||
+      data.subject.toLowerCase().includes('twi') ||
+      data.subject.toLowerCase().includes('fante') ||
+      data.subject.toLowerCase().includes('ewe') ||
+      data.subject.toLowerCase().includes('ga') ||
+      data.subject.toLowerCase().includes('dagbani');
 
     const languageInstruction = isGhanaianLanguage ? `
 **LANGUAGE INSTRUCTIONS FOR GHANAIAN LANGUAGE SUBJECT (CRITICAL - ZERO TOLERANCE):**
-- You are generating a lesson for a Ghanaian Language class.
 - Write the ENTIRE lesson plan, including all headings, activities, and instructions, in ENGLISH ONLY.
-- ABSOLUTELY NO TWI, FANTE, EWE, GA, DAGBANI, OR ANY OTHER LOCAL LANGUAGE WORDS ARE ALLOWED IN YOUR RESPONSE. ZERO EXCEPTIONS.
-- If you need to refer to a local word, you MUST use a placeholder like [Insert local word] or [Provide local example].
-- Example of what NOT to do: "Write 'nsuo' on the board."
-- Example of what TO do: "Write the local word for 'water' on the board."
+- ABSOLUTELY NO TWI, FANTE, EWE, GA, DAGBANI, OR ANY OTHER LOCAL LANGUAGE WORDS ARE ALLOWED. ZERO EXCEPTIONS.
+- If you need to refer to a local word, use a placeholder like [Insert local word].
 - Focus EXCLUSIVELY on the TEACHING METHODOLOGY and classroom activities.
-- The focus must remain strictly on the provided Strand and Indicator.
 ` : `
 **LANGUAGE AND SPELLING INSTRUCTIONS (CRITICAL):**
-- **USE BRITISH ENGLISH SPELLING ONLY.** (e.g., 'colour' not 'color', 'programme' not 'program', 'centre' not 'center', 'behaviour' not 'behavior', 'organise' not 'organize', 'analyse' not 'analyze').
-- This is mandatory for the Ghanaian curriculum context.
-- Lesson activities, instructions, examples, and all text must be in plain British English.
+- **USE BRITISH ENGLISH SPELLING ONLY.** (e.g., 'colour' not 'color', 'programme' not 'program', 'centre' not 'center', 'organise' not 'organize', 'analyse' not 'analyze').
 `;
+
+    const jsonEscapingInstruction = data.template ? `
+**CRITICAL JSON ESCAPING RULE:**
+- Your entire response MUST be a single valid JSON object — nothing else.
+- Any backslash you write inside a JSON string value MUST itself be escaped as a double backslash.
+  Example: to represent the LaTeX fraction one-half, write $\\\\frac{1}{2}$ in your output (NOT $\\frac{1}{2}$).
+- Never write a single unescaped backslash inside a string value. This applies to every LaTeX command
+  (\\\\times, \\\\sqrt, \\\\div, \\\\pm, etc.) and to any other special character.
+- Paragraph breaks inside a string value must use the standard JSON newline escape \\n.
+` : '';
 
     const ghanaContextPrompt = `
 **GHANAIAN CONTEXT REQUIREMENTS (CRITICAL):**
-1. Use ONLY Ghanaian names (Kwame, Akosua, Kofi, Ama, etc.)
+1. Use ONLY Ghanaian names (Kwame, Akosua, Kofi, Ama, etc.) for FICTIONAL characters in word problems, story scenarios, or example sentences (e.g., "Kofi bought 3 mangoes at the market for GH¢ 6.").
 2. Use ONLY Ghanaian places (Accra, Kumasi, Tamale, Cape Coast, etc.)
 3. Use ONLY Ghanaian currency (Ghana cedis and pesewas)
 4. Use ONLY locally available materials: ${GHANA_CONTEXT.local_materials.slice(0, 5).join(', ')}
 5. Include Ghanaian values and cultural elements
 6. Make it practical for real Ghanaian classroom conditions (large classes, limited resources)
 7. Curriculum Standard: ${curriculumStandard}
-${data.location ? `8. **LOCATION SPECIFIC CONTEXT:** The school is located in **${data.location}**. 
-   - Use examples relevant to this specific location (e.g., nearby landmarks, local geography, main economic activities of the area).
-   - If the location is a coastal area, use ocean/fishing examples. If forest belt, use farming/forestry examples. If northern savannah, use relevant agricultural/climate examples.
+${data.location ? `8. **LOCATION SPECIFIC CONTEXT (CRITICAL):** The school is located in **${data.location}**.
+   - Think concretely about what ${data.location} is actually like — coastal/fishing, forest/farming, savannah, urban/market town, mining, etc. — and ground the lesson in THAT specific environment, not a generic or different one.
+   - Use examples relevant to this specific location.
    - Mention local markets, festivals, or sites familiar to students in ${data.location}.` : ''}
+
+**STUDENT NAMING RULE (CRITICAL):**
+- Do NOT invent specific student names when giving classroom instructions — you do not know who is actually in this teacher's class, so naming real-sounding students to call on doesn't make sense in a lesson note meant to be usable by any teacher, with any class.
+- This means: never write things like "Ask Kwame and Amina to come forward," "Ask learners like Kweku, Fatima, and Ekow to share examples," or "Invite Akosua or Yaw to present." Ghanaian names are for FICTIONAL characters inside word problems and example sentences ONLY (rule 1 above) — never for directing an actual learner in the room.
+- Instead, use generic, name-free classroom language: "Ask two learners to come forward," "Invite a few volunteers to share examples," "Select a representative from each group to present," "Call on individual learners to respond."
+- This applies throughout every phase — Starter, New Learning activities, and Reflection — not just one section.
+
+**STARTER ACTIVITY & RESOURCES/TLR — IMMEDIATE ENVIRONMENT RULE (CRITICAL):**
+${data.location ? `- The Phase 1 Starter activity and every item listed under Resources/Teaching Learning Resources (TLR), in every phase, MUST be something a teacher could realistically walk outside and find in the immediate physical environment of ${data.location} itself — not just "somewhere in Ghana."
+- Match the materials to what that specific place actually has. If ${data.location} is a coastal/fishing community, favor items like nets, canoes, seashells, sand, fish crates, smoked fish. If it's a farming/forest community, favor items like leaves, seeds, farm produce, sticks, baskets, cocoa pods. If it's a savannah/pastoral area, favor items like millet stalks, calabashes, livestock-related items. If it's an urban/market town, favor items like market goods, recycled packaging, chalk, exercise books. Do NOT default to coastal items (shells, canoes, fishing nets) unless ${data.location} is actually coastal — this is a common mistake to avoid.
+- If you are not certain what kind of environment ${data.location} is, default to widely available, generic classroom/community materials (stones, bottle caps, counters, manila cards) rather than guessing at a specific environment type incorrectly.` : `- No specific location was provided, so use widely available, generic Ghanaian classroom/community materials (stones, bottle caps, counters, manila cards, real objects) for the Starter activity and Resources/TLR — the kind of items available in a typical Ghanaian school regardless of exact location.`}
 
 **RESOURCES / TEACHING MATERIALS INSTRUCTIONS:**
 - Keep resources simple, relevant, and easy to obtain in a typical Ghanaian school or community.
 - Focus on locally available materials (e.g., counters, stones, bottle caps, manila cards, real objects).
-- Avoid requesting expensive or hard-to-find equipment unless absolutely necessary for the subject (like Science lab equipment).
-- Ensure the listed resources directly support the lesson activities.
+- Avoid requesting expensive or hard-to-find equipment.
 ${languageInstruction}
+
+**CORE COMPETENCIES (CRITICAL — GROUND THESE IN THE ACTUAL ACTIVITIES):**
+- Only list a competency if the activities you write actually require it. A competency is not a label you attach because it's commonly paired with the subject — it must be demonstrated by a specific task a learner does.
+- Before listing Core Competencies, first write the activities. Then check each candidate competency against what you actually wrote, using this test:
+  - **Communication and Collaboration** — only if learners work in pairs/groups, present to each other, or must explain/justify something to a peer or the class.
+  - **Critical Thinking and Problem Solving** — only if a task requires learners to reason through an ambiguous case, justify a choice between plausible options, or work out something with more than one valid path. Reciting a definition, copying an example, or matching a term to its label does NOT count — that is recall, not critical thinking.
+  - **Creativity and Innovation** — only if learners produce something original (their own sentence, example, drawing, solution) rather than reproducing a given one.
+  - **Personal Development and Leadership** — only if there is genuine self-reflection, self-assessment, or a learner taking a leadership/ownership role in an activity.
+  - **Digital Literacy** — only if the lesson actually uses a digital tool or device.
+  - **Cultural Identity and Global Citizenship** — only if the lesson substantively engages learners with cultural values, community practices, or global connections as content — not merely because the word problems and names used are Ghanaian. Local names, places, and currency are background flavor (per the GHANAIAN EXAMPLES rule above) and do not by themselves justify this competency.
+- List at most 2 competencies, and only the ones that pass the test above for THIS specific lesson's activities. It is correct and expected for some lessons to genuinely support only 1.
 
 **FORMATTING REQUIREMENTS:**
 - Start each new thought, idea, or concept on a NEW LINE.
 - Use double newlines (blank line) between different sections or major ideas.
-- Number activities clearly (1), 2), 3) or Activity 1:, Activity 2:) with each on its own line.
-- Avoid long run-on paragraphs - break them into digestible chunks.
-- Use bullet points for lists of items.
-- **MATHEMATICS & EQUATIONS:**
-  - Ensure math equations stay on ONE line. Do NOT break lines after an equals sign (=), plus sign (+), minus sign (-), or other operator.
-  - If an equation is long, break it logically *before* an operator, not after.
-  - Surround operators with spaces (e.g., "2 + 2 = 4" not "2+2=4").
-  - **LaTeX Math Mode:** Wrap ALL mathematical expressions, equations, fractions, powers, and formulas in LaTeX inline math delimiters ($...$). This explicitly marks them as mathematics content and prevents text formatting issues.
-  - Examples: $2 + 2 = 4$, $x + 5 = 11$, $\frac{1}{2}$, $x^{2}$, $\sqrt{4}$
-
+- Number activities clearly (Activity 1:, Activity 2:) with each on its own line.
+- Avoid long run-on paragraphs.
+- **Bolding discipline (CRITICAL):** The ONLY things you may wrap in bold (**text**) are: (1) the activity/step/phase label together with the rest of that FIRST sentence, up to and including its full stop — e.g. **Activity 1: Review the concept of a fraction as part of a whole using shaded diagrams.** — and (2) the exact phrase **Sample Class Exercises:**. After that first sentence's full stop, start a new paragraph (blank line) and write the rest of the activity as plain, unbolded text. Do NOT bold anything else anywhere — not currency amounts, not quantities, not quoted words, not variable letters (x, n, y, etc.), not any other phrase for emphasis, and not any sentence after the first one in an activity. If you are unsure whether something should be bold, leave it unbolded.
+- **LaTeX Math Mode:** Wrap ALL mathematical expressions, equations, fractions, and formulas in LaTeX inline math delimiters ($...$).
+  Examples: $2 + 2 = 4$, $x + 5 = 11$, $\\frac{1}{2}$, $x^{2}$
+- **Ellipsis / continuing sequences:** Do NOT use \\dots, \\ldots, \\cdots, or any other LaTeX ellipsis command to show a sequence continuing (e.g., 2, 4, 6, ...). Write a plain three-dot ellipsis (...) directly as ordinary text — never inside a LaTeX command, and never inside $ $ delimiters. Only wrap genuine equations, fractions, and exponents in $...$.
+${jsonEscapingInstruction}
 **GHANAIAN EXAMPLES TO USE (BACKGROUND FLAVOR ONLY):**
-The following are examples of Ghanaian context. DO NOT change the core topic of the lesson to match these examples. The topic is STRICTLY defined by the Strand and Indicator. Use these examples ONLY as background flavor (e.g., names in word problems, places in sentences).
 ${subjectExamples.map(ex => `- ${ex}`).join('\n')}
 
 **DIFFERENTIATION STRATEGIES:**
@@ -533,18 +659,7 @@ ${englishGrammarPrompt}
     let prompt = "";
 
     if (data.template) {
-      // Use the selected template structure as the exact base
       prompt = `You are an expert educational content creator for Ghana's education system. You will be given a lesson note template with exact headings and structure. Your task is to FILL IN the template with actual content while keeping the EXACT structure and headings.
-${data.numLessons && data.numLessons > 1 ? `\n**CRITICAL: MULTIPLE LESSONS REQUIRED - GENERATE EXACTLY ${data.numLessons} LESSONS**
-You MUST generate **EXACTLY ${data.numLessons} SEPARATE LESSON NOTES**.
-⚠️ DO NOT generate fewer than ${data.numLessons} lessons. If you are asked for 5 lessons, you MUST create all 5.
-Spread the provided Learning Indicators/Exemplars across these ${data.numLessons} lessons logically.
-For example, if there are 4 exemplars and 2 lessons are requested, cover Exemplars 1-2 in Lesson 1, and Exemplars 3-4 in Lesson 2.
-If you have fewer indicators than lessons, create review/practice lessons for the remaining slots.
-At the top of EACH lesson note, clearly write "LESSON X OF ${data.numLessons}" where X is the lesson number (e.g. "LESSON 1 OF 5", "LESSON 2 OF 5").
-You MUST also include the specific Lesson Number within the lesson title or sub-heading (e.g. "Lesson 1: Introduction to...", "Lesson 2: Advanced..."). 
-OUTPUT FORMAT: Return a JSON ARRAY with EXACTLY ${data.numLessons} lesson objects: [{lesson1}, {lesson2}, {lesson3}, ...]
-Your response MUST start with [ and end with ]` : ''}
 
 **Template Name:** ${data.template.name}
 **Template Description:** ${data.template.description}
@@ -555,12 +670,8 @@ Your response MUST start with [ and end with ]` : ''}
 - Strand: ${data.strand}
 - Sub-Strand: ${data.subStrand}
 - Content Standard: ${data.contentStandard}
-${data.numLessons && data.numLessons > 1 ? '- **Task:** Split these Indicators/Exemplars across ' + data.numLessons + ' lessons.' : ''}
 - Learning Indicators: ${data.indicators || "None provided"}
 - Exemplars: ${data.exemplars || "None provided"}${data.schemeResources ? `\n- Resources from Scheme: ${data.schemeResources}` : ''}${curriculumFilesInfo}${resourceFilesInfo}
-
-**CRITICAL TOPIC ENFORCEMENT:**
-You MUST base 100% of the Starter, Main Activities, and Reflection STRICTLY on the provided Strand, Sub-Strand, and Indicators. DO NOT invent a new topic. DO NOT teach a generic subject lesson. If the Indicator says "Identify vowel sounds", the entire lesson MUST be about vowel sounds.
 
 ${ghanaContextPrompt}
 
@@ -568,34 +679,13 @@ ${ghanaContextPrompt}
 ${philosophyGuidance}
 
 **DETAIL LEVEL:** ${detailLevelLabel}
-- Use the selected detail level exactly as specified.
-- ${detailGuidance}
+${detailGuidance}
 ${detailLevelOverride}
 
 ${data.includeDiagrams ? `**DIAGRAM OUTLINES:**
-Include descriptions of relevant diagrams, charts, illustrations, or visual aids that should be used during the lesson. For each diagram, provide:
-- A clear title/caption
-- What should be shown in the diagram
-- How it relates to the learning objectives
-- When it should be presented during the lesson
-- Key elements or labels that should be included
-
-` : ''}**EXACT TEMPLATE TO FILL (DO NOT MODIFY STRUCTURE OR HEADINGS):**
-
+Include descriptions of relevant diagrams, charts, illustrations, or visual aids that should be used during the lesson.\n` : ''}
+**EXACT TEMPLATE TO FILL:**
 ${data.template.structure}
-
-**CRITICAL INSTRUCTIONS - FOLLOW EXACTLY:**
-
-1. MAINTAIN EXACT TABLE STRUCTURE - All +, -, |, and = characters MUST align perfectly
-2. DO NOT modify, add, or remove any table border characters (+, -, |, =)
-3. Keep text WITHIN cell boundaries - use concise text that fits the cell width
-4. PRESERVE all bold formatting (**text**) exactly as shown
-5. KEEP merged cell structure unchanged
-6. DO NOT break table borders with long text - use line breaks within cells if needed
-7. USE THE EXACT HEADINGS from the template - do not paraphrase, rename, or modify them
-8. DO NOT skip any sections from the template
-9. DO NOT add sections that aren't in the template
-10. DO NOT reorder sections
 
 **HOW TO FILL THE TEMPLATE:**
 - Replace {SUBJECT} with: ${data.subject}
@@ -603,112 +693,24 @@ ${data.template.structure}
 - Replace {STRAND} with: ${data.strand}
 - Replace {SUB_STRAND} with: ${data.subStrand}
 - Replace {CONTENT_STANDARD} with: ${data.contentStandard}
-- Replace {EXEMPLARS}, {OBJECTIVES}, or {INDICATOR} with appropriate learning objectives based on: ${data.indicators ? "Indicators: " + data.indicators : ""} ${data.exemplars ? "Exemplars: " + data.exemplars : ""}
-- Replace {LESSON_TITLE} with a descriptive title for this lesson
-- Replace {TERM} with the academic term (e.g., "First Term", "Second Term", "Third Term")
-- Use the exact value provided for TERM: "${data.term || 'TERM'}". Do not infer or alter the term based on lesson numbering, the number of lessons, or any other field.
-- If multiple lessons are generated, keep the same TERM for every lesson unless the task explicitly specifies otherwise.
-- Replace {WEEK_ENDING} with: ${data.weekEnding || ""} (Leave empty if not provided)
-- Replace {DAY} with: ${data.scheduledDays && data.scheduledDays.length > 0 ? `the scheduled day (use "${data.scheduledDays[0]}" for Lesson 1${data.scheduledDays.length > 1 ? `, "${data.scheduledDays[1]}" for Lesson 2` : ''}${data.scheduledDays.length > 2 ? `, "${data.scheduledDays[2]}" for Lesson 3` : ''})` : "the day of the week"}
-- Replace {DURATION} with appropriate lesson duration (e.g., 60 minutes, 1 hour)
-- Replace {CLASS_SIZE} with: ${data.classSize || "typical class size (e.g., 30-40 students)"}
-- Replace {PERFORMANCE_INDICATOR} with specific measurable outcomes starting with "By the end of the lesson, learners will be able to:"
-- Replace {CORE_COMPETENCIES} with relevant competencies (e.g., Critical Thinking, Creativity, Communication, Collaboration)
-- Replace {KEYWORDS} with key vocabulary terms for this lesson
-- Replace {REFERENCE} with EXACTLY: "NaCCA ${data.subject} Curriculum for ${data.level}" - DO NOT add any other text, materials, or resources to this field.
-- Replace {STARTER_DURATION} with "10 mins"
-- Replace {NEW_LEARNING_DURATION} with "40 mins"
-- Replace {REFLECTION_DURATION} with "10 mins"
-- For {STARTER_ACTIVITIES}: Provide a concise summary of starter/warm-up activities in one short sentence or a single concise bullet point. Do not leave this section blank, even in Brief mode.
-- For {REFLECTION_ACTIVITIES}: 
-  1. Briefly summarize the lesson closure.
-  2. ALWAYS add a blank line (double newline), then include the subheading "**Sample Class Exercises:**" (bolded) followed by at least 3 concept application questions for students to solve. 
-  3. Ensure these questions test understanding of the lesson concepts in a practical way.
-- For {NEW_LEARNING_ACTIVITIES}: Number the activities (Activity 1:, Activity 2:) starting on new lines and USE bold formatting (e.g. **Activity 1:**).
-  ${data.numLessons && data.numLessons > 1 ? `
-  - **CRITICAL - MULTIPLE STRANDS/LESSONS:**
-    You have been provided with multiple Strands/Sub-strands for this week (separated by newlines).
-    You are creating a plan for ${data.numLessons} lessons.
-    ${data.scheduledDays && data.scheduledDays.length > 0 ? `**SCHEDULE:** This subject is taught on: ${data.scheduledDays.join(', ')}. Assign each lesson to the correct day in order.` : ''}
-    **RULE:** You must STRICTLY separate the strands.
-    - **Lesson 1** ${data.scheduledDays?.[0] ? `(Day: ${data.scheduledDays[0]})` : ''} must focus ONLY on the *first* Strand/Sub-strand provided.
-    - **Lesson 2** ${data.scheduledDays?.[1] ? `(Day: ${data.scheduledDays[1]})` : ''} must focus ONLY on the *second* Strand/Sub-strand provided (if available).
-    - **Lesson 3** ${data.scheduledDays?.[2] ? `(Day: ${data.scheduledDays[2]})` : ''} must focus ONLY on the *third* Strand/Sub-strand provided (if available).
-    - **DO NOT** combine multiple strands into a single lesson/activity session. 
-    - If you run out of unique strands, you may extend the last strand or review, but NEVER squash distinct strands together.
-    - **NUMBERING:** Ensure each lesson is distinctly numbered 1 to ${data.numLessons}.` : ''}
-    - Replace {DAY} with the specific day assigned to each lesson as listed above:
-      * For Lesson 1, use: "${data.scheduledDays?.[0] || 'Monday'}"
-      * For Lesson 2, use: "${data.scheduledDays?.[1] || 'Wednesday'}"
-      * For Lesson 3, use: "${data.scheduledDays?.[2] || 'Friday'}"
-      *(Continue this pattern for all ${data.numLessons} lessons)*
-    - **SCHEDULE REQUIREMENT:** You MUST use the exact days provided above. DO NOT invent days or use default patterns like "Monday, Tuesday" unless they are explicitly listed above.
-- For {STARTER_RESOURCES}, {NEW_LEARNING_RESOURCES}, {REFLECTION_RESOURCES}, list ONLY essential, simple, and readily available materials (avoid long lists)
-- For sections like {INTRODUCTION}, {MAIN_ACTIVITIES}, {ASSESSMENT}, etc., write detailed, practical content
-- **FORMATTING:** Use short, clear paragraphs. Avoid long "walls of text". Use bullet points (-) for lists. Separate distinct ideas with newlines.
-
-**CONTENT QUALITY REQUIREMENTS:**
-- **Paragraphing:** Break long text into smaller, readable paragraphs. Use double newlines (\n\n) to separate paragraphs in JSON strings.
-- **Teaching Philosophy:** ${data.philosophy || 'balanced'} - ${philosophyGuidance}
-- **Detail Level:** ${detailLevelLabel} - ${detailGuidance}
-- **Diagrams:** ${data.includeDiagrams ? 'Include diagram outlines as requested.' : 'Do not include diagram outlines.'}
-- Generate detailed, practical, actionable content for EVERY section
-- Ensure all content is appropriate for ${data.level} students in Ghana
-- Include specific examples, activities, and clear instructions
-- Make it ready for immediate classroom use${curriculumFilesInfo || resourceFilesInfo ? '\n- Reference and incorporate content from the provided curriculum documents and resource materials' : ''}
-
-**CRITICAL: JSON TEMPLATE OUTPUT REQUIREMENTS:**
-- This template is in JSON format - you MUST return ONLY valid JSON
-- Your response should START with { and END with }
-- Do NOT add any text before or after the JSON
-- Do NOT add markdown code blocks (no \`\`\`json or \`\`\`)
-- DO NOT change the JSON structure or add/remove fields
-- Replace ALL placeholders {SUBJECT}, {LEVEL}, {CLASS}, {STRAND}, {SUB_STRAND}, {CONTENT_STANDARD}, {EXEMPLARS}, {OBJECTIVES}, {INDICATOR}, {LESSON_TITLE}, {TERM}, {WEEK_ENDING}, {DAY}, {DURATION}, {CLASS_SIZE}, {PERFORMANCE_INDICATOR}, {CORE_COMPETENCIES}, {KEYWORDS}, {REFERENCE}, {STARTER_DURATION}, {NEW_LEARNING_DURATION}, {REFLECTION_DURATION} with actual educational content
-- Ensure all string values are properly escaped (use \\ for special characters)
-- Do NOT include ANY explanation, commentary, or meta-text
-- The ENTIRE response must be parseable as JSON
-
-**SPECIAL INSTRUCTIONS FOR TABLE TEMPLATES:**
-- If the template contains ASCII table borders (+, -, |, =), you MUST preserve them EXACTLY
-- Keep all content within the visual cell boundaries
-- Use short, concise text that fits within each cell's width
-- For multi-line content within a cell, use line breaks but maintain cell borders
-- Example: If a cell is 50 characters wide, keep text under 48 characters per line
-- Fill ALL placeholders {PLACEHOLDER_TEXT} with actual content - no placeholders should remain
+- Replace {EXEMPLARS}, {OBJECTIVES}, or {INDICATOR} with appropriate learning objectives
+- Replace {LESSON_TITLE} with a descriptive title
+- Replace {TERM} with: "${data.term || 'TERM'}"
+- Replace {WEEK_ENDING} with: "${data.weekEnding || ''}"
+- Replace {DAY} with: "${data.scheduledDays?.[0] || 'Monday'}"
+- Replace {REFERENCE} with EXACTLY: "NaCCA ${data.subject} Curriculum for ${data.level}"
+- Replace {CORE_COMPETENCIES} (if present) ONLY after you have written {NEW_LEARNING_ACTIVITIES} — list the competencies that pass the evidence test in the CORE COMPETENCIES section above, based on what those activities actually require learners to do. Do not fill this field from a generic list.
+- For {STARTER_ACTIVITIES} and every {..._RESOURCES} field (Starter, New Learning, Reflection): follow the STARTER ACTIVITY & RESOURCES/TLR — IMMEDIATE ENVIRONMENT RULE above. ${data.location ? `List only items realistically found in and around ${data.location} specifically.` : 'List only widely available, generic Ghanaian classroom/community materials.'}
+- For {REFLECTION_ACTIVITIES}: Include summary closure, double newline, then "**Sample Class Exercises:**" followed by 3 questions.
+- For {NEW_LEARNING_ACTIVITIES}: Format each activity starting with **Activity 1: <first sentence ending in a full stop>**, then a blank line, then the rest of that activity's content as plain unbolded text. Repeat for Activity 2, Activity 3, etc. Never bold anything beyond that first sentence (no bolding numbers, quoted words, or variable letters in the body).
 
 **OUTPUT FORMAT:**
-${data.template?.structure.trim().startsWith('{') ? `
-⚠️ ATTENTION: This is a JSON template!
-${data.numLessons && data.numLessons > 1 ? `- You are generating ${data.numLessons} lessons, so return a JSON ARRAY
-- Your FIRST character must be: [
-- Your LAST character must be: ]
-- Format: [{lesson1}, {lesson2}, {lesson3}, ...] with EXACTLY ${data.numLessons} objects` : `- Your FIRST character must be: {
-- Your LAST character must be: }`}
-- NO text before the opening ${data.numLessons && data.numLessons > 1 ? '[' : '{'}
-- NO text after the closing ${data.numLessons && data.numLessons > 1 ? ']' : '}'}
-- NO markdown code fences
-- ONLY pure JSON
-` : `
-- Start with the EXACT first line of the template
-- Work through EACH section systematically, maintaining exact formatting
-`}
-- Output ONLY the filled template - no commentary, no explanations, no meta-text
-- Do NOT say things like "Here is the lesson note" or "I have filled the template"
-- Ensure EVERY placeholder is replaced with actual content
+- Your response must be ONLY the JSON object — no markdown fences, no commentary before or after.
 
 BEGIN THE FILLED TEMPLATE NOW:`;
     } else {
-      // Use default prompt if no template selected
       prompt = `You are an expert educational content creator for Ghana's education system. Generate a comprehensive, professional lesson note based on the following information:
-${data.numLessons && data.numLessons > 1 ? `
-**⚠️ CRITICAL: MULTIPLE LESSONS REQUIRED - GENERATE EXACTLY ${data.numLessons} LESSONS**
-You MUST generate **EXACTLY ${data.numLessons} SEPARATE LESSON NOTES**.
-DO NOT generate fewer than ${data.numLessons} lessons. If you are asked for 5 lessons, you MUST create all 5.
-Spread the provided Learning Indicators/Exemplars across these ${data.numLessons} lessons logically.
-If you have fewer indicators than lessons, create review/practice lessons for the remaining slots.
-Clearly label each lesson as "LESSON 1 OF ${data.numLessons}", "LESSON 2 OF ${data.numLessons}", etc.
-Separate each lesson with a line containing only "---"
-` : ''}
+
 **Subject:** ${data.subject}
 **Grade Level:** ${data.level}
 **Class Size:** ${data.classSize || "Typical (30-40)"}
@@ -725,60 +727,26 @@ ${ghanaContextPrompt}
 ${philosophyGuidance}
 
 **DETAIL LEVEL:** ${detailLevelLabel}
-- Use the selected detail level exactly as specified.
-- ${detailGuidance}
+${detailGuidance}
 ${detailLevelOverride}
-- **Formatting:** Use short, clear paragraphs. Avoid long blocks of text. Use bullet points where appropriate.
 
-${data.includeDiagrams ? `**DIAGRAM OUTLINES:**
-Include descriptions of relevant diagrams, charts, illustrations, or visual aids throughout the lesson. For each diagram, provide:
-- A clear title/caption
-- Description of what should be shown
-- How it supports the learning objectives
-- When it should be presented
-- Key elements, labels, or annotations
-
-` : ''}Please create a lesson note that includes:
+Please create a lesson note that includes:
 1. Lesson Title
 2. Learning Objectives (at least 3)
-3. Materials Needed (List only essential, readily available items)
-4. Introduction/Warm-up Activity (5-10 minutes)
-5. Main Teaching Activities (30-40 minutes)
-   - Step-by-step instructional sequence
-   - Guided practice activities
-   - Examples and demonstrations
-   - IMPORTANT: Start every "Activity X:" on a new line and use bold formatting (e.g., **Activity 1:**).
-   ${data.numLessons && data.numLessons > 1 ? `
-   - **CRITICAL - MULTIPLE STRANDS/LESSONS:**
-     You have been provided with distinct Strands/Sub-strands for this week (separated by newlines).
-     You are creating a plan for ${data.numLessons} lessons.
-     ${data.scheduledDays && data.scheduledDays.length > 0 ? `**SCHEDULE:** This subject is taught on: ${data.scheduledDays.join(', ')}. Assign each lesson to the correct day in order.` : ''}
-     **RULE:** You must STRICTLY separate the strands.
-     - **Lesson 1** ${data.scheduledDays?.[0] ? `(Day: ${data.scheduledDays[0]})` : ''} must focus ONLY on the *first* Strand/Sub-strand provided.
-     - **Lesson 2** ${data.scheduledDays?.[1] ? `(Day: ${data.scheduledDays[1]})` : ''} must focus ONLY on the *second* Strand/Sub-strand provided (if available).
-     - **Lesson 3** ${data.scheduledDays?.[2] ? `(Day: ${data.scheduledDays[2]})` : ''} must focus ONLY on the *third* Strand/Sub-strand provided (if available).
-     - **DO NOT** combine multiple strands into a single lesson/activity session. 
-     - If you run out of unique strands, you may extend the last strand or review, but NEVER squash distinct strands together.
-     - **NUMBERING:** Ensure each lesson is distinctly numbered 1 to ${data.numLessons}.` : ''}
-6. Assessment Methods
-7. Differentiation Strategies
-8. Closure/Summary (5 minutes) - Include summary of key points.
-   - **Sample Class Exercises (Concept Application):** (Must be bolded) Include at least 3 questions for learners to practice.
-9. Homework/Extension Activities
-
-${curriculumFilesInfo || resourceFilesInfo ? 'Reference and incorporate content from the provided curriculum documents and resource materials where appropriate.\n\n' : ''}Format the lesson note professionally with clear sections and practical, actionable content that a teacher can use directly in the classroom.
-${data.numLessons && data.numLessons > 1 ? `
-**FINAL REMINDER:** You MUST generate EXACTLY ${data.numLessons} complete lesson notes, each separated by "---". Count your lessons before finishing - if you have fewer than ${data.numLessons}, continue generating more.` : ''}`;
+3. Materials Needed
+4. Starter Activity (5-10 minutes)
+5. Main Teaching Activities (30-40 minutes) - Use **Activity 1:**, **Activity 2:**
+6. Core Competencies — list these LAST, after writing the activities above, and only include ones that pass the evidence test in the CORE COMPETENCIES section above
+7. Assessment Methods
+8. Differentiation Strategies
+9. Closure/Summary (5 minutes) - Include **Sample Class Exercises:** with 3 application questions.
+10. Homework/Extension Activities`;
     }
 
-    // Pass numLessons to callAIAPI so it can allocate enough tokens
-    const text = await callAIAPI(prompt, undefined, data.numLessons);
-    // Apply formatting patches for requested bolding ONLY for non-JSON (text) output
-    // JSON templates should not have text formatting applied as it corrupts the JSON
+    const text = await callAIAPI(prompt, undefined, data.numLessons, undefined, !!data.template);
+
     if (data.template) {
-      // JSON mode - but still need to normalize malformed LaTeX in single-lesson template
-      const processedStr = processJsonLessonContent(text, 0, 1);
-      return processedStr;
+      return JSON.stringify(safeParseLessonJson(text, 0, 1));
     }
     return formatGeneratedContent(text);
   } catch (error) {
@@ -787,48 +755,29 @@ ${data.numLessons && data.numLessons > 1 ? `
   }
 }
 
+// ============================================================================
+// Extraction helpers (all JSON-producing -> use expectJson: true)
+// ============================================================================
 export async function extractCurriculumFromText(text: string): Promise<any[]> {
   const prompt = `
-    You are an expert curriculum analyzer. I will provide you with text extracted from a curriculum document.
-    Your task is to extract the structured curriculum data from this text.
-    
-    The document may contain curriculum for MULTIPLE CLASSES (e.g., Basic 4, Basic 5, and Basic 6).
-    You must extract ALL curriculum units found in the text for ALL classes.
-    
-    The data should be structured as a JSON array of objects, where each object represents a specific "unit" or "sub-strand" of the curriculum.
-    
-    Each object MUST have the following fields:
-    - "grade_level": The class or grade level (e.g., "Basic 1", "JHS 2"). Look for headers like "Basic 4", "B4", "Year 4".
-    - "subject": The subject (e.g., "Mathematics", "Science").
-    - "strand": The main strand or section title.
-    - "sub_strand": The sub-strand or topic title.
-    - "content_standards": An array of strings, each representing a content standard code and description (e.g., "B1.1.1.1: Count numbers...").
-    - "learning_indicators": An array of strings, each representing a learning indicator.
-    - "exemplars": A string containing examples or further details (optional).
-    - "page_reference": A string indicating the page number(s) where this topic is found (e.g., "pg 45", "pp 12-14"). Look for "Page", "Pg", "P." columns or text.
-    
-    If the text contains multiple strands or sub-strands, create a separate object for each.
-    
-    Return ONLY the valid JSON array. Do not include any markdown formatting or explanation.
-    
-    TEXT TO ANALYZE:
-    ${text.substring(0, 100000)} // Limit text length to avoid token limits
+    Extract structured curriculum units from this text as a JSON array of objects.
+    Each object must contain:
+    - "grade_level"
+    - "subject"
+    - "strand"
+    - "sub_strand"
+    - "content_standards" (array of strings)
+    - "learning_indicators" (array of strings)
+    - "exemplars" (string)
+    - "page_reference" (string)
+
+    Return ONLY the valid JSON array.
+    TEXT:
+    ${text.substring(0, 100000)}
   `;
 
-  try {
-    const response = await callAIAPI(prompt, "You are a data extraction assistant that outputs strict JSON.");
-    
-    // Clean response
-    let cleanJson = response.trim();
-    if (cleanJson.startsWith('```')) {
-      cleanJson = cleanJson.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
-    }
-    
-    return JSON.parse(cleanJson);
-  } catch (error) {
-    console.error("Error extracting curriculum:", error);
-    throw new Error("Failed to extract curriculum data from the file.");
-  }
+  const response = await callAIAPI(prompt, "You are a data extraction assistant that outputs strict JSON.", undefined, undefined, true);
+  return parseJsonSafely(response, []);
 }
 
 export async function parseCurriculumPaste(text: string): Promise<{
@@ -838,35 +787,22 @@ export async function parseCurriculumPaste(text: string): Promise<{
   exemplars: string;
 }> {
   const prompt = `
-    I have a text snippet from a curriculum document. Please extract the following details:
-    - Strand
-    - Sub-strand
-    - Content Standard
-    - Learning Indicators / Exemplars
-
-    Text:
-    "${text.substring(0, 2000)}"
-
-    Return a valid JSON object with keys: "strand", "subStrand", "contentStandard", "exemplars".
-    If a field is not found, use an empty string.
-    Do not include markdown formatting.
+    Extract from this text snippet: "strand", "subStrand", "contentStandard", "exemplars".
+    Return a strict JSON object.
+    Text: "${text.substring(0, 2000)}"
   `;
 
   try {
-    const response = await callAIAPI(prompt, "You are a data extraction assistant that outputs strict JSON.");
-    let cleanJson = response.trim();
-    if (cleanJson.startsWith('```')) {
-      cleanJson = cleanJson.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
-    }
-    return JSON.parse(cleanJson);
-  } catch (error) {
-    console.error("Error parsing pasted curriculum:", error);
-    return {
+    const response = await callAIAPI(prompt, "You are a data extraction assistant that outputs strict JSON.", undefined, undefined, true);
+    return parseJsonSafely(response, {
       strand: "",
       subStrand: "",
       contentStandard: "",
-      exemplars: text // Fallback: put everything in exemplars if parsing fails
-    };
+      exemplars: text
+    });
+  } catch (error) {
+    console.error("Error parsing pasted curriculum:", error);
+    return { strand: "", subStrand: "", contentStandard: "", exemplars: text };
   }
 }
 
@@ -884,93 +820,234 @@ export async function parseSchemeOfLearning(text: string): Promise<Array<{
   resources: string;
 }>> {
   const prompt = `
-    I have a text extracted from a Scheme of Learning document (likely a table). 
-    Please extract the weekly plan details into a structured JSON array.
-
-    The text typically follows column orders like: 
-    Week, Week Ending, Term, Subject, Class, Strand, Sub-Strand, Content Standard, Indicators, Resources.
-    
-    CRITICAL INSTRUCTION:
-    1. GLOBAL METADATA SEARCH: 
-       - "Subject" (e.g., "Mathematics", "Science", "Computing").
-       - "Class/Level" (e.g., "Basic 7", "B7", "JHS 1").
-       - "Term" (e.g., "Term 1", "First Term", "Term One", "2nd Term").
-       - Look for these in the document header/title if they are not in every row. 
-    
-    2. PROPAGATE METADATA: 
-       - Apply the found Subject, Class, and Term to EVERY row in the output array.
-       - If the Term is found in the header (e.g. "Scheme of Learning for Term 2"), make sure every object in the array has "term": "Term 2".
-
-    3. WEEK ENDING SPECIFICS:
-       - Look for a column or text indicating "Week Ending", "W/E", "Date", or "Period".
-       - Extract the date or date range associated with each week.
-       - If finding the date is difficult, look for patterns like "24th - 28th" or "Ending Friday".
-
-    4. STRUCTURE:
-       - Extract as many weeks as you can find.
-    
-    FORMATTING RULES:
-    - "term": Normalize to "Term 1", "Term 2", or "Term 3". If text says "First Term", use "Term 1".
-    - "week": Normalize to "Week 1", "Week 2", etc.
-    - "strand" and "subStrand": Seperate them if possible. 
-    - "classLevel": Normalize to "Basic X" or "JHS X".
-    
-    Text:
-    "${text.substring(0, 15000)}"
-
-    Return a valid JSON array of objects with these exact keys: 
+    Extract weekly plan details from this Scheme of Learning into a JSON array of objects with keys:
     "week", "weekEnding", "term", "subject", "classLevel", "strand", "subStrand", "contentStandard", "indicators", "exemplars", "resources".
-    
-    Use empty strings for missing fields rather than omitting keys.
-    
-    Output ONLY the JSON array. No markdown blocks.
+    Normalize term to "Term 1", "Term 2", or "Term 3". Normalize class to "Basic X" or "JHS X".
+
+    Text: "${text.substring(0, 15000)}"
   `;
 
-  try {
-    const response = await callAIAPI(prompt, "You are a data extraction assistant that outputs strict JSON arrays.");
-    let cleanJson = response.trim();
-    if (cleanJson.startsWith('```')) {
-      cleanJson = cleanJson.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
-    }
+  const response = await callAIAPI(prompt, "You are a data extraction assistant that outputs strict JSON arrays.", undefined, undefined, true);
+  return parseJsonSafely(response, []);
+}
 
-    // Attempt to fix truncated JSON
+// ============================================================================
+// JSON parsing — robust, single code path
+//
+// This replaces the old hand-rolled sanitizeJsonString + manual repair pass.
+// jsonrepair handles unescaped control characters, bad/invalid escapes,
+// trailing commas, unterminated strings, markdown code fences, etc. in one
+// well-tested pass. Combined with `expectJson` above (which asks Gemini to
+// emit valid JSON directly), this should be needed only rarely as a safety net.
+// ============================================================================
+function stripCodeFences(raw: string): string {
+  let cleaned = raw.trim();
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+  }
+  return cleaned.trim();
+}
+
+function parseJsonSafely<T>(raw: string, fallback: T): T {
+  const cleaned = stripCodeFences(raw);
+  try {
+    return JSON.parse(cleaned);
+  } catch (e) {
+    console.warn("Direct JSON.parse failed, attempting repair:", e);
     try {
-      return JSON.parse(cleanJson);
-    } catch (e) {
-      console.warn("JSON parse failed, attempting to repair truncated JSON...");
-      // Find the last closing brace '}'
-      const lastBrace = cleanJson.lastIndexOf('}');
-      if (lastBrace !== -1) {
-        // Cut off everything after the last object and close the array
-        const repairedJson = cleanJson.substring(0, lastBrace + 1) + ']';
-        try {
-           const parsed = JSON.parse(repairedJson);
-           console.log(`Repair successful. Recovered ${Array.isArray(parsed) ? parsed.length : 0} items.`);
-           return Array.isArray(parsed) ? parsed : [];
-        } catch (e2) {
-           console.error("Repair failed:", e2);
-           // Try one more aggressive repair: find the last "},"
-           const lastCommaBrace = cleanJson.lastIndexOf('},');
-           if (lastCommaBrace !== -1) {
-             const repairedJson2 = cleanJson.substring(0, lastCommaBrace + 1) + ']';
-             try {
-                const parsed2 = JSON.parse(repairedJson2);
-                return Array.isArray(parsed2) ? parsed2 : [];
-             } catch (e3) {
-                throw e;
-             }
-           }
-           throw e;
-        }
-      }
-      throw e;
+      return JSON.parse(jsonrepair(cleaned));
+    } catch (repairErr) {
+      console.error("jsonrepair could not recover valid JSON:", repairErr);
+      return fallback;
     }
-  } catch (error) {
-    console.error("Error parsing scheme of learning:", error);
-    throw new Error("Failed to parse scheme of learning data.");
   }
 }
 
+/**
+ * Parses a single lesson's JSON, applies LaTeX/formatting normalization to
+ * every string field, and updates the lesson title numbering. Falls back to
+ * a clearly-marked error object (never throws) so callers can always index
+ * into the result array.
+ */
+function safeParseLessonJson(jsonStr: string, index: number, totalLessons: number): any {
+  const cleaned = stripCodeFences(jsonStr).replace(/,\s*$/, '');
+
+  let obj: any;
+  try {
+    obj = JSON.parse(cleaned);
+  } catch (e) {
+    try {
+      obj = JSON.parse(jsonrepair(cleaned));
+    } catch (repairErr) {
+      console.warn(`Lesson ${index} JSON could not be parsed or repaired, using fallback.`, repairErr);
+      return {
+        error: "This lesson's JSON format was interrupted or corrupted.",
+        raw_content: cleaned.substring(0, 200) + "..."
+      };
+    }
+  }
+
+  if (Array.isArray(obj)) {
+    obj = obj[index] ?? obj[0] ?? {};
+  }
+
+  const processedObj = formatValueDeep(obj);
+
+  const titleKeys = ['title', 'lessonTitle', 'topic', 'lesson_title'];
+  for (const k of titleKeys) {
+    if (processedObj[k] && typeof processedObj[k] === 'string' && /Lesson\s*:?\s*1\b/i.test(processedObj[k])) {
+      processedObj[k] = processedObj[k].replace(/Lesson\s*:?\s*1\b/i, `Lesson ${index + 1}`);
+      if (!processedObj[k].includes(`of ${totalLessons}`)) {
+        processedObj[k] += ` of ${totalLessons}`;
+      }
+    }
+  }
+
+  return processedObj;
+}
+
+// Strips EVERY bold marker (**) the model produced, then re-applies bold to
+// the activity/step/phase/part label PLUS the rest of that first sentence,
+// up to (and including) its first full stop — then breaks to a new line so
+// everything after the full stop is plain text on its own line.
+//
+// e.g. "Activity 1: Review the concept of a fraction as part of a whole
+// using shaded diagrams. Draw rectangles on the board..." becomes:
+//   **Activity 1: Review the concept of a fraction as part of a whole
+//   using shaded diagrams.**
+//
+//   Draw rectangles on the board...
+//
+// The model tends to also bold numbers, currency amounts, quoted words, and
+// variable letters throughout an activity's body (e.g. "GH₵ **15**",
+// "**'**unknown**'**") — since a DOCX run has no concept of "partially
+// bold", wrapping most of a paragraph's words in ** individually makes the
+// entire paragraph (or a large uncontrolled chunk of it) read as solid bold
+// in Word, even though only fragments were marked. Stripping every ** first
+// and re-adding it ONLY for this one controlled pattern guarantees the bold
+// span is always exactly "label + first sentence" — nothing more, nothing
+// less — regardless of what the model did with the rest of the text.
+//
+// The pattern is NOT anchored to start-of-line: the model doesn't reliably
+// put every "Activity N:" on its own line to begin with (they can appear
+// mid-paragraph, run straight on from the previous activity's last
+// sentence), so this matches "Activity N:" wherever it occurs. Inserting a
+// blank line (double newline) both before and after the bolded sentence
+// also fixes that case — each activity ends up on its own paragraph even if
+// the source text had them all run together. Double newlines are used
+// (rather than single) specifically so `collapseStraySingleNewlines` below
+// — which only touches single newlines — never merges this break back into
+// a space. A period immediately followed by a digit (e.g. "3.5") is treated
+// as a decimal point, not a sentence end, so it doesn't prematurely cut the
+// bold span short.
+//
+// It must run BEFORE the header-specific bold-adding regexes below (Sample
+// Class Exercises, Recap Activity, etc.), since those add their own fresh
+// ** and would otherwise get stripped right back out.
+function normalizeActivityBolding(text: string): string {
+  if (!text) return text;
+  const stripped = text.replace(/\*\*/g, '');
+  return stripped
+    .replace(
+      /\s*((?:Activity|Step|Part|Phase)\s+\d+\s*:\s*[^.\n]*\.(?!\d))\s*/gi,
+      (match, sentence: string) => `\n\n**${sentence.trim()}**\n\n`
+    )
+    .trim();
+}
+
+// Converts LaTeX ellipsis commands (\dots, \ldots, \cdots, \ddots, \dotsc,
+// \dotsb) into a plain ellipsis character, whether or not they're wrapped in
+// $ $. This is not "math" that a $...$ wrapper can make render correctly —
+// there's no LaTeX/OMML engine on the DOCX side, just a plain text run, so
+// any LaTeX command that isn't converted to real characters shows up as
+// literal backslash-text (e.g. "GH¢ 20, \dots"). The prompt instructs the
+// model to avoid this in the first place; this is the defensive backstop for
+// whenever it slips through anyway.
+function normalizeLatexEllipsis(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/\$\s*\\(?:dots|ldots|cdots|ddots|dotsc|dotsb)\s*\$/g, '…')
+    .replace(/\\(?:dots|ldots|cdots|ddots|dotsc|dotsb)/g, '…');
+}
+
+// Collapses stray single line-breaks that land mid-sentence (e.g. the model
+// wrote "...will be in\nGroup 4 and\nGroup\n5." instead of one flowing
+// sentence, or "...secret number is\n7. Purpose:" instead of "...is 7.
+// Purpose:") into a plain space. A *real* paragraph break (two or more
+// consecutive newlines) is left alone, and a newline is also left alone if
+// it looks like genuine list/header structure: what follows starts a bullet,
+// numbered item, or bold header, AND what precedes it actually ends a
+// sentence (or is the very start of the field) — a bare number straight
+// after a verb like "is" doesn't count, even though "7. Purpose:" alone
+// looks list-item-shaped.
+//
+// Implementation note: this matches ONLY the newline character itself, using
+// a lookbehind for the preceding character and inspecting several characters
+// of context on both sides via the replacer's (match, offset, string)
+// arguments — it does not capture/consume the surrounding characters into
+// the match. An earlier version captured single characters on each side of
+// the newline (`([^\n])\n(?!\n)([^\n])`), which meant the "is this a
+// numbered list item?" check only ever had ONE character of lookahead to
+// test against a pattern that needs 3+ (`\d+[.)]\s`) — so that protection
+// could never actually fire.
+function collapseStraySingleNewlines(text: string): string {
+  if (!text) return text;
+  return text.replace(/(?<=[^\n\r])\r?\n(?!\n)/g, (match, offset: number, full: string) => {
+    const after = full.slice(offset + match.length, offset + match.length + 10);
+
+    // Bullets ("- ", "• ") and bold headers ("**...") are unambiguous
+    // structural markers — they essentially never appear by accident, so
+    // always preserve the line break before them.
+    if (/^(\*\*|[-•]\s)/.test(after)) return match;
+
+    // A bare "digit + '.'/')' + space" is genuinely ambiguous: it's either a
+    // numbered list item ("1. Extend the pattern...") or just a number that
+    // happens to end the previous sentence ("...the secret number is\n7.
+    // Purpose:"). Only treat it as a list item if what precedes the break
+    // actually ends a sentence/section (or the break is at the very start of
+    // the field) — a bare number straight after a verb like "is" doesn't
+    // qualify, even though "7. Purpose:" alone looks list-item-shaped.
+    if (/^\d+[.)]\s/.test(after)) {
+      const before = full.slice(Math.max(0, offset - 12), offset);
+      const precededBySentenceEnd = before.trim().length === 0 || /[.:!?]\s*$/.test(before);
+      if (precededBySentenceEnd) return match;
+    }
+
+    return ' ';
+  });
+}
+
+function formatValueDeep(val: any): any {
+  if (typeof val === 'string') {
+    let formatted = normalizeLatexMathDelimiters(val);
+    formatted = normalizeActivityBolding(formatted);
+    formatted = normalizeLatexEllipsis(formatted);
+    formatted = collapseStraySingleNewlines(formatted);
+    formatted = wrapMathInLatex(formatted);
+    formatted = normalizeLatexMathDelimiters(formatted);
+    formatted = formatted.replace(
+      /(\n|^)[ \t]*(\*\*|)[ \t]*Sample Class Exercises.*?:?[ \t]*(\*\*|)[ \t]*(\n|$)/gi,
+      '\n\n**Sample Class Exercises:**\n'
+    );
+    formatted = formatted.replace(/\n{3,}/g, '\n\n');
+    const mergePattern = /(\**(?:Activity|Step|Part|Phase)\s+\d+(?::|.*?:)?\**)\s*[\r\n]+\s*/gi;
+    formatted = formatted.replace(mergePattern, '$1 ');
+    return formatted;
+  }
+  if (Array.isArray(val)) {
+    return val.map(formatValueDeep);
+  }
+  if (typeof val === 'object' && val !== null) {
+    const newObj: any = {};
+    for (const k in val) newObj[k] = formatValueDeep(val[k]);
+    return newObj;
+  }
+  return val;
+}
+
+// ============================================================================
+// LaTeX / text formatting for plain-text (non-JSON) responses
+// ============================================================================
 function normalizeMathDelimiters(text: string): string {
   return normalizeLatexMathDelimiters(text);
 }
@@ -997,21 +1074,16 @@ function wrapMathInLatex(text: string): string {
 
   let result = normalizedText;
 
-  // Preserve raw LaTeX commands as inline math before any other wrapping logic.
   result = replaceOutsideMath(
     result,
     /\\(?:cancel|frac|sqrt|leq|geq|neq|lt|gt|times|div|pm|approx)\{[^}\n]+\}(?:\{[^}\n]+\})?/g,
     (match) => `$${match}$`
   );
 
-  // ONLY match these specific patterns that are clearly mathematical:
-
-    // 1. Variable equations: "x = 5", "y = 2x + 3", "result = (5 + 3) * 2"
   result = replaceOutsideMath(
     result,
     /(?<![a-zA-Z])([a-zA-Z])\s*=\s*([\d(a-zA-Z+\-*/^.() ]+?)(?=\s*(?:,|\.|;|\n|$))/g,
     (match, variable, expression) => {
-      // Check if the expression contains math operators, digits, or parentheses with digits
       if (/[-+*/^\d()]/.test(expression) && expression.trim().length > 0) {
         return `$${variable} = ${expression.trim()}$`;
       }
@@ -1019,47 +1091,15 @@ function wrapMathInLatex(text: string): string {
     }
   );
 
-    // 2. Pure number equations: "2 + 3 = 5", "(3 + 4) x 2 = 14", "3 x 4 = 12"
-    // Also matches expressions involving parentheses and LaTeX operators like \times
-    result = replaceOutsideMath(
-      result,
-      /(\(?\d+(?:\.\d+)?(?:\s*[+\-*/]\s*\d+(?:\.\d+)?)*\)?\s*[\+\-\*\/]\s*\(?\d+(?:\.\d+)?(?:\s*[+\-*/]\s*\d+(?:\.\d+)?)*\)?\s*=\s*\d+(?:\.\d+)?)/g,
-      (match) => `$${match}$`
-    );
-
-    // 2a. Standalone parenthesized math with mixed operators (no '=' sign)
-    // e.g. "(5 + 3) * 2" or "3 \times 4"
-    result = replaceOutsideMath(
-      result,
-      /(\(?\s*(?:\d+|[a-zA-Z])\s*(?:[+\-*/^]|\\times|\\div|\\cdot)\s*(?:\d+|[a-zA-Z])(?:\s*[+\-*/^]\s*(?:\d+|[a-zA-Z]|[()]))*)/g,
-      (match) => {
-        // Only wrap if it looks like a math expression (has operators and is not just a word)
-        if (match.length > 1 && /[+\-*/^]/.test(match)) {
-          return `$${match}$`;
-        }
-        return match;
-      }
-    );
-
-  // 2b. Broader math expressions with operators that might include LaTeX commands like \times, \div
-  // e.g. "(3 + 4) \times 2 = 7 \times 2 = 14" or "x \times y = z"
   result = replaceOutsideMath(
     result,
-    /(\(?\s*(?:\d+|[a-zA-Z])\s*(?:[+\-*/^]|\\times|\\div|\\cdot)\s*(?:\d+|[a-zA-Z])\s*[=<>]\s*(?:\d+|[a-zA-Z])(?:\s*[+\-*/^]\s*(?:\d+|[a-zA-Z]))*)/g,
+    /(\(?\d+(?:\.\d+)?(?:\s*[+\-*/]\s*\d+(?:\.\d+)?)*\)?\s*[\+\-\*\/]\s*\(?\d+(?:\.\d+)?(?:\s*[+\-*/]\s*\d+(?:\.\d+)?)*\)?\s*=\s*\d+(?:\.\d+)?)/g,
     (match) => `$${match}$`
   );
 
-  // 3. Exponents: "x^2"
   result = replaceOutsideMath(
     result,
-    /(\d+|[a-zA-Z])\s*\^\s*(\d+|[a-zA-Z])/g,
-    (match) => `$${match}$`
-  );
-
-  // 4. Fractions: "1/2"
-  result = replaceOutsideMath(
-    result,
-    /(?<!\d)(\d+)\/(\d+)(?!\d)/g,
+    /(?<![\d\w/])([1-9]\d?)\/([1-9]\d?)(?![\d\w/])/g,
     (match) => `$${match}$`
   );
 
@@ -1070,216 +1110,22 @@ function formatGeneratedContent(text: string): string {
   if (!text) return text;
   let formatted = text;
 
-  // Normalize malformed LaTeX-style text commands early so these fixes apply
-  // before any further formatting or math wrapping is done.
   formatted = normalizeLatexMathDelimiters(formatted);
-
-  // 1. Wrap math equations in LaTeX delimiters
-  // Match common math expressions: numbers with operators, variables with operators, etc.
-  // This prevents text formatting from splitting equations
+  formatted = normalizeActivityBolding(formatted);
+  formatted = normalizeLatexEllipsis(formatted);
+  formatted = collapseStraySingleNewlines(formatted);
   formatted = wrapMathInLatex(formatted);
-
-  // Re-run normalization after math wrapping in case wrapping introduced or exposed stray malformed text.
   formatted = normalizeLatexMathDelimiters(formatted);
 
-  // 2. Recap Activity: ... (Bold the header line) - case insensitive
   formatted = formatted.replace(/(^|\n)(?!\*\*)(Recap Activity:[^\n]*)/gi, '$1**$2**');
-
-  // 3. Quick oral quiz: (Bold the phrase) - case insensitive
   formatted = formatted.replace(/(^|\n)(?!\*\*)(Quick oral quiz:)/gi, '$1**$2**');
-
-  // 4. Teacher summarises/summarizes the key steps for ...: (Bold the phrase)
   formatted = formatted.replace(/(^|\n)(?!\*\*)(Teacher summari[sz]es[^:]*:)/gi, '$1**$2**');
-
-  // 5. Sample Class Exercises: (Ensure bold and double newline)
-  // Be EXTREMELY aggressive to catch variations like "Sample Class Exercises (Concept Application):"
-  // Match "Sample Class Exercises" followed by anything up to a colon or end of line
   formatted = formatted.replace(/(\n|^)[ \t]*(\*\*|)[ \t]*Sample Class Exercises.*?:?[ \t]*(\*\*|)[ \t]*(\n|$)/gi, '\n\n**Sample Class Exercises:**\n');
 
-  // 5.5 Ensure "newline text ending with colon" is treated as a header (double newline before, newline after, bolded)
-  // But limit length to avoid bolding long paragraphs ending in colon. (Max 100 chars?)
-  // We use lookahead to ensure we don't match things that look like times or ratios inside a sentence (handled by ^|\n anchor)
-  formatted = formatted.replace(/(\n|^)(?!Sample Class Exercises)(?!\*\*Sample Class Exercises)(.{3,100}:)[ \t]*(\n|$)/g, '$1**$2**$3');
-
-  // 5.6 Fix Activity Headers Splitting
-  // Ensure "Activity X:" is NOT followed by a newline, but by a space.
-  const mergePattern = /(\**(?:Activity|Step|Part|Phase|Group)\s+\d+(?::|.*?:)?\**)\s*[\r\n]+\s*/gi;
+  const mergePattern = /(\**(?:Activity|Step|Part|Phase)\s+\d+(?::|.*?:)?\**)\s*[\r\n]+\s*/gi;
   formatted = formatted.replace(mergePattern, '$1 ');
-
-  // 6. Clean up triple+ newlines to double newlines
   formatted = formatted.replace(/\n{3,}/g, '\n\n');
-
-  // 7. Clean up potential double bolding from the replacements or AI output
   formatted = formatted.replace(/\*{4,}/g, '**');
 
   return formatted;
-}
-
-function sanitizeJsonString(raw: string): string {
-  let normalized = raw.replace(/\r\n?/g, '\n');
-  normalized = normalized.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ' ');
-
-  let result = '';
-  let inString = false;
-  let escaped = false;
-
-  for (let i = 0; i < normalized.length; i++) {
-    const char = normalized[i];
-
-    if (!inString) {
-      if (char === '"' && !escaped) {
-        inString = true;
-      }
-      if (char === '\\' && !escaped) {
-        escaped = true;
-      } else {
-        escaped = false;
-      }
-      result += char;
-      continue;
-    }
-
-    if (escaped) {
-      result += char;
-      escaped = false;
-      continue;
-    }
-
-    if (char === '\\') {
-      result += char;
-      escaped = true;
-      continue;
-    }
-
-    if (char === '"') {
-      inString = false;
-      result += char;
-      continue;
-    }
-
-    if (char === '\n' || char === '\r') {
-      result += '\\n';
-      continue;
-    }
-
-    if (char === '\t') {
-      result += '\\t';
-      continue;
-    }
-
-    if (char < ' ') {
-      result += ' ';
-      continue;
-    }
-
-    result += char;
-  }
-
-  if (inString) {
-    result += '"';
-  }
-
-  return result;
-}
-
-function processJsonLessonContent(jsonStr: string, index: number, totalLessons: number): string {
-  let cleanStr = jsonStr.trim();
-  try {
-    // Basic cleanup to ensure we have a valid JSON object string
-    if (cleanStr.startsWith('```')) {
-       cleanStr = cleanStr.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
-    }
-    cleanStr = cleanStr.trim(); // Re-trim after removing markdown ticks
-    
-    // Handle array wrapping if present
-    if (cleanStr.startsWith('[') && cleanStr.endsWith(']')) {
-        cleanStr = cleanStr.slice(1, -1).trim();
-    }
-    // Handle comma at end if present (from split logic maybe?)
-    if (cleanStr.endsWith(',')) {
-        cleanStr = cleanStr.slice(0, -1).trim();
-    }
-
-    const sanitized = sanitizeJsonString(cleanStr);
-    const obj = JSON.parse(sanitized);
-
-    // Helper to process formatting in string values
-    const formatValue = (val: any): any => {
-      if (typeof val === 'string') {
-        let formatted = val;
-
-            // Normalize malformed LaTeX-style text commands before any other formatting.
-            formatted = normalizeLatexMathDelimiters(formatted);
-
-            // 1. Wrap math equations in LaTeX delimiters
-            formatted = wrapMathInLatex(formatted);
-
-            // Re-normalize after math wrapping, in case the wrapper exposed or created malformed tokens.
-            formatted = normalizeLatexMathDelimiters(formatted);
-        // 3. Format Sample Class Exercises
-        // Same aggressive regex as the text-mode formatter
-        formatted = formatted.replace(/(\n|^)[ \t]*(\*\*|)[ \t]*Sample Class Exercises.*?:?[ \t]*(\*\*|)[ \t]*(\n|$)/gi, '\n\n**Sample Class Exercises:**\n');
-        
-        // 4. Clean up triple newlines
-        formatted = formatted.replace(/\n{3,}/g, '\n\n');
-
-        // 5. Activity Headers Joining
-        const mergePattern = /(\**(?:Activity|Step|Part|Phase|Group)\s+\d+(?::|.*?:)?\**)\s*[\r\n]+\s*/gi;
-        formatted = formatted.replace(mergePattern, '$1 ');
-
-        return formatted;
-      }
-      if (Array.isArray(val)) {
-        return val.map(formatValue);
-      }
-      if (typeof val === 'object' && val !== null) {
-        // Recursively process object values
-        const newObj: any = {};
-        for (const k in val) {
-            newObj[k] = formatValue(val[k]);
-        }
-        return newObj;
-      }
-      return val;
-    };
-
-    // Apply formatting to the whole object
-    const processedObj = formatValue(obj);
-
-    // Explicitly update any top-level "lessonTitle" or similar fields if they exist
-    // This catches fields that might be just "Lesson 1" where regex above missed
-    const titleKeys = ['title', 'lessonTitle', 'topic', 'lesson_title'];
-    for (const k of titleKeys) {
-        if (processedObj[k] && typeof processedObj[k] === 'string') {
-             // If title contains "Lesson 1", force update it
-             if (/Lesson\s*:?\s*1\b/i.test(processedObj[k])) {
-                 processedObj[k] = processedObj[k].replace(/Lesson\s*:?\s*1\b/i, `Lesson ${index + 1}`);
-                 // Append " of N" if missing
-                 if (!processedObj[k].includes(`of ${totalLessons}`)) {
-                     processedObj[k] += ` of ${totalLessons}`;
-                 }
-             }
-        }
-    }
-
-    return JSON.stringify(processedObj);
-  } catch (e) {
-    console.warn("Failed first pass JSON parse, attempting auto-repair:", e);
-    try {
-        let repairedStr = sanitizeJsonString(cleanStr);
-
-        // Try a couple of common repairs for accidentally truncated or malformed JSON
-        if (!repairedStr.trim().endsWith('}')) repairedStr += '}';
-        if (!repairedStr.trim().startsWith('{')) repairedStr = repairedStr.trimStart();
-
-        // Remove trailing commas inside objects/arrays
-        repairedStr = repairedStr.replace(/,\s*(?=[}\]])/g, '');
-
-        const repairedObj = JSON.parse(repairedStr);
-        return JSON.stringify(repairedObj);
-    } catch (repairErr) {
-        console.warn("Auto-repair failed, returning corrupted original.", repairErr);
-        return jsonStr; // Fallback to original so it at least exists
-    }
-  }
 }

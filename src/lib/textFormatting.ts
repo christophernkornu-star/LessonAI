@@ -9,25 +9,32 @@ export interface TextToken {
  */
 function removeOrphanAsterisks(text: string): string {
   let result = text;
-  
-  // Remove trailing ** that don't have a matching opening
-  // e.g., "Activity 3: Using Cardinal Directions**" -> "Activity 3: Using Cardinal Directions"
-  
-  // First, count ** pairs
+
   const matches = result.match(/\*\*/g) || [];
-  
-  if (matches.length % 2 !== 0) {
+  const hasOrphan = matches.length % 2 !== 0;
+
+  // Only clean up UNBALANCED ** markers. Balanced **...** spans (e.g. a label
+  // plus the rest of its first sentence, like "**Activity 1: Review the
+  // concept of a fraction...**") must be preserved exactly as-is. Previously
+  // the inline-stripping regex below ran unconditionally and removed a
+  // *legitimate* closing ** whenever a bolded span ended with a word char at
+  // the end of the string or before whitespace. parseMarkdownLine's odd-count
+  // cleanup then removed the leading ** too, so the whole activity/heading
+  // rendered as plain (non-bold) text in the DOCX. Running the cleanup only
+  // when the total count is odd (a genuine unmatched marker exists) fixes that.
+  if (hasOrphan) {
     // Odd number means orphan exists
-    // Check if it's at the end
+    // Remove a trailing ** that doesn't have a matching opening
+    // e.g., "Activity 3: Using Cardinal Directions**" -> "Activity 3: Using Cardinal Directions"
     if (result.trimEnd().endsWith('**')) {
       result = result.replace(/\*\*\s*$/, '');
     }
+
+    // Also handle inline orphan ** followed by space or end
+    // e.g., "text** more text" where ** has no opening
+    result = result.replace(/([a-zA-Z0-9\.\)\]\!\?,;])\*\*(?=\s|$)/g, '$1');
   }
-  
-  // Also handle inline orphan ** followed by space or end
-  // e.g., "text** more text" where ** has no opening
-  result = result.replace(/([a-zA-Z0-9\.\)\]\!\?,;])\*\*(?=\s|$)/g, '$1');
-  
+
   return result;
 }
 

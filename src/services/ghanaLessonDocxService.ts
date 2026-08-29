@@ -396,16 +396,27 @@ function createCell(
         const contentForCheck = trimmedLine.replace(/\*\*/g, '');
         let forceBold = false;
         
-        // Handle list items ending in colon (bold them)
-        // Check for colon at end, ignoring trailing bold markers or minimal whitespace
-        if (trimmedLine.replace(/[\*_]+$/, '').trim().endsWith(':')) {
+        // Handle short standalone labels ending in a colon (e.g. "Materials:").
+        // Length-guarded so a full activity paragraph that merely happens to
+        // end with a colon doesn't get force-bolded in its entirety.
+        const contentForColonCheck = trimmedLine.replace(/[\*_]+$/, '').trim();
+        if (contentForColonCheck.endsWith(':') && contentForColonCheck.length <= 60) {
              forceBold = true;
         }
 
-        // Check if this is an Activity/Step/Part/Phase line - make it bold
-        if (/^(Activity|Step|Part|Phase|Group)\s+\d+/i.test(contentForCheck)) {
-            forceBold = true;
-        }
+        // NOTE: We deliberately do NOT force-bold the whole line just because
+        // it starts with "Activity N:" / "Step N:" / "Phase N:" / "Part N:" /
+        // "Group N:" (an earlier version of this function did). That check
+        // used to override the correctly-scoped ** markup coming from the AI
+        // service (which wraps ONLY the "Activity 1:" label in ** and leaves
+        // the rest of the activity's text plain) by force-bolding every
+        // token in the entire paragraph via createDocxParagraphChildren's
+        // `bold || token.bold` logic below — producing a fully-bold activity
+        // block instead of just a bold label. The ** markers already present
+        // in the text (handled per-token by parseMarkdownLine inside
+        // createDocxParagraphChildren) are sufficient and correctly scoped;
+        // no line-level override is needed or wanted here. THIS REMOVAL IS
+        // THE FIX for the "whole activity paragraph is bold" bug.
 
         // Handle Markdown Headers (e.g. # Title, ## Subtitle)
         if (trimmedLine.match(/^#+\s/)) {
@@ -417,8 +428,6 @@ function createCell(
         if (trimmedLine.match(/^[-*]\s/)) {
             trimmedLine = trimmedLine.replace(/^[-*]\s/, '• ');
         }
-        
-        // Removed the specific colon check here because we moved it up to be more general
         
         const children = createDocxParagraphChildren(trimmedLine, forceBold);
         
@@ -1324,4 +1333,3 @@ export function parseAIJsonResponse(response: string): GhanaLessonData | GhanaLe
     throw new Error("Failed to parse lesson data. Please ensure the AI returned valid JSON.");
   }
 }
-

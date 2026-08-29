@@ -1228,33 +1228,35 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
   const handleDownloadAll = async () => {
       if (batchResults.length === 0) return;
 
-      toast({ title: "Preparing Download", description: "Zipping files..." });
+      toast({ title: "Preparing Download", description: "Zipping files... please wait." });
       
-            try {
-          // Dynamically import heavy libraries only when ZIP generation is needed
-          const PizZip = (await import("pizzip")).default;
-          const { saveAs } = await import("file-saver");
-          const { generateGhanaLessonDocx, generateGhanaLessonFileName } = await import("@/services/ghanaLessonDocxService");
+      try {
+          // 1. Safely import libraries handling CommonJS/ESM quirks
+          const PizZipModule = await import("pizzip");
+          const PizZip: any = PizZipModule.default || PizZipModule;
+
+          const fileSaverModule = await import("file-saver");
+          const saveAs: any = fileSaverModule.saveAs || fileSaverModule.default?.saveAs || fileSaverModule.default;
+          
+          const docxService = await import("@/services/ghanaLessonDocxService");
+          const generateGhanaLessonDocx = docxService.generateGhanaLessonDocx;
+          const generateGhanaLessonFileName = docxService.generateGhanaLessonFileName;
+          
+          if (!PizZip || typeof PizZip !== 'function') throw new Error("ZIP library failed to load");
           
           const zip = new PizZip();
           
           // Generate all docs
           for (let index = 0; index < batchResults.length; index++) {
             const result = batchResults[index];
-            let finalData: any;
+            let finalData: any = {};
             
-            // Try to parse the content as JSON first (high fidelity)
             try {
-                // simple cleanup before parse
-                let cleanContent = result.content;
+                let cleanContent = result.content || "";
                 if (cleanContent.startsWith('```')) {
                      cleanContent = cleanContent.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
                 }
                 finalData = JSON.parse(cleanContent);
-                // Ensure it's an array or object
-                // FIX: Do NOT take [0] only! Pass the full array to the docx generator.
-                // It knows how to render multiple lessons.
-                // However, we need to ensure metadata is merged into ALL items in the array if missing
                 
                 if (Array.isArray(finalData)) {
                     finalData = finalData.map((lesson: any) => ({
@@ -1265,24 +1267,21 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
                         weekNumber: lesson.weekNumber || result.data.weekNumber,
                     }));
                 } else {
-                    // Merge critical metadata from result.data if missing in AI response
                     finalData.weekEnding = finalData.weekEnding || result.data.weekEnding;
                     finalData.class = finalData.class || result.data.level;
                     finalData.subject = finalData.subject || result.data.subject;
                     finalData.weekNumber = finalData.weekNumber || result.data.weekNumber;
                 }
-                
             } catch (e) {
-                // Fallback: Construct object wrapping the raw content
+                console.warn("JSON parse failed for lesson, using fallback", e);
                 const phases = {
                     phase1_starter: { duration: "10 mins", learnerActivities: "", resources: "" },
-                    phase2_newLearning: { duration: "40 mins", learnerActivities: result.content, resources: "" },
+                    phase2_newLearning: { duration: "40 mins", learnerActivities: result.content || "Content missing", resources: "" },
                     phase3_reflection: { duration: "10 mins", learnerActivities: "", resources: "" }
                 };
-                
                 finalData = {
                     weekEnding: result.data.weekEnding,
-                    day: new Date(result.data.date || "").toLocaleDateString('en-GB', { weekday: 'long' }),
+                    day: result.data.date ? new Date(result.data.date).toLocaleDateString('en-GB', { weekday: 'long' }) : "Day 1",
                     subject: result.data.subject,
                     duration: result.data.duration,
                     strand: result.data.strand,
@@ -1300,46 +1299,26 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
                 };
             }
 
-            // Generate filename using the standard service
-            const fileName = generateGhanaLessonFileName(finalData);
-
-            // Ensure uniqueness without forced ugly suffixes unless essential
-            let uniqueName = fileName;
+            // 2. Safe optional chaining to prevent crash if array is empty
+            const safeClass = Array.isArray(finalData) ? finalData[0]?.class : finalData?.class;
+            const classProfile = getClassProfile(safeClass || "");
             
-            // Check if this filename is already in the zip
-            if (zip.file(uniqueName)) {
-                 // Try adding "Lesson X" if applicable to differentiate
-                 if (result.data.subTopic && result.data.subTopic.includes("Lesson")) {
-                    const cleanLessonTag = result.data.subTopic.replace(/[^a-zA-Z0-9]/g, '-');
-                    uniqueName = fileName.replace('.docx', `-${cleanLessonTag}.docx`);
-                 }
-                 
-                 // If still duplicate, increment counter
-                 let counter = 1;
-                 while (zip.file(uniqueName)) {
-                     uniqueName = fileName.replace('.docx', `-${counter}.docx`);
-                     counter++;
-                 }
-            }
-
-            // Generate Blob (pass true for returnBlob)
-            // We pass finalData as the first arg. generateGhanaLessonDocx handles object inputs too.
-            // If it's the first document and cover page is requested, generate the cover page as a completely standalone file
-            const shouldIncludeCover = batchFormData.includeCoverPage || Boolean(getClassProfile((Array.isArray(finalData) ? finalData[0].class : finalData.class) || "").schoolName || getClassProfile((Array.isArray(finalData) ? finalData[0].class : finalData.class) || "").teacherName);
+            const shouldIncludeCover = batchFormData.includeCoverPage || Boolean(classProfile.schoolName || classProfile.teacherName);
+            
             if (shouldIncludeCover && index === 0) {
-                const classLvl = normalizeClassLevel((Array.isArray(finalData) ? finalData[0].class : finalData.class) || "");
+                const classLvl = normalizeClassLevel(safeClass || "");
                 const coverPageLevel = getCoverPageLevelString(
-                  batchResults.map((result) => {
-                    const lessonData = result.data as any;
+                  batchResults.map((res) => {
+                    const lessonData = res.data as any;
                     return lessonData.level || lessonData.class || lessonData.classLevel;
                   })
                 ) || classLvl;
+                
                 const isJHS = /\bbasic\s*[7-9]\b/i.test(coverPageLevel);
                 const subjectValue = isJHS && batchFormData.coverPageSubject?.trim() !== "" 
                     ? batchFormData.coverPageSubject 
                     : "ALL SUBJECTS";
                 
-                const classProfile = getClassProfile(classLvl);
                 const useProfileSource = batchFormData.coverPageSource === "profiles";
                 const coverMeta = {
                     subject: subjectValue,
@@ -1353,45 +1332,70 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
                       : undefined,
                 };
                 
-                // Create a dummy lesson payload so the generator runs, but the coverPageMeta flags the cover page creation.
-                // We'll rely on the fact that if we pass an empty array of lessons it will just render the cover page (or a very blank first page).
-                // Actually, let's just generate it using the first lesson data but tell the generator it's a cover page? 
-                // Wait, if it generates the lesson too, it's not strictly "standalone".
-                // We have access to PizZip. Let's just render the cover page as a separate document.
-                const coverBlob = await generateGhanaLessonDocx([], "Cover_Page.docx", true, coverMeta);
-                if (coverBlob && coverBlob instanceof Blob) {
-                    const coverArrayBuffer = await coverBlob.arrayBuffer();
-                    zip.file("00_Cover_Page.docx", coverArrayBuffer);
+                try {
+                    const coverBlob = await generateGhanaLessonDocx([], "Cover_Page.docx", true, coverMeta);
+                    if (coverBlob && coverBlob instanceof Blob) {
+                        const coverArrayBuffer = await coverBlob.arrayBuffer();
+                        zip.file("00_Cover_Page.docx", coverArrayBuffer);
+                    }
+                } catch (coverError) {
+                    console.error("Cover page generation failed:", coverError);
                 }
             }
 
-            // Normal lesson note generation (without cover pages)
-            const blob = await generateGhanaLessonDocx(finalData, uniqueName, true, undefined); 
+            let fileName = "Lesson_Note.docx";
+            try {
+                if (typeof generateGhanaLessonFileName === "function") {
+                    fileName = generateGhanaLessonFileName(finalData);
+                }
+                if (!fileName.toLowerCase().endsWith('.docx')) {
+                    fileName += '.docx';
+                }
+            } catch (err) {
+                console.warn("Could not generate standard filename, using fallback.", err);
+            }
+
+            let uniqueName = fileName;
             
-            if (blob && blob instanceof Blob) {
-                const arrayBuffer = await blob.arrayBuffer();
-                zip.file(uniqueName, arrayBuffer);
-            } else {
-                console.error("Failed to generate blob for", uniqueName);
+            // 3. Infinite-loop safe duplication check
+            if (zip.file(uniqueName)) {
+                 if (result.data.subTopic && result.data.subTopic.includes("Lesson")) {
+                    const cleanLessonTag = result.data.subTopic.replace(/[^a-zA-Z0-9]/g, '-');
+                    uniqueName = fileName.replace('.docx', `-${cleanLessonTag}.docx`);
+                 }
+                 
+                 let counter = 1;
+                 const baseName = fileName.substring(0, fileName.lastIndexOf('.docx'));
+                 while (zip.file(uniqueName) && counter < 100) { // Added counter max to strictly prevent freezes
+                     uniqueName = `${baseName}-${counter}.docx`;
+                     counter++;
+                 }
+            }
+
+            try {
+                const blob = await generateGhanaLessonDocx(finalData, uniqueName, true, undefined); 
+                if (blob && blob instanceof Blob) {
+                    const arrayBuffer = await blob.arrayBuffer();
+                    zip.file(uniqueName, arrayBuffer);
+                } else {
+                    console.error("No valid blob returned for", uniqueName);
+                }
+            } catch (docxErr) {
+                console.error(`Failed to generate DOCX for ${uniqueName}`, docxErr);
             }
           }
           
           const content = zip.generate({ type: "blob" });
           
-          // Generate meaningful zip filename: Class_Week (e.g. BS1_WK1.zip)
-          let zipName = `Batch_Lesson_Notes_${new Date().toISOString().split('T')[0]}.zip`; // Fallback
-          
+          let zipName = `Batch_Lesson_Notes_${new Date().toISOString().split('T')[0]}.zip`; 
           if (batchResults.length > 0) {
              const firstItem = batchResults[0].data;
-             // Helper to clean strings
              const clean = (s: string) => (s || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
              
-             // Get Class Abbreviation (Basic 1 -> BS1, KG 1 -> KG1)
              let classAbbr = clean(firstItem.level || "");
              if (classAbbr.startsWith("BASIC")) classAbbr = classAbbr.replace("BASIC", "BS");
              if (classAbbr.startsWith("BS") && !classAbbr.startsWith("BS")) classAbbr = "BS" + classAbbr.replace("B", "");
 
-             // Get Week Abbreviation (Week 1 -> WK1)
              let weekVal = clean(firstItem.weekNumber || "");
              if (weekVal.includes("WEEK")) weekVal = weekVal.replace("WEEK", "WK");
              else if (/^\d+$/.test(weekVal)) weekVal = "WK" + weekVal;
@@ -1401,12 +1405,20 @@ const useProfileSource = batchFormData.coverPageSource === "profiles";
              }
           }
 
-          saveAs(content, zipName);
-          toast({ title: "Download Complete", description: "Your files have been downloaded." });
+          if (typeof saveAs === "function") {
+              saveAs(content, zipName);
+              toast({ title: "Download Complete", description: "Your files have been saved successfully.", variant: "default" });
+          } else {
+              throw new Error("File saver library failed to load");
+          }
           
       } catch (e) {
-          console.error("Download error", e);
-          toast({ title: "Download Failed", description: "Could not create zip file.", variant: "destructive" });
+          console.error("Fatal download error:", e);
+          toast({ 
+              title: "Download Failed", 
+              description: e instanceof Error ? e.message : "An unexpected error occurred during zip creation.", 
+              variant: "destructive" 
+          });
       }
   };
 
